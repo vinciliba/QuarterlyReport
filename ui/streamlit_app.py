@@ -30,9 +30,22 @@ if uploaded_file:
         saved_rule = get_existing_rule(uploaded_file.name)
         if saved_rule:
             st.info(f"⚙️ Existing rule found for `{uploaded_file.name}`: Using sheet: `{saved_rule}`")
-            sheet_to_use = saved_rule
+            override = st.checkbox("⬆️ Override saved sheet rule?", value=False)
+
+            if override:
+                sheet_to_use = st.selectbox("Select a sheet to upload:", all_sheets)
+            else:
+                sheet_to_use = saved_rule
         else:
             sheet_to_use = st.selectbox("Select a sheet to upload:", all_sheets)
+
+    if sheet_to_use:
+        st.subheader("🔍 Sheet Preview")
+        try:
+            preview_df = xl.parse(sheet_to_use, nrows=10)
+            st.dataframe(preview_df)
+        except Exception as e:
+            st.error(f"Could not load preview: {e}")
 
     if st.button("✅ Ingest Data"):
         try:
