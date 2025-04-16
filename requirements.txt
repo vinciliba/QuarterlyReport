@@ -1,0 +1,23 @@
+# Streamlit App Core
+streamlit
+streamlit-aggrid
+
+# Data Processing
+pandas
+numpy
+openpyxl      # required for Excel (.xlsx) support in pandas
+
+# Optional: used by some pandas backends (recommended)
+xlrd          # Excel legacy reader (for .xls)
+xlsxwriter    # Excel writer engine
+
+# Database (SQLite - built-in, no install needed)
+
+# Optional Add-Ons (future-proofing)
+python-docx   # for Word report generation
+docxtpl       # for templating Word reports
+matplotlib    # for charts (if needed)
+plotly        # optional interactive charts
+
+# Dev convenience
+watchdog      # optional: auto-reload on changes (used internally by Streamlit)
