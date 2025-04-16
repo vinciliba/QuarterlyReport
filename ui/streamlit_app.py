@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import re
 from datetime import datetime
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode, DataReturnMode
 
 # Adjust path as needed
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -163,62 +163,108 @@ with tabs[1]:
         st.markdown("### Edit Data in Grid (Rename / Remove Columns, Adjust Values)")
         max_rows = st.slider("🔢 Rows to preview:", 5, 1000, 10)
 
+        # Step 1: GridOptionsBuilder
         gb = GridOptionsBuilder.from_dataframe(preview_df.head(max_rows))
-        gb.configure_default_column(editable=True, resizable=True, filter=True, sortable=True)
+
+        gb.configure_default_column(
+            editable=True,
+            resizable=True,
+            filter=True,
+            sortable=True
+        )
+
+        # Step 2: Explicitly configure each column with hide toggle
+        for col in preview_df.columns:
+            gb.configure_column(field=col, header_name=col, hide=False)
+
+        # Step 3: Build the grid options
         gb.configure_grid_options(domLayout="autoHeight")
+
+        # Step 4: Render AgGrid with correct mode for column state tracking
         grid_response = AgGrid(
             preview_df.head(max_rows),
             gridOptions=gb.build(),
-            update_mode=GridUpdateMode.MANUAL,
+            update_mode=GridUpdateMode.MODEL_CHANGED,
+            data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
             allow_unsafe_jscode=True,
-            theme="material"
-        )
-
+            fit_columns_on_grid_load=False,
+            enable_enterprise_modules=True,
+            theme="material")
+        
         edited_df = grid_response["data"]
+        # ✅ Extract column visibility state safely
+        column_state = grid_response.get("column_state", [])
+        hidden_columns = [col.get("colId") for col in column_state if col.get("hide", False)]
+        # ✅ Still use `columns` for ordering/renaming
         updated_columns = grid_response.get("columns", [])
+        # hidden_columns = [col["field"] for col in updated_columns if col.get("hide", False)]
+        # Step 2: Show for debugging (optional)
+        st.markdown("### 🕵️ Hidden columns (will be excluded):")
+        st.write(hidden_columns)
 
-        # Build rename map for columns changed in the AgGrid header
-        rename_map = {
-            col['field']: col.get('headerName', col['field']) 
-            for col in updated_columns 
-            if col['field'] != col.get('headerName', col['field'])
-        }
+        # Optional: Prompt the user to apply visibility/rename changes
+        st.markdown("📝 After hiding or renaming columns, click **🔄 Update** to apply your changes.")
+        
+        if st.button("🔄 Update"):
+            # Extract edited data
+            edited_df = grid_response["data"]
 
-        # Apply rename to the full preview_df (not just the head)
-        final_df = preview_df.rename(columns=rename_map).copy()
+            # Extract column metadata
+            updated_columns = grid_response.get("columns", [])
+            hidden_columns = [col["colId"] for col in column_state if col.get("hide", False)]
 
-        # Also reorder columns to match what's in the grid
-        # Also reorder columns to match what's in the grid (if valid)
-        current_fields = [col["field"] for col in updated_columns if "field" in col]
+            # Show which columns are hidden
+            st.markdown("### 🕵️ Hidden columns (will be excluded):")
+            st.write(hidden_columns)
 
-        if current_fields:
-            final_df = final_df[current_fields]
-        else:
-            st.warning("⚠️ Could not determine column order from AgGrid. Keeping original order.")
+            # Build rename map from AgGrid header renames
+            rename_map = {
+                col['field']: col.get('headerName', col['field']) 
+                for col in updated_columns 
+                if col['field'] != col.get('headerName', col['field'])
+            }
 
-        # ──────────────────────────────────────────────────────────
-        # Sanitize column names to avoid SQLite syntax issues
-        # ──────────────────────────────────────────────────────────
-        def sanitize(col):
-            """
-            Remove invalid characters, handle blanks, ensure name doesn't start with a digit.
-            """
-            # If the column is empty or just whitespace, assign a placeholder
-            if not col or not str(col).strip():
-                return "col_unnamed"
-            # Replace non-alphanumeric or underscore chars with underscores
-            col = re.sub(r"[^a-zA-Z0-9_]+", "_", str(col))
-            # If it starts with a digit, prepend "col_"
-            if col[0].isdigit():
-                col = f"col_{col}"
-            return col
+            # Apply renames and column order to full dataset
+            final_df = preview_df.rename(columns=rename_map).copy()
+            current_fields = [col["field"] for col in updated_columns]
 
-        final_df.columns = [sanitize(c) for c in final_df.columns]
+            if current_fields:
+                final_df = final_df[current_fields]
+            else:
+                st.warning("⚠️ Could not determine column order from AgGrid. Keeping original order.")
 
+            # Sanitize column names to avoid SQLite syntax issues
+            def sanitize(col):
+                if not col or not str(col).strip():
+                    return "col_unnamed"
+                col = re.sub(r"[^a-zA-Z0-9_]+", "_", str(col))
+                if col[0].isdigit():
+                    col = f"col_{col}"
+                return col
+
+            final_df.columns = [sanitize(c) for c in final_df.columns]
+
+            # Store result in session state for Save/Upload step
+            st.session_state["final_df"] = final_df
+            st.session_state["rename_map"] = rename_map
+            st.session_state["hidden_columns"] = hidden_columns
+            st.success("✅ Changes applied. You can now proceed to Save/Upload.")
+
+        
         # ──────────────────────────────────────────────────────────
         # SAVE/UPLOAD block
         # ──────────────────────────────────────────────────────────
         if st.button("✅ Save/Upload"):
+            # STEP 1: Load from session state
+            final_df = st.session_state.get("final_df")
+            rename_map = st.session_state.get("rename_map", {})
+            hidden_columns = st.session_state.get("hidden_columns", [])
+
+              # STEP 2: Safety check
+            if final_df is None:
+                st.error("❌ No changes found. Please click 🔄 Update before saving.")
+                st.stop()
+
             # Debugging: show final columns
             st.write("**Final columns going into the DB:**", list(final_df.columns))
             st.write(f"**Final shape:** {final_df.shape}")
@@ -231,11 +277,13 @@ with tabs[1]:
             now = datetime.now().isoformat()
             rule_payload = []
 
-            # A) Handle original columns
+            #  STEP 6: Handle original columns
             # (We iterate over the original preview_df columns before rename)
+            reverse_rename_map = {v: k for k, v in rename_map.items()}
             original_preview_cols = list(preview_df.rename(columns={v: k for k, v in rename_map.items()}).columns)
             for col in original_preview_cols:
-                included = col in preview_df.columns  # for clarity, but you can adjust logic
+                # included = col in preview_df.columns  # for clarity, but you can adjust logic
+                included = col not in hidden_columns
                 new_name = rename_map.get(col, col)
                 if col:  # guard
                     rule_payload.append({
@@ -247,7 +295,7 @@ with tabs[1]:
                         "created_at": now
                     })
 
-            # B) Handle brand-new columns (added with the "Insert Column" logic)
+            #  STEP 7:  Handle brand-new columns (added with the "Insert Column" logic)
             for new_col_name in final_df.columns:
                 # If new_col_name not in original_preview_cols, then it's brand new
                 if new_col_name not in original_preview_cols:
@@ -259,9 +307,14 @@ with tabs[1]:
                         "included": True,
                         "created_at": now
                     })
+            
+          
 
-            # ✅ Only save if non-empty
+            #  STEP 8:  ✅ Only save if non-empty
             if rule_payload:
+                if not any(rule["included"] for rule in rule_payload):
+                    st.error("❌ All columns are excluded. Please include at least one column.")
+                    st.stop()
                 try:
                     save_transform_rules(rule_payload, DB_PATH)
                     st.toast("✅ Transform rules saved")
@@ -270,7 +323,7 @@ with tabs[1]:
             else:
                 st.warning("⚠️ No valid transformation rules to save.")
 
-            # Upload data to DB
+            # STEP 9: Upload to SQLite
             table_name = f"raw_data_{datetime.now().strftime('%Y%m%d_%H%M')}"
             try:
                 with sqlite3.connect(DB_PATH) as conn:
