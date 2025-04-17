@@ -10,10 +10,20 @@ from st_aggrid import GridOptionsBuilder, AgGrid, GridUpdateMode, DataReturnMode
 # Adjust path as needed
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from ingestion.db_utils import (
-    init_db, 
-    get_existing_rule, insert_sheet_rule, get_transform_rules, save_transform_rules,
-    insert_upload_log, create_new_report, get_all_reports
+    init_db,
+    get_existing_rule,
+    insert_sheet_rule,
+    get_transform_rules,
+    save_transform_rules,
+    insert_upload_log, 
+    create_new_report, 
+    get_all_reports,
+    is_report_complete, 
+    get_expected_tables,
+    get_alias_for_file,  
+    update_alias_status
 )
+
 
 DB_PATH = 'database/reporting.db'
 os.makedirs("app_files", exist_ok=True)
@@ -43,17 +53,54 @@ tabs = st.tabs(["🚀 Choose Workflow", "📂 Single File Upload", "📦 Mass Up
 # TAB 0: Info
 # ──────────────────────────────────────────────────
 with tabs[0]:
-    st.title("📊 Quarterly Report Ingestion Console")
-    st.subheader("1) Choose a workflow")
-    st.markdown("""
-    - **Single File Upload**: upload a file, define or override a rule (Tab 2).
-    - **Mass Upload**: handle multiple files for a single “report” (Tab 3).
-    - **View History**: see a chronological log of all file uploads (Tab 4).
-    """)
+    st.title("📊 Report Launch & Validation")
+    st.markdown("Use this section to validate if all required data is present before running a report.")
+
+    reports_df = get_all_reports(DB_PATH)
+    report_names = reports_df["report_name"].tolist()
+
+    chosen_report = st.selectbox("Choose report to validate", report_names)
+
+    # Step 1: Cutoff input
+    cutoff_date = st.date_input("📅 Enter reporting cutoff date")
+    tolerance_days = st.slider("⏱️ Allow uploads within how many days before cutoff?", 0, 15, 3)
+
+    # Step 2: Validate presence of all required tables
+    complete, missing = is_report_complete(chosen_report, DB_PATH)
+    st.markdown("### ✅ Required Tables")
+    st.write(get_expected_tables(chosen_report, DB_PATH))
+
+    if not complete:
+        st.error(f"⛔ Missing required uploads: {', '.join(missing)}")
+        st.stop()
+
+    # Step 3: Validate upload timestamps against cutoff
+    import pandas as pd
+    with sqlite3.connect(DB_PATH) as conn:
+        df_uploads = pd.read_sql_query("""
+            SELECT table_alias, uploaded_at
+            FROM upload_log
+            WHERE report_name = ?
+        """, conn, params=(chosen_report,))
+
+    df_uploads["uploaded_at"] = pd.to_datetime(df_uploads["uploaded_at"])
+    too_old = df_uploads[df_uploads["uploaded_at"] < pd.to_datetime(cutoff_date) - pd.Timedelta(days=tolerance_days)]
+
+    if not too_old.empty:
+        st.warning("⚠️ Some tables were uploaded too early:")
+        st.dataframe(too_old)
+        st.stop()
+
+    st.success("🎉 All required tables uploaded and within valid cutoff window!")
+
+    if st.button("🚀 Run Report"):
+        st.info("✨ Your report logic goes here!")
+
 
 # ──────────────────────────────────────────────────
 # TAB 1: Single File Upload & Transformation
 # ──────────────────────────────────────────────────
+
 with tabs[1]:
     st.subheader("📂 Single File Upload & Transformation")
 
@@ -65,9 +112,12 @@ with tabs[1]:
         new_report_name = st.text_input("New Report Name")
         if st.button("➕ Create Report"):
             if new_report_name.strip():
-                create_new_report(new_report_name, DB_PATH)
-                st.success(f"Report '{new_report_name}' created!")
-                st.experimental_rerun()
+                try:
+                    create_new_report(new_report_name.strip(), DB_PATH)
+                    st.success(f"Report '{new_report_name}' created!")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
             else:
                 st.warning("Please provide a name.")
         st.stop()
@@ -81,293 +131,225 @@ with tabs[1]:
 
     filename = uploaded_file.name
     extension = os.path.splitext(filename)[1].lower()
+    filename_wo_ext = os.path.splitext(filename)[0]
+    table_name = f"raw_{filename_wo_ext.lower()}"
     st.success(f"📥 File received: `{filename}`")
 
-    preview_df = None
+    existing_sheet, saved_start_row = get_existing_rule(filename, DB_PATH)
     sheet_to_use = None
-    saved_rule = get_existing_rule(filename, DB_PATH)
 
-    try:
-        if extension in [".xlsx", ".xls"]:
-            xls = pd.ExcelFile(uploaded_file)
-            all_sheets = xls.sheet_names
+    if extension in [".xlsx", ".xls"]:
+        xls = pd.ExcelFile(uploaded_file)
+        sheet_names = xls.sheet_names
 
-            if saved_rule:
-                st.success(f"💾 Found saved sheet rule: `{saved_rule}`")
-                use_saved = st.checkbox("Use saved sheet rule?", value=True)
-                if use_saved:
-                    sheet_to_use = saved_rule
-                else:
-                    selected = st.selectbox("📑 Select sheet to override the saved rule:", all_sheets)
-                    confirm_override = st.button("✅ Confirm Sheet Selection")
-                    if confirm_override:
-                        sheet_to_use = selected
-                        st.success(f"✅ Using sheet: `{sheet_to_use}`")
-                        insert_sheet_rule(filename, sheet_to_use, DB_PATH)
-                    else:
-                        st.stop()
-            else:
-                selected = st.selectbox("📑 Select sheet to upload:", all_sheets)
-                confirm_select = st.button("✅ Confirm Sheet Selection")
-                if confirm_select:
-                    sheet_to_use = selected
-                    st.success(f"✅ Using sheet: `{sheet_to_use}`")
-                    insert_sheet_rule(filename, sheet_to_use, DB_PATH)
-                else:
-                    st.stop()
+        if existing_sheet and existing_sheet in sheet_names:
+            st.success(f"✅ Found saved sheet: `{existing_sheet}`")
+            use_existing = st.checkbox("Use saved sheet rule?", value=True)
+            sheet_to_use = existing_sheet if use_existing else None
 
-            preview_df = xls.parse(sheet_to_use)
+        if sheet_to_use is None:
+            sheet_to_use = st.selectbox("📑 Select sheet to upload:", sheet_names)
 
-        elif extension == ".csv":
-            sheet_to_use = "CSV_SHEET"
-            preview_df = pd.read_csv(uploaded_file)
-        else:
-            st.error("❌ Unsupported file format.")
-            st.stop()
+        start_row = st.number_input("Start row:", min_value=0, value=saved_start_row or 0)
 
-        # 🔁 Apply transform rules
-        rules = get_transform_rules(filename, sheet_to_use, DB_PATH)
-        if rules:
-            included_cols = [r['original_column'] for r in rules if r['included']]
-            rename_map = {r['original_column']: r['renamed_column'] for r in rules if r['included']}
-            
-            # ✅ Extra check to avoid empty DataFrame bug
-            existing = [c for c in included_cols if c in preview_df.columns]
-            if existing:
-                preview_df = preview_df[existing]
-                preview_df.rename(columns=rename_map, inplace=True)
-            else:
-                st.warning("⚠️ No matching columns found to apply transform rules. Showing full dataset.")
-        else:
-            st.info("ℹ️ No transform rules applied.")
+        if st.button("💾 Save sheet rule"):
+            insert_sheet_rule(filename, sheet_to_use, start_row, DB_PATH)
+            st.success(f"Rule saved for `{filename}`: `{sheet_to_use}`, row {start_row}")
 
-        # ➕ Add New Column (Optional)
-        st.markdown("### ➕ Add a New Column (Optional)")
-        st.markdown("Use a Python expression referencing `preview_df`. For example: `Call.str[-3:]`")
+        preview_df = xls.parse(sheet_to_use, skiprows=start_row)
 
-        new_col = st.text_input("New column name", value="NewColumn")
-        expression = st.text_input("Python expression (optional)")
+    elif extension == ".csv":
+        sheet_to_use = "CSV_SHEET"
+        start_row = st.number_input("Start row:", min_value=0, value=saved_start_row or 0)
+        preview_df = pd.read_csv(uploaded_file, skiprows=start_row)
 
-        if st.button("➕ Insert Column"):
-            try:
-                if expression.strip():
-                    preview_df[new_col] = eval(f"preview_df.{expression}")
-                    st.success(f"✅ New column `{new_col}` added.")
-                else:
-                    preview_df[new_col] = ""
-                    st.success(f"✅ Blank column `{new_col}` created.")
-            except Exception as err:
-                st.error(f"❌ Error: {err}")
+    else:
+        st.error("❌ Unsupported file format.")
+        st.stop()
 
-        # 🧠 AgGrid for editing
-        st.markdown("### Edit Data in Grid (Rename / Remove Columns, Adjust Values)")
-        max_rows = st.slider("🔢 Rows to preview:", 5, 1000, 10)
+    rules = get_transform_rules(filename, sheet_to_use, DB_PATH)
+    if rules:
+        included = [r["original_column"] for r in rules if r["included"]]
+        rename_map = {r["original_column"]: r["renamed_column"] for r in rules if r["included"]}
+        preview_df = preview_df[[c for c in included if c in preview_df.columns]]
+        preview_df.rename(columns=rename_map, inplace=True)
+        st.info("✅ Applied saved transformation rules.")
 
-        # Step 1: GridOptionsBuilder
-        gb = GridOptionsBuilder.from_dataframe(preview_df.head(max_rows))
+    st.markdown("### 👀 Preview")
+    st.dataframe(preview_df.head(10))
 
-        gb.configure_default_column(
-            editable=True,
-            resizable=True,
-            filter=True,
-            sortable=True
-        )
+    excluded_cols = st.multiselect("Exclude columns:", preview_df.columns)
 
-        # Step 2: Explicitly configure each column with hide toggle
+    if st.button("✅ Save/Upload"):
+        final_df = preview_df.drop(columns=excluded_cols, errors="ignore")
+        now = datetime.now().isoformat()
+
+        rule_payload = []
         for col in preview_df.columns:
-            gb.configure_column(field=col, header_name=col, hide=False)
+            rule_payload.append({
+                "filename": filename,
+                "sheet": sheet_to_use,
+                "original_column": col,
+                "renamed_column": col,
+                "included": col not in excluded_cols,
+                "created_at": now
+            })
 
-        # Step 3: Build the grid options
-        gb.configure_grid_options(domLayout="autoHeight")
+        save_transform_rules(rule_payload, DB_PATH)
 
-        # Step 4: Render AgGrid with correct mode for column state tracking
-        grid_response = AgGrid(
-            preview_df.head(max_rows),
-            gridOptions=gb.build(),
-            update_mode=GridUpdateMode.MODEL_CHANGED,
-            data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-            allow_unsafe_jscode=True,
-            fit_columns_on_grid_load=False,
-            enable_enterprise_modules=True,
-            theme="material")
-        
-        edited_df = grid_response["data"]
-        # ✅ Extract column visibility state safely
-        column_state = grid_response.get("column_state", [])
-        hidden_columns = [col.get("colId") for col in column_state if col.get("hide", False)]
-        # ✅ Still use `columns` for ordering/renaming
-        updated_columns = grid_response.get("columns", [])
-        # hidden_columns = [col["field"] for col in updated_columns if col.get("hide", False)]
-        # Step 2: Show for debugging (optional)
-        st.markdown("### 🕵️ Hidden columns (will be excluded):")
-        st.write(hidden_columns)
+        try:
+            with sqlite3.connect(DB_PATH) as conn:
+                upload_id = insert_upload_log(
+                    filename, table_name, final_df.shape[0], final_df.shape[1],
+                    chosen_report, db_path=DB_PATH
+                )
+                final_df["upload_id"] = upload_id
+                final_df["uploaded_at"] = now
 
-        # Optional: Prompt the user to apply visibility/rename changes
-        st.markdown("📝 After hiding or renaming columns, click **🔄 Update** to apply your changes.")
-        
-        if st.button("🔄 Update"):
-            # Extract edited data
-            edited_df = grid_response["data"]
-
-            # Extract column metadata
-            updated_columns = grid_response.get("columns", [])
-            hidden_columns = [col["colId"] for col in column_state if col.get("hide", False)]
-
-            # Show which columns are hidden
-            st.markdown("### 🕵️ Hidden columns (will be excluded):")
-            st.write(hidden_columns)
-
-            # Build rename map from AgGrid header renames
-            rename_map = {
-                col['field']: col.get('headerName', col['field']) 
-                for col in updated_columns 
-                if col['field'] != col.get('headerName', col['field'])
-            }
-
-            # Apply renames and column order to full dataset
-            final_df = preview_df.rename(columns=rename_map).copy()
-            current_fields = [col["field"] for col in updated_columns]
-
-            if current_fields:
-                final_df = final_df[current_fields]
-            else:
-                st.warning("⚠️ Could not determine column order from AgGrid. Keeping original order.")
-
-            # Sanitize column names to avoid SQLite syntax issues
-            def sanitize(col):
-                if not col or not str(col).strip():
-                    return "col_unnamed"
-                col = re.sub(r"[^a-zA-Z0-9_]+", "_", str(col))
-                if col[0].isdigit():
-                    col = f"col_{col}"
-                return col
-
-            final_df.columns = [sanitize(c) for c in final_df.columns]
-
-            # Store result in session state for Save/Upload step
-            st.session_state["final_df"] = final_df
-            st.session_state["rename_map"] = rename_map
-            st.session_state["hidden_columns"] = hidden_columns
-            st.success("✅ Changes applied. You can now proceed to Save/Upload.")
-
-        
-        # ──────────────────────────────────────────────────────────
-        # SAVE/UPLOAD block
-        # ──────────────────────────────────────────────────────────
-        if st.button("✅ Save/Upload"):
-            # STEP 1: Load from session state
-            final_df = st.session_state.get("final_df")
-            rename_map = st.session_state.get("rename_map", {})
-            hidden_columns = st.session_state.get("hidden_columns", [])
-
-              # STEP 2: Safety check
-            if final_df is None:
-                st.error("❌ No changes found. Please click 🔄 Update before saving.")
-                st.stop()
-
-            # Debugging: show final columns
-            st.write("**Final columns going into the DB:**", list(final_df.columns))
-            st.write(f"**Final shape:** {final_df.shape}")
-
-            # Safety check: ensure at least one column
-            if final_df.shape[1] == 0:
-                st.error("⚠️ No columns left to upload. Please keep at least one column.")
-                st.stop()
-
-            now = datetime.now().isoformat()
-            rule_payload = []
-
-            #  STEP 6: Handle original columns
-            # (We iterate over the original preview_df columns before rename)
-            reverse_rename_map = {v: k for k, v in rename_map.items()}
-            original_preview_cols = list(preview_df.rename(columns={v: k for k, v in rename_map.items()}).columns)
-            for col in original_preview_cols:
-                # included = col in preview_df.columns  # for clarity, but you can adjust logic
-                included = col not in hidden_columns
-                new_name = rename_map.get(col, col)
-                if col:  # guard
-                    rule_payload.append({
-                        "filename": filename,
-                        "sheet": sheet_to_use,
-                        "original_column": col,
-                        "renamed_column": sanitize(new_name),
-                        "included": included,
-                        "created_at": now
-                    })
-
-            #  STEP 7:  Handle brand-new columns (added with the "Insert Column" logic)
-            for new_col_name in final_df.columns:
-                # If new_col_name not in original_preview_cols, then it's brand new
-                if new_col_name not in original_preview_cols:
-                    rule_payload.append({
-                        "filename": filename,
-                        "sheet": sheet_to_use,
-                        "original_column": new_col_name,
-                        "renamed_column": new_col_name,
-                        "included": True,
-                        "created_at": now
-                    })
-            
-          
-
-            #  STEP 8:  ✅ Only save if non-empty
-            if rule_payload:
-                if not any(rule["included"] for rule in rule_payload):
-                    st.error("❌ All columns are excluded. Please include at least one column.")
-                    st.stop()
-                try:
-                    save_transform_rules(rule_payload, DB_PATH)
-                    st.toast("✅ Transform rules saved")
-                except Exception as err:
-                    st.error(f"❌ Failed saving rules: {err}")
-            else:
-                st.warning("⚠️ No valid transformation rules to save.")
-
-            # STEP 9: Upload to SQLite
-            table_name = f"raw_data_{datetime.now().strftime('%Y%m%d_%H%M')}"
-            try:
-                with sqlite3.connect(DB_PATH) as conn:
+                existing = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table'", conn)
+                if table_name not in existing["name"].tolist():
                     final_df.to_sql(table_name, conn, index=False, if_exists="replace")
-                insert_upload_log(filename, table_name, final_df.shape[0], final_df.shape[1], DB_PATH)
-                st.toast(f"📦 Data uploaded to `{table_name}`", icon="✅")
-            except Exception as err:
-                st.error(f"❌ Failed uploading to DB: {err}")
+                else:
+                    final_df.to_sql(table_name, conn, index=False, if_exists="append")
 
-    except Exception as err:
-        st.error(f"❌ Error processing file: {err}")
+            st.success(f"📦 Uploaded to `{table_name}` (Upload ID: {upload_id})")
+
+        except Exception as e:
+            st.error(f"❌ Upload failed: {e}")
 
 
 # ──────────────────────────────────────────────────
-# TAB 2: Mass Upload
+# TAB 2: Mass Upload from `app_files`
 # ──────────────────────────────────────────────────
+
 with tabs[2]:
-    st.subheader("📦 Mass Upload for a Report")
+    st.subheader("📦 Mass Upload from `app_files/`")
 
     reports_df = get_all_reports(DB_PATH)
     if reports_df.empty:
-        st.warning("No reports found. Please create a report in the Single File tab first.")
+        st.warning("Please create a report first.")
         st.stop()
 
-    chosen_report_for_mass = st.selectbox("Select Report", reports_df["report_name"].tolist())
-    st.info(f"You are uploading multiple files for: {chosen_report_for_mass}")
+    chosen_report = st.selectbox("Select report to upload files for:", reports_df["report_name"].tolist())
 
-    files = st.file_uploader("Drop multiple files here", type=["csv","xlsx","xls"], accept_multiple_files=True)
-    if files:
-        st.write(f"Number of files selected: {len(files)}")
-        for f in files:
-            st.write(f"- {f.name}")
+    all_files = [f for f in os.listdir("app_files") if f.endswith((".csv", ".xlsx", ".xls"))]
+    if not all_files:
+        st.info("Place files in the `app_files/` folder.")
+        st.stop()
 
-        if st.button("🚀 Perform Mass Upload"):
-            st.success("Mass upload completed! (Implement your logic...)")
+    if st.button("🚀 Upload All"):
+        for file in all_files:
+            file_path = os.path.join("app_files", file)
+            filename_wo_ext = os.path.splitext(file)[0]
+            table_name = f"raw_{filename_wo_ext.lower()}"
+
+            ext = os.path.splitext(file)[1].lower()
+            sheet, start_row = get_existing_rule(file, DB_PATH)
+
+            try:
+                if ext in [".xlsx", ".xls"]:
+                    xls = pd.ExcelFile(file_path)
+                    if not sheet or sheet not in xls.sheet_names:
+                        st.warning(f"⚠️ No sheet rule for `{file}`")
+                        continue
+                    df = xls.parse(sheet, skiprows=start_row)
+                elif ext == ".csv":
+                    sheet = "CSV_SHEET"
+                    df = pd.read_csv(file_path, skiprows=start_row or 0)
+                else:
+                    st.warning(f"⚠️ Unsupported file type `{file}`")
+                    continue
+
+                rules = get_transform_rules(file, sheet, DB_PATH)
+                if rules:
+                    included = [r["original_column"] for r in rules if r["included"]]
+                    rename_map = {r["original_column"]: r["renamed_column"] for r in rules if r["included"]}
+                    df = df[[c for c in included if c in df.columns]]
+                    df.rename(columns=rename_map, inplace=True)
+
+                with sqlite3.connect(DB_PATH) as conn:
+                    upload_id = insert_upload_log(
+                        file, table_name, df.shape[0], df.shape[1], chosen_report, db_path=DB_PATH
+                    )
+                    df["upload_id"] = upload_id
+                    df["uploaded_at"] = datetime.now().isoformat()
+
+                    existing = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table'", conn)
+                    if table_name not in existing["name"].tolist():
+                        df.to_sql(table_name, conn, index=False, if_exists="replace")
+                    else:
+                        df.to_sql(table_name, conn, index=False, if_exists="append")
+
+                st.success(f"✅ Uploaded `{file}` to `{table_name}`")
+
+            except Exception as e:
+                st.error(f"❌ Failed to upload `{file}`: {e}")
 
 # ──────────────────────────────────────────────────
-# TAB 3: View Upload History
+# TAB 3: Upload History & Report Management
 # ──────────────────────────────────────────────────
+
 with tabs[3]:
     st.subheader("🔎 Upload History")
+
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            logs = pd.read_sql_query("SELECT * FROM upload_log ORDER BY uploaded_at DESC", conn)
-        st.dataframe(logs)
+            logs = pd.read_sql_query("""
+                SELECT report_name, MAX(uploaded_at) AS last_refresh
+                FROM upload_log
+                GROUP BY report_name
+                ORDER BY last_refresh DESC
+            """, conn)
+        if logs.empty:
+            st.info("No uploads found.")
+        else:
+            selected_report = st.selectbox("Select report to inspect", logs["report_name"])
+            st.dataframe(logs)
+
+            with sqlite3.connect(DB_PATH) as conn:
+                report_logs = pd.read_sql_query("""
+                    SELECT filename, table_alias, uploaded_at, rows, cols
+                    FROM upload_log
+                    WHERE report_name = ?
+                    ORDER BY uploaded_at DESC
+                """, conn, params=(selected_report,))
+            st.markdown(f"### 📁 Files uploaded for `{selected_report}`")
+            st.dataframe(report_logs)
+
+            col1, col2 = st.columns(2)
+            if col1.button("❌ Delete selected report"):
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("DELETE FROM reports WHERE report_name = ?", (selected_report,))
+                    conn.execute("DELETE FROM upload_log WHERE report_name = ?", (selected_report,))
+                    conn.execute("DELETE FROM report_structure WHERE report_name = ?", (selected_report,))
+                    conn.execute("DELETE FROM report_cutoff_log WHERE report_name = ?", (selected_report,))
+                st.success(f"✅ Report `{selected_report}` and its logs were deleted.")
+                st.rerun()
+
+            if col2.button("🔥 Delete ALL reports"):
+                with sqlite3.connect(DB_PATH) as conn:
+                    conn.execute("DELETE FROM reports")
+                    conn.execute("DELETE FROM upload_log")
+                    conn.execute("DELETE FROM report_structure")
+                    conn.execute("DELETE FROM report_cutoff_log")
+                    conn.execute("DELETE FROM alias_upload_status")
+                st.success("🧨 All reports and their logs were deleted.")
+                st.rerun()
+
+        # Show alias freshness
+        st.markdown("### ⏱️ Alias Freshness")
+        with sqlite3.connect(DB_PATH) as conn:
+            freshness_df = pd.read_sql_query("""
+                SELECT a.alias, a.last_loaded_at, f.filename
+                FROM alias_upload_status a
+                LEFT JOIN file_alias_map f ON a.file_id = f.id
+                ORDER BY a.last_loaded_at DESC
+            """, conn)
+        if freshness_df.empty:
+            st.info("No alias freshness records yet.")
+        else:
+            st.dataframe(freshness_df)
+
     except Exception as e:
-        st.error(f"Could not load upload log: {e}")
+        st.error(f"Could not load history: {e}")
+

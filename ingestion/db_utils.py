@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 
 # ─────────────────────────────────────────
-# Helper: initialize all tables, including 'reports'
+# Init DB with all required tables
 # ─────────────────────────────────────────
 def init_db(db_path='database/reporting.db'):
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -19,7 +19,29 @@ def init_db(db_path='database/reporting.db'):
                 table_name TEXT,
                 uploaded_at TEXT,
                 rows INTEGER,
-                cols INTEGER
+                cols INTEGER,
+                report_name TEXT,
+                table_alias TEXT
+            )
+        """)
+
+        # 1.5) File-alias mapping
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS file_alias_map (
+                id INTEGER PRIMARY KEY,
+                filename TEXT UNIQUE,
+                table_alias TEXT
+            )
+        """)
+
+        # 1.6) Alias upload status
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS alias_upload_status (
+                id INTEGER PRIMARY KEY,
+                alias TEXT UNIQUE,
+                last_loaded_at TEXT,
+                file_id INTEGER,
+                FOREIGN KEY (file_id) REFERENCES file_alias_map(id)
             )
         """)
 
@@ -29,9 +51,8 @@ def init_db(db_path='database/reporting.db'):
                 id INTEGER PRIMARY KEY,
                 filename TEXT,
                 sheet_name TEXT,
+                start_row INTEGER,
                 rule_created_at TEXT
-                -- OPTIONAL: If you want to link to a 'report_name'
-                -- report_name TEXT
             )
         """)
 
@@ -48,7 +69,7 @@ def init_db(db_path='database/reporting.db'):
             )
         """)
 
-        # 4) Reports table
+        # 4) Reports
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,41 +78,65 @@ def init_db(db_path='database/reporting.db'):
             )
         """)
 
-        conn.commit()
+        # 5) Expected report structure
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS report_structure (
+                id INTEGER PRIMARY KEY,
+                report_name TEXT,
+                table_alias TEXT,
+                required BOOLEAN,
+                expected_cutoff TEXT
+            )
+        """)
 
+        # 6) Report cutoff tracking
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS report_cutoff_log (
+                id INTEGER PRIMARY KEY,
+                report_name TEXT,
+                cutoff_label TEXT,
+                cutoff_date TEXT,
+                validated BOOLEAN,
+                validated_at TEXT
+            )
+        """)
+
+        conn.commit()
 
 # ─────────────────────────────────────────
 # Upload log
 # ─────────────────────────────────────────
-def insert_upload_log(filename, table_name, rows, cols, db_path='database/reporting.db'):
+def insert_upload_log(filename, table_name, rows, cols, report_name, db_path='database/reporting.db'):
     now = datetime.now().isoformat()
     with sqlite3.connect(db_path) as conn:
-        conn.execute("""
-            INSERT INTO upload_log (filename, table_name, uploaded_at, rows, cols)
-            VALUES (?, ?, ?, ?, ?)
-        """, (filename, table_name, now, rows, cols))
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO upload_log (filename, table_name, uploaded_at, rows, cols, report_name)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (filename, table_name, now, rows, cols, report_name))
         conn.commit()
+        return cursor.lastrowid
 
 
 # ─────────────────────────────────────────
 # Sheet rules
 # ─────────────────────────────────────────
-def insert_sheet_rule(filename, sheet_name, db_path='database/reporting.db'):
+def insert_sheet_rule(filename, sheet_name, start_row=0, db_path='database/reporting.db'):
     now = datetime.now().isoformat()
     with sqlite3.connect(db_path) as conn:
+        conn.execute("DELETE FROM sheet_rules WHERE filename = ?", (filename,))
         conn.execute("""
-            INSERT INTO sheet_rules (filename, sheet_name, rule_created_at)
-            VALUES (?, ?, ?)
-        """, (filename, sheet_name, now))
+            INSERT INTO sheet_rules (filename, sheet_name, start_row, rule_created_at)
+            VALUES (?, ?, ?, ?)
+        """, (filename, sheet_name, start_row, now))
         conn.commit()
 
 def get_existing_rule(filename, db_path='database/reporting.db'):
     with sqlite3.connect(db_path) as conn:
         cur = conn.cursor()
-        cur.execute("SELECT sheet_name FROM sheet_rules WHERE filename = ?", (filename,))
+        cur.execute("SELECT sheet_name, start_row FROM sheet_rules WHERE filename = ?", (filename,))
         row = cur.fetchone()
-        return row[0] if row else None
-
+        return (row[0], row[1]) if row else (None, None)
 
 # ─────────────────────────────────────────
 # Transform rules
@@ -137,15 +182,17 @@ def save_transform_rules(rules, db_path='database/reporting.db'):
             ))
         conn.commit()
 
-
 # ─────────────────────────────────────────
 # Reports
 # ─────────────────────────────────────────
 def create_new_report(report_name, db_path='database/reporting.db'):
-    """Insert a new report record, if it doesn’t exist."""
     now = datetime.now().isoformat()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM reports WHERE report_name = ?", (report_name,))
+        exists = cursor.fetchone()[0]
+        if exists:
+            raise ValueError(f"Report name '{report_name}' already exists.")
         cursor.execute("""
             INSERT INTO reports (report_name, created_at)
             VALUES (?, ?)
@@ -153,8 +200,97 @@ def create_new_report(report_name, db_path='database/reporting.db'):
         conn.commit()
 
 def get_all_reports(db_path='database/reporting.db'):
-    """Return all reports as a list of rows or a DataFrame if desired."""
     import pandas as pd
     with sqlite3.connect(db_path) as conn:
         df = pd.read_sql_query("SELECT * FROM reports ORDER BY created_at DESC", conn)
     return df
+
+# ─────────────────────────────────────────
+# Report structure logic
+# ─────────────────────────────────────────
+def define_expected_table(report_name, table_alias, required=True, expected_cutoff=None, db_path='database/reporting.db'):
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            INSERT INTO report_structure (report_name, table_alias, required, expected_cutoff)
+            VALUES (?, ?, ?, ?)
+        """, (report_name, table_alias, int(required), expected_cutoff))
+        conn.commit()
+
+def get_expected_tables(report_name, db_path='database/reporting.db'):
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT table_alias FROM report_structure
+            WHERE report_name = ? AND required = 1
+        """, (report_name,))
+        return [row[0] for row in cursor.fetchall()]
+
+def get_uploaded_tables(report_name, db_path='database/reporting.db'):
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT table_alias FROM upload_log
+            WHERE report_name = ?
+        """, (report_name,))
+        return [row[0] for row in cursor.fetchall()]
+
+def is_report_complete(report_name, db_path='database/reporting.db'):
+    expected = set(get_expected_tables(report_name, db_path))
+    uploaded = set(get_uploaded_tables(report_name, db_path))
+    missing = expected - uploaded
+    return (len(missing) == 0, list(missing))
+
+# ─────────────────────────────────────────
+# Report cutoff logging
+# ─────────────────────────────────────────
+def log_cutoff(report_name, cutoff_label, cutoff_date, validated=False, db_path='database/reporting.db'):
+    now = datetime.now().isoformat()
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            INSERT INTO report_cutoff_log (report_name, cutoff_label, cutoff_date, validated, validated_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (report_name, cutoff_label, cutoff_date, int(validated), now))
+        conn.commit()
+
+# ─────────────────────────────────────────
+# File ↔ Table Alias Mapping
+# ─────────────────────────────────────────
+def register_file_alias(filename, alias, db_path='database/reporting.db'):
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            INSERT OR REPLACE INTO file_alias_map (filename, table_alias)
+            VALUES (?, ?)
+        """, (filename, alias))
+        conn.commit()
+
+def get_alias_for_file(filename, db_path='database/reporting.db'):
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT table_alias FROM file_alias_map WHERE filename = ?", (filename,))
+        row = cur.fetchone()
+        return row[0] if row else None
+
+# ─────────────────────────────────────────
+# Alias freshness tracking
+# ─────────────────────────────────────────
+def update_alias_status(alias, filename, db_path='database/reporting.db'):
+    now = datetime.now().isoformat()
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM file_alias_map WHERE filename = ?", (filename,))
+        row = cur.fetchone()
+        if row:
+            file_id = row[0]
+            cur.execute("""
+                INSERT INTO alias_upload_status (alias, last_loaded_at, file_id)
+                VALUES (?, ?, ?)
+                ON CONFLICT(alias) DO UPDATE SET last_loaded_at=excluded.last_loaded_at, file_id=excluded.file_id
+            """, (alias, now, file_id))
+            conn.commit()
+
+def get_alias_last_load(alias, db_path='database/reporting.db'):
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT last_loaded_at FROM alias_upload_status WHERE alias = ?", (alias,))
+        row = cur.fetchone()
+        return row[0] if row else None
