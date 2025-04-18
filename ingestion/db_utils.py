@@ -106,17 +106,18 @@ def init_db(db_path='database/reporting.db'):
 # ─────────────────────────────────────────
 # Upload log
 # ─────────────────────────────────────────
-def insert_upload_log(filename, table_name, rows, cols, report_name, db_path='database/reporting.db'):
+# Corrected function signature to accept table_alias
+def insert_upload_log(filename, table_name, rows, cols, report_name, table_alias, db_path='database/reporting.db'):
     now = datetime.now().isoformat()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
+        # Corrected INSERT statement to include table_alias
         cursor.execute("""
-            INSERT INTO upload_log (filename, table_name, uploaded_at, rows, cols, report_name)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (filename, table_name, now, rows, cols, report_name))
+            INSERT INTO upload_log (filename, table_name, uploaded_at, rows, cols, report_name, table_alias)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (filename, table_name, now, rows, cols, report_name, table_alias))
         conn.commit()
         return cursor.lastrowid
-
 
 # ─────────────────────────────────────────
 # Sheet rules
