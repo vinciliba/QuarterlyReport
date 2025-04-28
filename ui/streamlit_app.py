@@ -5,7 +5,9 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import traceback # Import traceback for better error reporting
-from ingestion.db_utils import get_suggested_structure, define_expected_table
+from ingestion.db_utils import get_suggested_structure, define_expected_table, get_all_reports
+from ingestion.report_check import check_report_readiness
+
 
 # Adjust path as needed
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -107,102 +109,104 @@ selected_section = sections[selected_section_key]
 print(f"DEBUG: Script rerun. Selected section: {selected_section_key} ({selected_section})")
 st.write(f"", unsafe_allow_html=True) # HTML comment for browser source check
 
+# ──────────────────────────────────────────────────
+# WORKFLOW  – Launch & Validation
+# ──────────────────────────────────────────────────
 if selected_section == "workflow":
-    # --- Section: Choose Workflow (Original Tab 0) ---
-    print("DEBUG: Entering workflow section") # Debug print
+    from ingestion.report_check import check_report_readiness   # ← new helper
+
     st.title("📊 Report Launch & Validation")
-    st.markdown("Use this section to validate if all required data is present before running a report.")
+    st.markdown(
+        "Validate that all required uploads are present **and** fresh before "
+        "running a report."
+    )
 
+    # ----------------------------------------------
+    # Pick a report
+    # ----------------------------------------------
     reports_df = get_all_reports(DB_PATH)
-    report_names = reports_df["report_name"].tolist()
+    if reports_df.empty:
+        st.info("No reports defined yet. Create one in “Single File Upload”.")
+        st.stop()
 
-    if not report_names:
-        st.info("No reports defined yet. Please go to 'Single File Upload' to create one.")
-        st.stop() # Stop if no reports exist
+    chosen_report = st.selectbox(
+        "Choose report to validate", reports_df["report_name"].tolist()
+    )
 
-    chosen_report = st.selectbox("Choose report to validate", report_names)
+    # ----------------------------------------------
+    # Pick cutoff & tolerance
+    # ----------------------------------------------
+    cutoff_date = st.date_input("📅 Reporting cutoff date")
+    tolerance_days = st.slider(
+        "⏱️ Tolerance – uploads accepted this many days before cutoff",
+        0,
+        15,
+        3,
+    )
 
-    # Step 1: Cutoff input
-    cutoff_date = st.date_input("📅 Enter reporting cutoff date")
-    tolerance_days = st.slider("⏱️ Allow uploads within how many days before cutoff?", 0, 15, 3)
+    # ----------------------------------------------
+    # Run validation (pure util)
+    # ----------------------------------------------
+    validation_df, ready = check_report_readiness(
+        chosen_report, cutoff_date, tolerance_days, db_path=DB_PATH
+    )
 
-    # Step 2: Validate presence of all required tables
-    st.markdown("### ✅ Required Tables")
-    expected_tables = get_expected_tables(chosen_report, DB_PATH)
-    if not expected_tables:
-         st.warning(f"No required tables defined for report '{chosen_report}'. Please define them using db_utils or a future UI feature.")
-         # Allow proceeding if no tables are required, or stop? Decision needed.
-         # For now, let's assume a report with no required tables is 'complete' regarding table presence.
-         complete = True
-         missing = []
-    else:
-        complete, missing = is_report_complete(chosen_report, DB_PATH)
-        st.write(expected_tables)
+    st.markdown("### Validation results")
+    st.dataframe(validation_df, hide_index=True, use_container_width=True)
 
-
-    if not complete:
-        st.error(f"⛔ Missing required uploads: {', '.join(missing)}. Upload them via 'Single File Upload' or 'Mass Upload'.")
-        st.stop() # Stop here if required tables are missing
-
-    # Step 3: Validate upload timestamps against cutoff
-    try:
-        with sqlite3.connect(DB_PATH) as conn:
-            # Ensure table_alias is included in upload_log or join with file_alias_map if needed
-            # Based on db_utils, upload_log table now has table_alias column
-            df_uploads = pd.read_sql_query("""
-                SELECT table_alias, uploaded_at
-                FROM upload_log
-                WHERE report_name = ?
-            """, conn, params=(chosen_report,))
-
-        df_uploads["uploaded_at"] = pd.to_datetime(df_uploads["uploaded_at"])
-        cutoff_datetime = pd.to_datetime(cutoff_date) - pd.Timedelta(days=tolerance_days)
-        too_old = df_uploads[df_uploads["uploaded_at"] < cutoff_datetime]
-
-        if not too_old.empty:
-            st.warning("⚠️ Some tables were uploaded too early (outside the allowed window before cutoff):")
-            st.dataframe(too_old)
-            st.stop() # Stop here if uploads are too old
-
-        st.success("🎉 All required tables uploaded and within valid cutoff window!")
+    # ----------------------------------------------
+    # Outcome
+    # ----------------------------------------------
+    if ready:
+        st.success("🎉 All required tables uploaded and within the valid window!")
 
         if st.button("🚀 Run Report"):
+            # ── 1️⃣ transient status banner ───────────────────────────
+            status = st.empty()                       # reserve space
+            status.info(f"Launching report **{chosen_report}** …")
+
+            # ── 2️⃣ run the job inside a spinner ─────────────────────
             try:
-                # Dynamically import and run the report module
-                import importlib
-                
-                # Map your report names to their corresponding module filenames
-                report_to_module = {
-                    "Quarterly_Report": "reporting.quarterly_report",
-                    "Invoice_Summary": "reporting.invoice_summary",
-                    # Add other mappings here as needed
-                }
-                
-                selected_module = report_to_module.get(chosen_report)
-                
-                if not selected_module:
-                    st.error(f"❌ No module defined for report '{chosen_report}'. Please add it to the mapping!")
-                else:
-                    report_module = importlib.import_module(selected_module)
-                    
-                    # Assume each report module has a `run_report` function inside
-                    if hasattr(report_module, 'run_report'):
-                        st.success(f"📊 Launching report: {chosen_report}")
-                        report_module.run_report()  # 🚀 Run it
-                    else:
-                        st.error(f"❌ Module `{selected_module}` missing a `run_report()` function.")
+                with st.spinner("Running …"):
+                    report_to_module = {
+                        "Quarterly_Report": "reporting.quarterly_report",
+                        "Invoice_Summary": "reporting.invoice_summary",
+                        # add more mappings …
+                    }
+                    mod_path = report_to_module.get(chosen_report)
 
+                    if not mod_path:
+                        raise RuntimeError(f"No module mapped for '{chosen_report}'")
+
+                    import importlib
+                    mod = importlib.import_module(mod_path)
+
+                    if not hasattr(mod, "run_report"):
+                        raise RuntimeError(f"Module '{mod_path}' has no `run_report()`")
+
+                    ok, msg = mod.run_report(cutoff_date, tolerance_days, db_path=DB_PATH)
             except Exception as e:
-                st.error(f"❌ Error running the report: {e}")
-                import traceback
-                st.code(traceback.format_exc()) # Print traceback to console for debugging
-            # Example: log the cutoff date validation
-            log_cutoff(chosen_report, f"Validation_{cutoff_date}", cutoff_date.isoformat(), validated=True, db_path=DB_PATH)
+                status.empty()                        # remove blue banner
+                st.error(f"💥 Error running report: {e}")
+                import traceback;  st.code(traceback.format_exc())
+            else:
+                status.empty()                        # remove banner when done
+                if ok:
+                    st.success(msg)
+                    st.toast("Report finished", icon="✅")
+                else:
+                    st.error(msg)
 
-
-    except Exception as e:
-         st.error(f"An error occurred during cutoff validation: {e}")
-         print(traceback.format_exc()) # Print traceback to console for debugging
+                # optional log
+                log_cutoff(
+                    chosen_report,
+                    f"Validation_{cutoff_date}",
+                    cutoff_date.isoformat(),
+                    validated=True,
+                    db_path=DB_PATH,
+                )
+    else:
+        st.error("⛔ Missing or stale uploads detected. Fix them before launch.")
 
 
 elif selected_section == "single_upload":
@@ -1167,6 +1171,53 @@ elif selected_section == "report_structure":
         st.dataframe(structure_df, use_container_width=True)
 
     st.markdown("---")
+
+    # --------------------------------------------------
+    # 2b) Inline edit existing rows
+    # --------------------------------------------------
+    if not structure_df.empty:
+        st.markdown("### ✏️ Edit existing rows")
+        editable_df = structure_df.copy()
+
+        edited_df = st.data_editor(
+            editable_df,
+            column_config={
+                "id": st.column_config.NumberColumn(disabled=True),
+                "table_alias": st.column_config.TextColumn(disabled=True),
+                "required": st.column_config.CheckboxColumn(),
+                "expected_cutoff": st.column_config.TextColumn(),
+            },
+            hide_index=True,
+            use_container_width=True,
+            num_rows="fixed",  # prevent adding new rows here
+        )
+
+        if st.button("💾 Save Changes to Existing Rows"):
+            diff_ct = 0
+            with sqlite3.connect(DB_PATH) as conn:
+                cur = conn.cursor()
+                for _, row in edited_df.iterrows():
+                    orig = structure_df.loc[structure_df.id == row["id"]].iloc[0]
+                    if (
+                        int(row["required"]) != int(orig["required"])
+                        or (row["expected_cutoff"] or "") != (orig["expected_cutoff"] or "")
+                    ):
+                        cur.execute(
+                            """
+                            UPDATE report_structure
+                            SET required = ?, expected_cutoff = ?
+                            WHERE id = ?
+                            """,
+                            (int(row["required"]), row["expected_cutoff"], int(row["id"])),
+                        )
+                        diff_ct += 1
+                conn.commit()
+
+            if diff_ct:
+                st.success(f"Updated {diff_ct} row(s).")
+                st.rerun()
+            else:
+                st.info("No changes detected.")
 
     # --------------------------------------------------
     # 3) Suggested aliases from upload_log (NEW)

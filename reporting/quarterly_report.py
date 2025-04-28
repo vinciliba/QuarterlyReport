@@ -1,105 +1,143 @@
-import os
-import sys
+# file: reporting/quarterly_report.py
+"""
+Quarterly Report generator.
+
+This module **does not use Streamlit**.  It provides one public function
+`run_report()` that performs:
+
+1.  Validation – all required table_aliases uploaded and fresh
+2.  Report-generation logic (placeholder)
+
+Returns
+-------
+Tuple[bool, str]
+    (True, "success message") on success
+    (False, "reason / error") on failure
+"""
+from __future__ import annotations
+
 import sqlite3
-import streamlit as st
+from datetime import datetime, date
 import pandas as pd
-from datetime import datetime
-from ingestion.db_utils import define_expected_table
+from ingestion.db_utils import get_expected_tables
 
 
-# Add project root to sys.path to allow absolute imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from ingestion.db_utils import (
-    init_db,
-    get_expected_tables,
-    get_all_reports,
-)
-
-# Initialize DB
-DB_PATH = 'database/reporting.db'
-os.makedirs("app_files", exist_ok=True)
-init_db(db_path=DB_PATH)
+DB_PATH_DEFAULT = "database/reporting.db"
+REPORT_NAME = "Quarterly_Report"
 
 
-st.title("📊 Quarterly Report Launch & Validation")
-st.markdown("Use this section to validate that all required uploads are present and fresh before running the report.")
+# ----------------------------------------------------------------------
+# helpers
+# ----------------------------------------------------------------------
+def _validate_uploads(
+    report_name: str,
+    cutoff_date: date | datetime,
+    tolerance_days: int,
+    db_path: str,
+) -> tuple[pd.DataFrame, bool]:
+    """Return validation dataframe + ready flag (internal use)."""
+    cutoff_dt = pd.to_datetime(cutoff_date) - pd.Timedelta(days=tolerance_days)
+    expected = get_expected_tables(report_name, db_path)
 
-# --- Report Selection ---
-reports_df = get_all_reports(DB_PATH)
-report_names = reports_df["report_name"].tolist()
+    if not expected:
+        # No strict requirements means always ready
+        return pd.DataFrame(
+            [{"Required Table Alias": "(none)", "Status": "⚠️ No requirements", "Last Upload": "-"}]
+        ), True
 
-if not report_names:
-    st.warning("No reports defined. Please create a report first.")
-    st.stop()
+    with sqlite3.connect(db_path) as conn:
+        uploaded_df = pd.read_sql_query(
+            """
+            SELECT table_alias, MAX(uploaded_at) as last_uploaded
+            FROM upload_log
+            WHERE report_name = ?
+            GROUP BY table_alias
+            """,
+            conn,
+            params=(report_name,),
+        )
 
-chosen_report = st.selectbox("Select report to validate", report_names)
+    uploaded = dict(zip(uploaded_df["table_alias"], uploaded_df["last_uploaded"]))
 
-# --- Cutoff Date and Tolerance ---
-cutoff_date = st.date_input("📅 Reporting Cutoff Date", value=datetime.today())
-tolerance_days = st.slider("⏱️ Tolerance (days before cutoff allowed)", 0, 15, 3)
-cutoff_datetime = pd.to_datetime(cutoff_date) - pd.Timedelta(days=tolerance_days)
+    rows: list[dict] = []
+    ready = True
 
-# --- Fetch Expected Tables ---
-expected_aliases = get_expected_tables(chosen_report, DB_PATH)
-
-if not expected_aliases:
-    st.warning(f"No required tables defined for report `{chosen_report}`.")
-    st.info("Assuming all uploads OK since no strict requirements.")
-    st.stop()
-
-# --- Fetch Uploaded Tables ---
-with sqlite3.connect(DB_PATH) as conn:
-    uploaded_df = pd.read_sql_query("""
-        SELECT table_alias, MAX(uploaded_at) as last_uploaded
-        FROM upload_log
-        WHERE report_name = ?
-        GROUP BY table_alias
-    """, conn, params=(chosen_report,))
-
-uploaded_aliases = dict(zip(uploaded_df['table_alias'], uploaded_df['last_uploaded']))
-
-# --- Validation ---
-validation_result = []
-report_is_complete = True
-
-for alias in expected_aliases:
-    if alias in uploaded_aliases:
-        upload_time = pd.to_datetime(uploaded_aliases[alias])
-        if upload_time >= cutoff_datetime:
-            validation_result.append({
-                "Required Table Alias": alias,
-                "Status": "✅ Fresh Upload",
-                "Last Upload": upload_time.strftime("%Y-%m-%d %H:%M")
-            })
+    for alias in expected:
+        if alias in uploaded:
+            ts = pd.to_datetime(uploaded[alias])
+            if ts >= cutoff_dt:
+                rows.append(
+                    {
+                        "Required Table Alias": alias,
+                        "Status": "✅ Fresh Upload",
+                        "Last Upload": ts.strftime("%Y-%m-%d %H:%M"),
+                    }
+                )
+            else:
+                rows.append(
+                    {
+                        "Required Table Alias": alias,
+                        "Status": "⚠️ Too Old",
+                        "Last Upload": ts.strftime("%Y-%m-%d %H:%M"),
+                    }
+                )
+                ready = False
         else:
-            validation_result.append({
-                "Required Table Alias": alias,
-                "Status": "⚠️ Too Old",
-                "Last Upload": upload_time.strftime("%Y-%m-%d %H:%M")
-            })
-            report_is_complete = False
-    else:
-        validation_result.append({
-            "Required Table Alias": alias,
-            "Status": "❌ Missing",
-            "Last Upload": "-"
-        })
-        report_is_complete = False
+            rows.append(
+                {
+                    "Required Table Alias": alias,
+                    "Status": "❌ Missing",
+                    "Last Upload": "-",
+                }
+            )
+            ready = False
 
-validation_df = pd.DataFrame(validation_result)
+    return pd.DataFrame(rows), ready
 
-st.markdown("### Validation Results")
-st.dataframe(validation_df, hide_index=True, use_container_width=True)
 
-# --- Final Decision ---
-if report_is_complete:
-    st.success("🎉 All required tables are uploaded and fresh!")
+# ----------------------------------------------------------------------
+# public entry-point
+# ----------------------------------------------------------------------
+def run_report(
+    cutoff_date: date | datetime | None = None,
+    tolerance_days: int = 3,
+    db_path: str = DB_PATH_DEFAULT,
+) -> tuple[bool, str]:
+    """
+    Execute Quarterly Report.
 
-    if st.button("🚀 Run Report"):
-        st.info(f"Launching report generation for `{chosen_report}`...")
-        # TODO: CALL your real report logic here, e.g., run_report(chosen_report)
-        st.success("✅ Report successfully launched!")
-else:
-    st.error("⛔ Some required tables are missing or outdated.")
-    st.stop()
+    Parameters
+    ----------
+    cutoff_date : date | datetime
+        The reporting cutoff.  If None, uses today.
+    tolerance_days : int
+        Uploads must be within this many days before cutoff.
+    db_path : str
+        Path to SQLite db.
+
+    Returns
+    -------
+    (ok: bool, message: str)
+    """
+    cutoff_date = cutoff_date or datetime.today().date()
+
+    # 1) Validate uploads
+    _, ready = _validate_uploads(REPORT_NAME, cutoff_date, tolerance_days, db_path)
+    if not ready:
+        return False, "Missing or outdated uploads – report aborted."
+
+    # 2) ---------- YOUR REAL REPORT LOGIC HERE ----------
+    try:
+        # Example: fetch some tables, do calculations, save XLSX/PDF etc.
+        # with sqlite3.connect(db_path) as conn:
+        #     df_calls = pd.read_sql_query("SELECT * FROM call_overview", conn)
+        #     ...
+        # pretend work:
+        import time
+
+        time.sleep(1)  # simulate heavy work
+        # --------------------------------------------------
+
+        return True, "Quarterly report generated successfully."
+    except Exception as exc:
+        return False, f"Report generation failed: {exc}"
