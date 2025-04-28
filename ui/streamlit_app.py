@@ -169,7 +169,7 @@ if selected_section == "workflow":
             try:
                 with st.spinner("Running …"):
                     report_to_module = {
-                        "Quarterly_Report": "reporting.quarterly_report",
+                        "Quarterly_Report": "reporting.quarterly.quarterly_report",
                         "Invoice_Summary": "reporting.invoice_summary",
                         # add more mappings …
                     }

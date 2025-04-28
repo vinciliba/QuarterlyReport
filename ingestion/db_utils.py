@@ -100,6 +100,25 @@ def init_db(db_path='database/reporting.db'):
                 validated_at TEXT
             )
         """)
+        # 7) Report parameters
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS report_parameters (
+            report_name   TEXT,
+            param_key     TEXT,
+            param_value   TEXT,
+            PRIMARY KEY (report_name, param_key)
+        )""")
+        
+        # 8) Generated reports
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS generated_reports (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_name   TEXT,
+            cutoff_date   TEXT,
+            generated_at  TEXT,
+            file_path     TEXT,
+            notes         TEXT
+        )""")
 
         conn.commit()
 
