@@ -295,3 +295,68 @@ def get_alias_last_load(alias, db_path='database/reporting.db'):
         cur.execute("SELECT last_loaded_at FROM alias_upload_status WHERE alias = ?", (alias,))
         row = cur.fetchone()
         return row[0] if row else None
+
+def get_suggested_structure(report_name, db_path='database/reporting.db'):
+    """
+    Return aliases that exist in upload_log for this report but are
+    NOT yet present in report_structure.
+    """
+    sql = """
+        SELECT DISTINCT ul.table_alias
+        FROM upload_log ul
+        LEFT JOIN report_structure rs
+          ON rs.report_name = ul.report_name
+         AND rs.table_alias = ul.table_alias
+        WHERE ul.report_name = ?
+          AND rs.table_alias IS NULL
+    """
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute(sql, (report_name,))
+        return [r[0] for r in cur.fetchall()]
+
+# ─────────────────────────────────────────
+# Report structure helpers  (ADD this)
+# ─────────────────────────────────────────
+def define_expected_table(
+    report_name: str,
+    table_alias: str,
+    required: bool = True,
+    expected_cutoff: str | None = None,
+    db_path: str = "database/reporting.db",
+):
+    """
+    Upsert a row in report_structure WITHOUT needing a UNIQUE index.
+    """
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id FROM report_structure
+            WHERE report_name = ? AND table_alias = ?
+            """,
+            (report_name, table_alias),
+        )
+        row = cur.fetchone()
+
+        if row:  # --- update ---
+            cur.execute(
+                """
+                UPDATE report_structure
+                SET required = ?,
+                    expected_cutoff = ?
+                WHERE id = ?
+                """,
+                (int(required), expected_cutoff, row[0]),
+            )
+        else:    # --- insert ---
+            cur.execute(
+                """
+                INSERT INTO report_structure
+                      (report_name, table_alias, required, expected_cutoff)
+                VALUES (?, ?, ?, ?)
+                """,
+                (report_name, table_alias, int(required), expected_cutoff),
+            )
+        conn.commit()
+

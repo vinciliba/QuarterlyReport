@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 import traceback # Import traceback for better error reporting
+from ingestion.db_utils import get_suggested_structure, define_expected_table
 
 # Adjust path as needed
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -91,7 +92,8 @@ sections = {
     "🚀 Choose Workflow": "workflow",
     "📂 Single File Upload": "single_upload",
     "📦 Mass Upload": "mass_upload",
-    "🔎 View History": "history"
+    "🔎 View History": "history",
+    "🛠️ Admin" :  "report_structure" 
 }
 
 # Use a selectbox for navigation
@@ -165,7 +167,35 @@ if selected_section == "workflow":
         st.success("🎉 All required tables uploaded and within valid cutoff window!")
 
         if st.button("🚀 Run Report"):
-            st.info("✨ Your report logic goes here!")
+            try:
+                # Dynamically import and run the report module
+                import importlib
+                
+                # Map your report names to their corresponding module filenames
+                report_to_module = {
+                    "Quarterly_Report": "reporting.quarterly_report",
+                    "Invoice_Summary": "reporting.invoice_summary",
+                    # Add other mappings here as needed
+                }
+                
+                selected_module = report_to_module.get(chosen_report)
+                
+                if not selected_module:
+                    st.error(f"❌ No module defined for report '{chosen_report}'. Please add it to the mapping!")
+                else:
+                    report_module = importlib.import_module(selected_module)
+                    
+                    # Assume each report module has a `run_report` function inside
+                    if hasattr(report_module, 'run_report'):
+                        st.success(f"📊 Launching report: {chosen_report}")
+                        report_module.run_report()  # 🚀 Run it
+                    else:
+                        st.error(f"❌ Module `{selected_module}` missing a `run_report()` function.")
+
+            except Exception as e:
+                st.error(f"❌ Error running the report: {e}")
+                import traceback
+                st.code(traceback.format_exc()) # Print traceback to console for debugging
             # Example: log the cutoff date validation
             log_cutoff(chosen_report, f"Validation_{cutoff_date}", cutoff_date.isoformat(), validated=True, db_path=DB_PATH)
 
@@ -1080,3 +1110,142 @@ elif selected_section == "history":
     except Exception as e:
         st.error(f"💥 An error occurred in the Upload History & Management section: {e}")
         print(traceback.format_exc())
+        
+# ──────────────────────────────────────────────────
+# TAB 5: Admin – Report Structure
+# selected_section == "report_structure"
+# ──────────────────────────────────────────────────
+elif selected_section == "report_structure":
+    from ingestion.db_utils import (
+        get_suggested_structure,   # ⬅️ NEW helper
+        define_expected_table      # re-use save helper
+    )
+
+    st.subheader("🛠️ Admin – Define Required Tables for a Report")
+
+    # --------------------------------------------------
+    # 1) Choose or create a report
+    # --------------------------------------------------
+    reports_df = get_all_reports(DB_PATH)
+    report_names = ["-- Create new --"] + reports_df["report_name"].tolist() \
+                   if not reports_df.empty else ["-- Create new --"]
+
+    chosen_report = st.selectbox("Select Report", report_names, key="admin_report_select")
+
+    if chosen_report == "-- Create new --":
+        new_report_name = st.text_input("New report name")
+        if st.button("➕ Create Report (Admin)"):
+            if new_report_name.strip():
+                try:
+                    create_new_report(new_report_name.strip(), DB_PATH)
+                    st.success(f"Report '{new_report_name}' created.")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(e)
+            else:
+                st.warning("Enter a name.")
+        st.stop()
+
+    # --------------------------------------------------
+    # 2) Current structure
+    # --------------------------------------------------
+    with sqlite3.connect(DB_PATH) as conn:
+        structure_df = pd.read_sql_query(
+            """
+            SELECT id, table_alias, required, expected_cutoff
+            FROM report_structure
+            WHERE report_name = ?
+            ORDER BY table_alias
+            """,
+            conn, params=(chosen_report,)
+        )
+
+    st.markdown("### Current Structure")
+    if structure_df.empty:
+        st.info("No aliases defined yet.")
+    else:
+        st.dataframe(structure_df, use_container_width=True)
+
+    st.markdown("---")
+
+    # --------------------------------------------------
+    # 3) Suggested aliases from upload_log (NEW)
+    # --------------------------------------------------
+    suggested = get_suggested_structure(chosen_report, DB_PATH)
+    if suggested:
+        st.markdown("### 🚀 Suggested aliases from recent uploads")
+        st.write("Tick the aliases you want to add as **required**:")
+        accept_states = {}
+        for alias in suggested:
+            accept_states[alias] = st.checkbox(f"Add `{alias}`", value=True, key=f"suggest_{alias}")
+
+        if st.button("➕ Accept Selected Suggestions"):
+            added = 0
+            for alias, do_add in accept_states.items():
+                if do_add:
+                    define_expected_table(chosen_report, alias, required=True, db_path=DB_PATH)
+                    added += 1
+            st.success(f"Added {added} alias(es) to report structure.")
+            st.rerun()
+    else:
+        st.info("No new aliases found in uploads that are missing from the structure.")
+
+    st.markdown("---")
+
+    # --------------------------------------------------
+    # 4) Manual Add / Edit
+    # --------------------------------------------------
+    st.markdown("### ➕ Add or Edit an Alias")
+
+    col1, col2, col3 = st.columns([0.4, 0.2, 0.4])
+    with col1:
+        alias_input = st.text_input("Table alias", key="alias_input")
+    with col2:
+        required_input = st.checkbox("Required?", value=True, key="required_input")
+    with col3:
+        cutoff_input = st.text_input("Expected cutoff (free text)", placeholder="e.g. Month-End", key="cutoff_input")
+
+    if st.button("💾 Save Alias"):
+        alias = alias_input.strip()
+        if not alias:
+            st.warning("Alias cannot be empty.")
+        else:
+            try:
+                define_expected_table(
+                    chosen_report,
+                    alias,
+                    required=required_input,
+                    expected_cutoff=cutoff_input or None,
+                    db_path=DB_PATH
+                )
+                st.success(f"Alias '{alias}' saved / updated.")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error saving alias: {e}")
+
+    # --------------------------------------------------
+    # 5) Delete aliases
+    # --------------------------------------------------
+    if not structure_df.empty:
+        st.markdown("---")
+        st.markdown("### 🗑️ Delete Aliases")
+
+        ids_to_del = st.multiselect(
+            "Select IDs to delete",
+            structure_df["id"].tolist(),
+            format_func=lambda x: f"{x} – "
+                + structure_df.loc[structure_df.id == x, "table_alias"].values[0],
+        )
+
+        if ids_to_del and st.button(f"Delete {len(ids_to_del)} alias(es)"):
+            with sqlite3.connect(DB_PATH) as conn:
+                placeholders = ",".join("?" for _ in ids_to_del)
+                conn.execute(
+                    f"DELETE FROM report_structure WHERE id IN ({placeholders})",
+                    ids_to_del,
+                )
+                conn.commit()
+            st.success("Selected aliases deleted.")
+            st.rerun()
+
+  
