@@ -1,21 +1,27 @@
 import os
 import sys
-import sqlite3, json
+import sqlite3, json, textwrap, pathlib, base64
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 import streamlit as st
+from streamlit.components.v1 import html    
+from streamlit_ace import st_ace
 import pandas as pd
 from datetime import datetime
 import traceback # Import traceback for better error reporting
 from ingestion.db_utils import (
     get_all_reports, create_new_report,
     define_expected_table, get_suggested_structure,
-    load_report_params, upsert_report_param
+    load_report_params, upsert_report_param, save_report_object,
+    get_report_object, list_report_objects, delete_report_object
 )
 from ingestion.report_check import check_report_readiness
+import mammoth, io, docx
+
+DB_PATH = 'database/reporting.db'
 
 
 # Adjust path as needed
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 
 # =================================
 # === Session State Initialization ===
@@ -71,7 +77,7 @@ except ImportError as e:
     st.error(f"Failed to import db_utils: {e}")
     st.stop() # Stop execution if core imports fail
 
-DB_PATH = 'database/reporting.db'
+
 os.makedirs("app_files", exist_ok=True)
 
 # --- Page config, style ---
@@ -99,7 +105,8 @@ sections = {
     "📂 Single File Upload": "single_upload",
     "📦 Mass Upload": "mass_upload",
     "🔎 View History": "history",
-    "🛠️ Admin" :  "report_structure" 
+    "🛠️ Admin" :  "report_structure",
+    "🖋️ Template Editor": "template_editor",
 }
 
 # Use a selectbox for navigation
@@ -1553,3 +1560,591 @@ elif selected_section == "report_structure":
             st.success("Parameters saved to database.")
         except json.JSONDecodeError as e:
             st.error(f"JSON error: {e}")
+
+elif selected_section == "template_editor":
+    # ------------------------------------------------------------
+    # imports used ONLY in this section
+    # ------------------------------------------------------------
+    import pathlib, base64, textwrap, sqlite3, json
+    import pandas as pd
+    import mammoth, jinja2
+    from datetime import datetime
+    from streamlit.components.v1 import html
+    from streamlit_ace import st_ace
+    import plotly.express as px
+    import plotly.graph_objects as go
+    import io
+    from typing import Any
+
+    # --- Import your DB Utils ---
+    try:
+        DB_PATH = 'database/reporting.db'
+        init_db(DB_PATH)
+    except ImportError:
+        st.error("Could not import db_utils.py. Make sure it's accessible.")
+        st.stop()
+    except Exception as e:
+        st.error(f"Failed to initialize database: {e}")
+        st.stop()
+
+    # ------------------------------------------------------------
+    # constants & helpers
+    # ------------------------------------------------------------
+    TEMPL_DIR = pathlib.Path("reporting/templates")
+    TEMPL_DIR.mkdir(parents=True, exist_ok=True)
+    SESSION_KEY_TEMPLATE_BUFFER = "template_editor_buffer"
+    SESSION_KEY_OBJECT_PYTHON = "template_obj_python"
+    SESSION_KEY_OBJECT_PREVIEW = "template_obj_preview_result"
+    SESSION_KEY_EDIT_OBJECT_NAME = "template_edit_object_name"
+
+    def list_templates() -> list[str]:
+        return sorted(p.name for p in TEMPL_DIR.glob("*.html*"))
+
+    # ------------------------------------------------------------
+    # Jinja2 Environment & Object Rendering Function
+    # ------------------------------------------------------------
+    def execute_object_code(object_definition: dict, db_conn, report_params: dict) -> Any:
+        """
+        Executes the Python code for a given object definition.
+        Returns the final processed object (string, DataFrame, Plotly figure, etc.).
+        """
+        python_code = object_definition.get("python_code")
+        obj_out = None
+
+        # Prepare data from the database based on report context
+        df_dict = {}
+        if report_params:
+            # Fetch all tables associated with the report context
+            with sqlite3.connect(db_conn) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT table_alias FROM report_structure WHERE report_name = ?", (object_definition.get("report_context"),))
+                tables = [row[0] for row in cursor.fetchall()]
+                for table in tables:
+                    try:
+                        df_dict[table] = pd.read_sql_query(f"SELECT * FROM {table}", conn)
+                    except Exception as e:
+                        st.warning(f"Could not load data from table '{table}': {e}")
+
+        if python_code:
+            allowed_globals = {
+                "__builtins__": {
+                    "print": print, "len": len, "range": range, "str": str, "int": int,
+                    "float": float, "list": list, "dict": dict, "set": set, "bool": bool,
+                    "None": None, "True": True, "False": False,
+                    "isinstance": isinstance, "round": round, "max": max, "min": min, "sum": sum
+                },
+                "pd": pd,
+                "px": px,
+                "go": go,
+                "datetime": datetime,
+            }
+            local_vars = {
+                "dfs": df_dict,  # Dictionary of DataFrames keyed by table name
+                "params": report_params,
+                "st": None,
+                "db_conn": None,
+                "obj_out": None
+            }
+            try:
+                exec(python_code, allowed_globals, local_vars)
+                obj_out = local_vars.get("obj_out")
+            except Exception as e:
+                raise ValueError(f"Error executing Python code for object '{object_definition.get('object_name')}': {e}")
+
+            return obj_out
+        return None
+
+    def render_report_object(object_name: str, db_path: str = DB_PATH, report_params: dict = {}) -> str:
+        """
+        Jinja function: Fetches, executes, and renders a report object as HTML.
+        """
+        try:
+            obj_def = get_report_object(object_name, db_path)
+            if not obj_def:
+                return f"<div style='color:red; border:1px solid red; padding: 5px;'>Error: Report Object '{object_name}' not found.</div>"
+
+            with sqlite3.connect(db_path) as conn:
+                result = execute_object_code(obj_def, db_path, report_params)
+
+            if result is None:
+                return ""
+            elif isinstance(result, pd.DataFrame):
+                return result.to_html(index=False, border=0, classes=["dataframe", "obj-table"])
+            elif isinstance(result, (px.Figure, go.Figure)):
+                return result.to_html(full_html=False, include_plotlyjs='cdn')
+            elif isinstance(result, (str, int, float)):
+                import html as html_escaper
+                return html_escaper.escape(str(result))
+            else:
+                import html as html_escaper
+                return f"<pre>{html_escaper.escape(str(result))}</pre>"
+
+        except Exception as e:
+            st.error(f"Error rendering object '{object_name}': {e}", icon="🔥")
+            return f"<div style='color:red; border:1px solid red; padding: 5px;'>Error rendering object '{object_name}': {e}</div>"
+
+    def get_jinja_env(report_params: dict = {}) -> jinja2.Environment:
+        """Creates a Jinja2 environment with the render_report_object function."""
+        env = jinja2.Environment(
+            loader=jinja2.FileSystemLoader(TEMPL_DIR),
+            autoescape=jinja2.select_autoescape(['html', 'xml']),
+            variable_start_string="{{",
+            variable_end_string="}}",
+            block_start_string="{%",
+            block_end_string="%}",
+        )
+        env.globals['render_object'] = lambda name: render_report_object(name, DB_PATH, report_params)
+        env.globals['now'] = datetime.now
+        return env
+
+    # ------------------------------------------------------------
+    # UI Layout
+    # ------------------------------------------------------------
+    st.subheader("🖋️ Template Editor & Object Manager")
+
+    # --- Sidebar (Object Library & Designer) ---
+    with st.sidebar:
+        st.markdown("### 🧩 Object Library")
+
+        # Select Report Context
+        all_reports_df = get_all_reports(DB_PATH)
+        report_names = ["-- Global / All --"] + all_reports_df['report_name'].tolist()
+        selected_report_context = st.selectbox(
+            "View Objects For Report",
+            options=report_names,
+            index=0,
+            key="obj_lib_report_context",
+            help="Select a report to see its specific objects and load its parameters for previewing."
+        )
+        report_context_filter = None if selected_report_context == "-- Global / All --" else selected_report_context
+
+        # Load parameters
+        current_report_params = {}
+        if report_context_filter:
+            current_report_params = load_report_params(report_context_filter, DB_PATH)
+            with st.expander("Loaded Parameters for Preview"):
+                st.json(current_report_params)
+
+        # Display Object Library with Drag-and-Drop
+        try:
+            objects_df = list_report_objects(report_context_filter, DB_PATH)
+            if not objects_df.empty:
+                table_rows = ""
+                for _, row in objects_df.iterrows():
+                    obj_name = row['object_name']
+                    obj_type = row['object_type']
+                    desc = row['description'] or ''
+                    table_rows += f"""
+                        <tr class='object-row' data-object-name='{obj_name}' draggable='true'>
+                            <td>{obj_name}</td>
+                            <td>{obj_type}</td>
+                            <td>{desc}</td>
+                        </tr>
+                    """
+                
+                object_table_html = f"""
+                    <style>
+                        #object-table {{
+                            width: 100%;
+                            border-collapse: collapse;
+                            background: white;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                            margin-bottom: 1em;
+                        }}
+                        #object-table th, #object-table td {{
+                            border: 1px solid #ddd;
+                            padding: 8px;
+                            text-align: left;
+                            font-size: 14px;
+                        }}
+                        #object-table th {{
+                            background: #f4f4f4;
+                            font-weight: bold;
+                        }}
+                        #object-table tr:hover {{
+                            background: #f0f0f0;
+                            cursor: pointer;
+                        }}
+                        #object-table tr.selected {{
+                            background: #e6f3ff;
+                        }}
+                        .object-row[draggable=true] {{
+                            cursor: move;
+                        }}
+                    </style>
+                    <table id='object-table'>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {table_rows}
+                        </tbody>
+                    </table>
+                    <script>
+                        document.querySelectorAll('.object-row').forEach(row => {{
+                            row.addEventListener('click', () => {{
+                                document.querySelectorAll('.object-row').forEach(r => r.classList.remove('selected'));
+                                row.classList.add('selected');
+                            }});
+                        }});
+
+                        document.querySelectorAll('.object-row').forEach(row => {{
+                            row.addEventListener('dragstart', (e) => {{
+                                const objName = row.getAttribute('data-object-name');
+                                e.dataTransfer.setData('text/plain', `{{{{ render_object('${{objName}}') }}}}`);
+                            }});
+                        }});
+                    </script>
+                """
+                html(object_table_html, height=250, scrolling=True)
+
+                sel_col, edit_col, del_col, copy_col = st.columns(4)
+                selected_object = sel_col.selectbox("Select Object", options=["-- New Object --"] + objects_df['object_name'].tolist(), key="obj_lib_select")
+                edit_btn = edit_col.button("✏️ Edit", disabled=(selected_object == "-- New Object --"))
+                del_btn = del_col.button("🗑️ Delete", disabled=(selected_object == "-- New Object --"))
+                copy_btn = copy_col.button("📋 Copy Tag", disabled=(selected_object == "-- New Object --"))
+
+                if edit_btn and selected_object != "-- New Object --":
+                    st.session_state[SESSION_KEY_EDIT_OBJECT_NAME] = selected_object
+                    st.rerun()
+
+                if del_btn and selected_object != "-- New Object --":
+                    try:
+                        delete_report_object(selected_object, DB_PATH)
+                        st.success(f"Object '{selected_object}' deleted.")
+                        if st.session_state.get(SESSION_KEY_EDIT_OBJECT_NAME) == selected_object:
+                            st.session_state[SESSION_KEY_EDIT_OBJECT_NAME] = None
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error deleting object: {e}")
+
+                if copy_btn and selected_object != "-- New Object --":
+                    placeholder = f"{{{{ render_object('{selected_object}') }}}}
+"
+                    st.code(placeholder, language='jinja2')
+                    try:
+                        import pyperclip
+                        pyperclip.copy(placeholder)
+                        st.info("Placeholder tag copied to clipboard!")
+                    except ImportError:
+                        st.warning("Install 'pyperclip' for automatic copy to clipboard.")
+                    except Exception:
+                        st.warning("Could not copy to clipboard automatically.")
+            else:
+                st.info("No objects available for this report context.")
+        except Exception as e:
+            st.error(f"Error loading object library: {e}")
+
+        st.markdown("---")
+
+        # --- Object Designer ---
+        st.markdown("### 🛠️ Object Designer")
+
+        default_obj_data = {"name": "", "type": "text", "desc": "", "py": ""}
+        editing_object_name = st.session_state.get(SESSION_KEY_EDIT_OBJECT_NAME)
+
+        if editing_object_name:
+            st.info(f"Editing: **{editing_object_name}**")
+            obj_data_to_edit = get_report_object(editing_object_name, DB_PATH)
+            if obj_data_to_edit:
+                default_obj_data["name"] = obj_data_to_edit.get("object_name", "")
+                default_obj_data["type"] = obj_data_to_edit.get("object_type", "text")
+                default_obj_data["desc"] = obj_data_to_edit.get("description", "")
+                default_obj_data["py"] = obj_data_to_edit.get("python_code", "")
+            else:
+                st.warning(f"Could not load data for '{editing_object_name}'. Starting new.")
+                st.session_state[SESSION_KEY_EDIT_OBJECT_NAME] = None
+                editing_object_name = None
+
+        # Input fields
+        obj_name = st.text_input("Object Name (Unique ID)", value=default_obj_data["name"], key="obj_def_name", placeholder="e.g., quarterly_summary_table")
+        obj_type = st.selectbox("Object Type", options=["text", "table", "plotly_chart"], index=["text", "table", "plotly_chart"].index(default_obj_data["type"]), key="obj_def_type")
+        obj_desc = st.text_area("Description", value=default_obj_data["desc"], key="obj_def_desc", height=100)
+        obj_context = st.selectbox("Assign to Report (Optional)", options=report_names, index=report_names.index(selected_report_context), key="obj_def_context")
+
+        # Data Resources Dropdown (for reference in Python code)
+        st.markdown("###### Available Data Resources")
+        data_resources = []
+        if report_context_filter:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT table_alias FROM report_structure WHERE report_name = ?", (report_context_filter,))
+                tables = [f"Table: {row[0]}" for row in cursor.fetchall()]
+                data_resources.extend(tables)
+            params = load_report_params(report_context_filter, DB_PATH)
+            data_resources.extend([f"Param: {k}" for k in params.keys()])
+        else:
+            with sqlite3.connect(DB_PATH) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT DISTINCT table_alias FROM upload_log")
+                tables = [f"Table: {row[0]}" for row in cursor.fetchall()]
+                data_resources.extend(tables)
+
+        if data_resources:
+            st.write("Available in Python code:")
+            for resource in data_resources:
+                if resource.startswith("Table:"):
+                    table_name = resource.replace("Table: ", "")
+                    st.write(f"- `dfs['{table_name}']`: DataFrame from table '{table_name}'")
+                else:
+                    param_name = resource.replace("Param: ", "")
+                    st.write(f"- `params['{param_name}']`: Parameter '{param_name}'")
+        else:
+            st.info("No data resources available for this report context.")
+
+        st.markdown("###### Data Transformation (Python)")
+        python_code = st_ace(
+            value=default_obj_data["py"] or st.session_state.get(SESSION_KEY_OBJECT_PYTHON, """# Access data via 'dfs' dictionary and parameters via 'params'
+# Example: dfs['sales_data'] for a table named 'sales_data'
+# Example: params['report_date'] for a parameter named 'report_date'
+# Assign result to 'obj_out'
+
+obj_out = "Hello, World!"  # Replace with your logic
+"""),
+            language="python",
+            theme="chrome",
+            key="ace_obj_python",
+            height=250,
+            auto_update=True,
+        )
+        st.session_state[SESSION_KEY_OBJECT_PYTHON] = python_code
+
+        # --- Object Preview ---
+        if st.button("⚙️ Preview Object", key="btn_preview_obj"):
+            temp_obj_def = {
+                "object_name": obj_name or "preview",
+                "python_code": python_code,
+                "report_context": report_context_filter
+            }
+            preview_result = None
+            try:
+                preview_result = execute_object_code(temp_obj_def, DB_PATH, current_report_params)
+                st.session_state[SESSION_KEY_OBJECT_PREVIEW] = preview_result
+                st.success("Preview generated below.")
+            except Exception as e:
+                st.error(f"Preview Error: {e}", icon="🔥")
+                st.session_state[SESSION_KEY_OBJECT_PREVIEW] = None
+
+        # Display Preview Result
+        preview_data = st.session_state.get(SESSION_KEY_OBJECT_PREVIEW)
+        if preview_data is not None:
+            st.markdown("##### Preview Result")
+            try:
+                if isinstance(preview_data, pd.DataFrame):
+                    st.dataframe(preview_data, use_container_width=True)
+                elif isinstance(preview_data, (px.Figure, go.Figure)):
+                    st.plotly_chart(preview_data, use_container_width=True)
+                else:
+                    st.write(preview_data)
+            except Exception as e:
+                st.error(f"Error displaying preview data: {e}")
+
+        # --- Save Object ---
+        save_label = "💾 Update Object" if editing_object_name else "💾 Save New Object"
+        if st.button(save_label, key="btn_save_obj", disabled=not obj_name):
+            if not obj_name:
+                st.warning("Object Name cannot be empty.")
+            else:
+                try:
+                    obj_report_context = None if obj_context == "-- Global / All --" else obj_context
+                    save_report_object(
+                        object_name=obj_name,
+                        object_type=obj_type,
+                        description=obj_desc,
+                        sql_query=None,  # No SQL query since SQL editor is removed
+                        python_code=python_code if python_code.strip() else None,
+                        report_context=obj_report_context,
+                        db_path=DB_PATH,
+                    )
+                    st.success(f"Object '{obj_name}' saved successfully!")
+                    st.session_state[SESSION_KEY_EDIT_OBJECT_NAME] = None
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error saving object '{obj_name}': {e}")
+
+        if editing_object_name:
+            if st.button("Cancel Edit", key="btn_cancel_edit"):
+                st.session_state[SESSION_KEY_EDIT_OBJECT_NAME] = None
+                st.rerun()
+
+    # --- Main Editor Area (Template Editing) ---
+    st.markdown("#### Load Base Template")
+    col_docx, col_map = st.columns(2)
+    with col_docx:
+        docx_up = st.file_uploader("📄 DOCX template", type="docx", key="up_docx")
+    with col_map:
+        smap_up = st.file_uploader("🎨 Optional .style-map", type=None, key="smap_up")
+
+    if smap_up and not smap_up.name.endswith((".style-map", ".txt")):
+        st.warning("Please upload a *.style-map* or *.txt* file for style map")
+        smap_up = None
+
+    if docx_up:
+        try:
+            style_arg = {"style_map": smap_up.read().decode()} if smap_up else {}
+            style_arg["disable_default_styles"] = True
+            html_boot = mammoth.convert_to_html(docx_up, **style_arg).value
+            st.session_state[SESSION_KEY_TEMPLATE_BUFFER] = (
+                "{# ---- Imported from Word ---- #}\n"
+                + html_boot
+                + "\n{# ---- /Imported from Word ---- #}"
+            )
+            st.success("DOCX imported – edit below.")
+        except Exception as e:
+            st.error(f"Error importing DOCX: {e}")
+
+    # Select/Create Template File
+    st.markdown("#### Select/Create Template File")
+    tmpl_files = list_templates()
+    tmpl_choice = st.selectbox("Template file",
+                            ["-- New --", *tmpl_files],
+                            key="templ_select")
+    if tmpl_choice == "-- New --":
+        new_name = st.text_input("New File name", "my_template.html.j2", key="templ_new_name")
+        if not new_name.endswith((".html", ".html.j2", ".htm")):
+            st.warning("Filename should end with .html, .htm, or .html.j2")
+        active_f = TEMPL_DIR / new_name if new_name else None
+    else:
+        active_f = TEMPL_DIR / tmpl_choice
+
+    # Buffer initialization
+    load_template = False
+    if SESSION_KEY_TEMPLATE_BUFFER not in st.session_state:
+        load_template = True
+    elif 'last_tmpl_choice' not in st.session_state or st.session_state.last_tmpl_choice != tmpl_choice:
+        if tmpl_choice != "-- New --":
+            load_template = True
+
+    if load_template and active_f and active_f.exists():
+        try:
+            st.session_state[SESSION_KEY_TEMPLATE_BUFFER] = active_f.read_text("utf-8")
+            st.info(f"Loaded content from {active_f.name}")
+        except Exception as e:
+            st.error(f"Error reading template file {active_f.name}: {e}")
+            st.session_state[SESSION_KEY_TEMPLATE_BUFFER] = ""
+    elif load_template and tmpl_choice == "-- New --":
+        st.session_state[SESSION_KEY_TEMPLATE_BUFFER] = """<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ params.get('report_title', 'Default Report Title') }}</title>
+    <style>
+        body { font-family: sans-serif; }
+        table.dataframe { border-collapse: collapse; width: 80%; margin: 1em 0; }
+        table.dataframe th, table.dataframe td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        table.dataframe th { background-color: #f2f2f2; }
+        .plotly-chart { margin: 1em 0; }
+    </style>
+</head>
+<body>
+    <h1>Report: {{ params.get('report_title', 'My Report') }}</h1>
+    <p>Generated on: {{ now().strftime('%Y-%m-%d %H:%M:%S') }}</p>
+    <p>Report Cutoff Date: {{ params.get('report_date', 'N/A') }}</p>
+    <hr>
+    <h2>Section 1: Summary Table</h2>
+    {{ render_object('summary_data_table') }}
+    <hr>
+    <h2>Section 2: Trend Chart</h2>
+    {{ render_object('trends_chart') }}
+    <hr>
+    <h2>Section 3: Key Metrics</h2>
+    <p>Key Metric: {{ render_object('key_metric_text') }}</p>
+</body>
+</html>
+"""
+    st.session_state.last_tmpl_choice = tmpl_choice
+
+    # Editor with Drag-and-Drop Support
+    st.markdown("#### Edit Template Content (HTML + Jinja2)")
+    editor_height = 600
+    template_content = st_ace(
+        value=st.session_state.get(SESSION_KEY_TEMPLATE_BUFFER, ""),
+        language="html",
+        theme="chrome",
+        key="ace_template_editor",
+        height=editor_height,
+        auto_update=True
+    )
+    st.session_state[SESSION_KEY_TEMPLATE_BUFFER] = template_content
+
+    html("""
+        <script>
+            const editor = document.querySelector('.ace_editor');
+            if (editor) {
+                editor.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                });
+                editor.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    const placeholder = e.dataTransfer.getData('text/plain');
+                    const aceEditor = window.ace.edit(document.querySelector('.ace_editor').id);
+                    aceEditor.insert(placeholder);
+                });
+            }
+        </script>
+    """, height=0)
+
+    # Live Preview
+    st.markdown("---")
+    st.markdown("#### Preview")
+    preview_params = current_report_params
+    preview_expander = st.expander("🔎 Live Preview (Using selected report parameters)", expanded=True)
+    with preview_expander:
+        template_content = st.session_state.get(SESSION_KEY_TEMPLATE_BUFFER, "")
+        if not template_content:
+            st.warning("Template content is empty.")
+        else:
+            try:
+                jinja_env = get_jinja_env(preview_params)
+                template = jinja_env.from_string(template_content)
+                rendered_html = template.render(params=preview_params)
+                html(rendered_html, height=600, scrolling=True)
+            except jinja2.exceptions.TemplateSyntaxError as e:
+                st.error(f"Template Syntax Error: {e.message} (Line: {e.lineno})", icon="❌")
+            except Exception as e:
+                st.error(f"Preview Rendering Error: {e}", icon="🔥")
+
+    # Template Actions
+    st.markdown("#### Template Actions")
+    col_sv, col_dl, col_rm = st.columns(3)
+    save_disabled = active_f is None or tmpl_choice == "-- New --" and not new_name.strip()
+
+    if col_sv.button("💾 Save Template", disabled=save_disabled):
+        if active_f:
+            try:
+                active_f.write_text(template_content, encoding="utf-8")
+                st.success(f"Template '{active_f.name}' saved ✔")
+                if tmpl_choice == "-- New --":
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error saving template: {e}")
+        else:
+            st.warning("Please enter a valid file name for the new template.")
+
+    if col_dl.button("📥 Download Template", disabled=active_f is None):
+        if active_f:
+            st.download_button(
+                label="Click to Download",
+                data=template_content,
+                file_name=active_f.name,
+                mime="text/html",
+            )
+        else:
+            st.warning("No active template file selected or named.")
+
+    delete_disabled = active_f is None or not active_f.exists() or tmpl_choice == "-- New --"
+    if col_rm.button("🗑️ Delete Template", disabled=delete_disabled):
+        if active_f and active_f.exists():
+            try:
+                active_f.unlink(missing_ok=True)
+                st.warning(f"Template '{active_f.name}' deleted")
+                st.session_state[SESSION_KEY_TEMPLATE_BUFFER] = ""
+                st.session_state.templ_select = "-- New --"
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error deleting template: {e}")
+        else:
+            st.warning("Cannot delete. Template doesn't exist or isn't selected.")

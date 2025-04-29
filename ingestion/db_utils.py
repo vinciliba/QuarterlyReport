@@ -3,7 +3,7 @@ import sqlite3, json
 from datetime import datetime
 # helper functions
 from typing import Any
-
+import pandas as pd 
 
 # ─────────────────────────────────────────
 # Init DB with all required tables
@@ -127,6 +127,26 @@ def init_db(db_path='database/reporting.db'):
         # UNIQUE index for report_structure
         cursor.execute("""CREATE UNIQUE INDEX IF NOT EXISTS ux_report_structure_rn_alias
                         ON report_structure (report_name, table_alias);""")
+        
+        # Inside init_db function, after other CREATE TABLE statements:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS report_objects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                object_name TEXT UNIQUE NOT NULL,
+                object_type TEXT NOT NULL, -- e.g., 'text', 'table', 'plotly_chart'
+                description TEXT,
+                sql_query TEXT,
+                python_code TEXT,
+                report_context TEXT, -- Optional: Link object to a specific report or make it global (NULL)
+                created_at TEXT,
+                updated_at TEXT
+            )
+        """)
+        # Optional: Add an index for faster lookups
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_report_objects_name
+            ON report_objects (object_name);
+            """)
 
    
         conn.commit()
@@ -407,3 +427,112 @@ def load_report_params(report_name: str, db_path="database/reporting.db") -> dic
         cur.execute("SELECT param_key, param_value FROM report_parameters WHERE report_name = ?",
                     (report_name,))
         return {k: json.loads(v) for k, v in cur.fetchall()}
+    
+
+# ─────────────────────────────────────────
+# Report Objects (Dynamic Content)
+# ─────────────────────────────────────────
+
+def save_report_object(
+    object_name: str,
+    object_type: str,
+    description: str | None,
+    sql_query: str | None,
+    python_code: str | None,
+    report_context: str | None = None,
+    db_path: str = "database/reporting.db",
+) -> int:
+    """Saves or updates a report object definition."""
+    now = datetime.now().isoformat()
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id FROM report_objects WHERE object_name = ?", (object_name,)
+        )
+        row = cursor.fetchone()
+        if row:
+            # Update existing object
+            obj_id = row[0]
+            cursor.execute(
+                """
+                UPDATE report_objects
+                SET object_type = ?, description = ?, sql_query = ?,
+                    python_code = ?, report_context = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    object_type,
+                    description,
+                    sql_query,
+                    python_code,
+                    report_context,
+                    now,
+                    obj_id,
+                ),
+            )
+            print(f"Updated object: {object_name}")
+        else:
+            # Insert new object
+            cursor.execute(
+                """
+                INSERT INTO report_objects (
+                    object_name, object_type, description, sql_query,
+                    python_code, report_context, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    object_name,
+                    object_type,
+                    description,
+                    sql_query,
+                    python_code,
+                    report_context,
+                    now,
+                    now,
+                ),
+            )
+            obj_id = cursor.lastrowid
+            print(f"Inserted new object: {object_name} (ID: {obj_id})")
+        conn.commit()
+        return obj_id
+
+def get_report_object(
+    object_name: str, db_path: str = "database/reporting.db"
+) -> dict | None:
+    """Fetches a specific report object definition by name."""
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row # Return results as dict-like rows
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT * FROM report_objects WHERE object_name = ?", (object_name,)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+def list_report_objects(
+    report_context: str | None = None, db_path: str = "database/reporting.db"
+) -> pd.DataFrame:
+    """Lists all report objects, optionally filtered by report context."""
+    with sqlite3.connect(db_path) as conn:
+        query = "SELECT id, object_name, object_type, description, report_context, updated_at FROM report_objects"
+        params = []
+        if report_context:
+            # Allows filtering for objects specific to a report OR global objects
+            query += " WHERE report_context = ? OR report_context IS NULL"
+            params.append(report_context)
+        query += " ORDER BY object_name"
+        df = pd.read_sql_query(query, conn, params=params)
+        return df
+
+
+def delete_report_object(
+    object_name: str, db_path: str = "database/reporting.db"
+) -> None:
+    """Deletes a report object by name."""
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM report_objects WHERE object_name = ?", (object_name,))
+        conn.commit()
+        print(f"Deleted object: {object_name}")
+
+
