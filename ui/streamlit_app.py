@@ -1407,42 +1407,103 @@ elif selected_section == "report_structure":
     st.markdown("---")
 
     # ---------- 4. QUICK PATCH EXISTING KEYS  -----------------------------------
+    # -------------------------------------------------------------------
+    # 4. QUICK PATCH / EDIT / DELETE
+    # -------------------------------------------------------------------
     st.markdown("### 🔄 Quick add / update")
 
+    def commit_and_rerun(params_dict: dict, toast_msg: str):
+        """
+        Write json draft → session-state, toast, force rerun
+        (we cannot touch param_editor while it’s mounted)
+        """
+        st.session_state["_params_draft"] = json.dumps(params_dict, indent=2)
+        st.toast(toast_msg, icon="✅")
+        st.rerun()
+
     gkey = st.selectbox("Existing key", list(params.keys()), key="qa_sel")
-    ctype = st.selectbox("Value type",
-                        ["string / number", "list item", "dict entry"],
-                        key="qa_type")
-    
-    def commit_and_rerun(new_params: dict):
-        """Safely push new JSON without touching the text-area widget."""
-        st.session_state["_params_draft"] = json.dumps(new_params, indent=2)
-        st.rerun()       
 
-    if ctype == "string / number":
-        val = st.text_input("New value", key="qa_scalar")
-        if st.button("Replace value", key="qa_replace"):
-            params[gkey] = val
-            commit_and_rerun(params)  
+    # detect the value type of the selected key
+    current_val = params[gkey]
+    is_list = isinstance(current_val, list)
+    is_dict = isinstance(current_val, dict)
 
-    elif ctype == "list item":
-        if not isinstance(params[gkey], list):
-            st.warning("Selected key is not a list")
+    vtype = st.selectbox(
+        "Action",
+        [
+            "replace scalar",            # for str / number
+            "append to list",            # for list
+            "edit list item",            # for list
+            "delete list item",          # for list
+            "add / update dict entry",   # for dict
+            "delete dict entry"          # for dict
+        ],
+        key="qa_action"
+    )
+
+    # ───────── scalar replace ──────────────────────────────────────────
+    if vtype == "replace scalar":
+        if is_list or is_dict:
+            st.warning("Selected key is not a scalar.")
         else:
-            itm = st.text_input("Item to append", key="qa_item")
-            if st.button("Append", key="qa_append"):
-                params[gkey].append(itm)
-                commit_and_rerun(params)  
+            new_val = st.text_input("New value", key="qa_scalar_in")
+            if st.button("💾 Replace value", key="qa_scalar_btn"):
+                params[gkey] = new_val
+                commit_and_rerun(params, "Scalar replaced")
 
-    else:  # dict entry
-        if not isinstance(params[gkey], dict):
-            st.warning("Selected key is not a dict")
+    # ───────── list append  ────────────────────────────────────────────
+    elif vtype == "append to list":
+        if not is_list:
+            st.warning("Selected key is not a list.")
         else:
-            subk = st.text_input("Sub-key", key="qa_subk")
-            subv = st.text_input("Sub-value", key="qa_subv")
-            if st.button("Add / update entry", key="qa_upd"):
+            new_item = st.text_input("Item to append", key="qa_append_in")
+            if st.button("➕ Append", key="qa_append_btn"):
+                params[gkey].append(new_item)
+                commit_and_rerun(params, "Item appended")
+
+    # ───────── list edit  ──────────────────────────────────────────────
+    elif vtype == "edit list item":
+        if not is_list:
+            st.warning("Selected key is not a list.")
+        else:
+            sel = st.selectbox("Pick item", current_val, key="qa_list_pick")
+            new_item = st.text_input("New value", value=sel, key="qa_list_edit")
+            if st.button("✏️ Update item", key="qa_list_edit_btn"):
+                idx = current_val.index(sel)
+                params[gkey][idx] = new_item
+                commit_and_rerun(params, "List item updated")
+
+    # ───────── list delete  ────────────────────────────────────────────
+    elif vtype == "delete list item":
+        if not is_list:
+            st.warning("Selected key is not a list.")
+        else:
+            sel = st.selectbox("Pick item to delete", current_val, key="qa_list_del_pick")
+            if st.button("🗑️ Delete item", key="qa_list_del_btn"):
+                params[gkey].remove(sel)
+                commit_and_rerun(params, "List item deleted")
+
+    # ───────── dict upsert  ────────────────────────────────────────────
+    elif vtype == "add / update dict entry":
+        if not is_dict:
+            st.warning("Selected key is not a dict.")
+        else:
+            subk = st.text_input("Sub-key", key="qa_dict_key")
+            subv = st.text_input("Sub-value", key="qa_dict_val")
+            if st.button("💾 Add / update", key="qa_dict_upd_btn"):
                 params[gkey][subk] = subv
-                commit_and_rerun(params)  
+                commit_and_rerun(params, "Dict entry saved")
+
+    # ───────── dict delete  ────────────────────────────────────────────
+    elif vtype == "delete dict entry":
+        if not is_dict:
+            st.warning("Selected key is not a dict.")
+        else:
+            subk = st.selectbox("Pick sub-key to delete", list(current_val.keys()), key="qa_dict_del_pick")
+            if st.button("🗑️ Delete entry", key="qa_dict_del_btn"):
+                params[gkey].pop(subk, None)
+                commit_and_rerun(params, "Dict entry deleted")
+
 
     st.markdown("---")
 
