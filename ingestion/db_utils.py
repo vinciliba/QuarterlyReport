@@ -1,6 +1,9 @@
 import os
-import sqlite3
+import sqlite3, json
 from datetime import datetime
+# helper functions
+from typing import Any
+
 
 # ─────────────────────────────────────────
 # Init DB with all required tables
@@ -120,6 +123,12 @@ def init_db(db_path='database/reporting.db'):
             notes         TEXT
         )""")
 
+
+        # UNIQUE index for report_structure
+        cursor.execute("""CREATE UNIQUE INDEX IF NOT EXISTS ux_report_structure_rn_alias
+                        ON report_structure (report_name, table_alias);""")
+
+   
         conn.commit()
 
 # ─────────────────────────────────────────
@@ -379,3 +388,22 @@ def define_expected_table(
             )
         conn.commit()
 
+# helper functions
+
+def upsert_report_param(report_name: str, key: str, value: Any,
+                        db_path="database/reporting.db") -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            INSERT INTO report_parameters (report_name, param_key, param_value)
+            VALUES (?,?,?)
+            ON CONFLICT(report_name, param_key) DO UPDATE
+            SET param_value = excluded.param_value
+        """, (report_name, key, json.dumps(value)))
+        conn.commit()
+
+def load_report_params(report_name: str, db_path="database/reporting.db") -> dict:
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT param_key, param_value FROM report_parameters WHERE report_name = ?",
+                    (report_name,))
+        return {k: json.loads(v) for k, v in cur.fetchall()}

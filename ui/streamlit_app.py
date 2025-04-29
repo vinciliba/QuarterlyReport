@@ -1,11 +1,15 @@
 import os
 import sys
-import sqlite3
+import sqlite3, json
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 import traceback # Import traceback for better error reporting
-from ingestion.db_utils import get_suggested_structure, define_expected_table, get_all_reports
+from ingestion.db_utils import (
+    get_all_reports, create_new_report,
+    define_expected_table, get_suggested_structure,
+    load_report_params, upsert_report_param
+)
 from ingestion.report_check import check_report_readiness
 
 
@@ -1119,7 +1123,10 @@ elif selected_section == "history":
 # TAB 5: Admin – Report Structure
 # selected_section == "report_structure"
 # ──────────────────────────────────────────────────
+
+
 elif selected_section == "report_structure":
+
     from ingestion.db_utils import (
         get_suggested_structure,   # ⬅️ NEW helper
         define_expected_table      # re-use save helper
@@ -1299,4 +1306,189 @@ elif selected_section == "report_structure":
             st.success("Selected aliases deleted.")
             st.rerun()
 
-  
+    # ------------------------------------------------------------------
+    # 6) parameters editor
+    # ------------------------------------------------------------------
+    st.markdown("## ⚙️ Report parameters")
+    DEFAULTS_BY_REPORT = {                       # only used if nothing in DB yet
+        "Quarterly_Report": { "H2020_positions": ['all','EXPERTS','ADG','STG','POC','COG','SYG'],
+            "HEU_positions":   ['all','EXPERTS','ADG','STG','POC','COG','SYG'],
+            "list_H2020_payTypes": ['Interim Payments','Final Payments','Experts Payment '],
+            "list_HE_payTypes":    ['Prefinancing Payments','Interim Payments','Final Payments','Experts Payment '],
+            "calls_list": [
+                'ERC-2023-POC (01/23)','ERC-2023-POC (04/23)','ERC-2023-POC (09/23)',
+                'ERC-2023-STG','ERC-2023-COG','ERC-2023-SyG','ERC-2023-ADG',
+                'ERC-2024-POC (03/24)','ERC-2024-STG','ERC-2024-COG','ERC-2024-SyG'
+            ],
+            "TTI_Targets" : {
+                'ERC-2023-POC (01/23)' : 106, 'ERC-2023-POC (04/23)' : 98,'ERC-2023-POC (09/23)':97,
+                'ERC-2023-STG': 304,'ERC-2023-COG' : 309,'ERC-2023-SyG' : 371,'ERC-2023-ADG' : 332,
+                'ERC-2024-POC (03/24)' : 106,'ERC-2024-STG' : 300,'ERC-2024-COG' : 309,'ERC-2024-SyG' : 371
+            },
+            "TTS_Targets" : {
+                'ERC-2023-POC (01/23)' : 120, 'ERC-2023-POC (04/23)' : 120,'ERC-2023-POC (09/23)':120,
+                'ERC-2023-STG': 120,'ERC-2023-COG' : 120,'ERC-2023-SyG' : 140,'ERC-2023-ADG' : 120,
+                'ERC-2024-POC (03/24)' : 120,'ERC-2024-STG' : 120,'ERC-2024-COG' : 120,'ERC-2024-SyG' :140
+            },
+            "TTG_Targets" : {
+                'ERC-2023-POC (01/23)' : 226, 'ERC-2023-POC (04/23)' : 218,'ERC-2023-POC (09/23)':217,
+                'ERC-2023-STG': 424,'ERC-2023-COG' : 429,'ERC-2023-SyG' : 511,'ERC-2023-ADG' : 452,
+                'ERC-2024-POC (03/24)' :226,'ERC-2024-STG' : 420,'ERC-2024-COG' : 429,'ERC-2024-SyG' :511
+            }
+      }
+    }
+    params = load_report_params(chosen_report, DB_PATH) or DEFAULTS_BY_REPORT.get(chosen_report, {})
+
+    # ----- defaults only for the selected report ----------------------
+    DEFAULTS_FOR_THIS = DEFAULTS_BY_REPORT.get(chosen_report, {})
+
+    # ------------------------------------------------------------------
+    # 0) bootstrap the authoritative dict just once
+    # ------------------------------------------------------------------
+   
+    if "params_full" not in st.session_state:
+        # first pull what we already have in the database
+        from_db = load_report_params(chosen_report, DB_PATH)  # may be {}
+        # DB values win over defaults
+        st.session_state.params_full = {**DEFAULTS_FOR_THIS, **from_db}
+
+    # make a short alias for readability
+    params = st.session_state.params_full
+
+
+    # ---------- editable JSON textarea ----------------------------------
+    txt_key = "param_editor"           # 1-line alias for the textarea’s key
+
+
+    # ----------  one-off fill of the textarea -------------------------
+    def refresh_editor_from_params() -> None:
+        """Put the current `params` dict into the text-area."""
+        st.session_state[txt_key] = json.dumps(params, indent=2)
+
+
+    # --- if a widget (Add-key / Quick-add) set a _params_draft, promote it
+    if "_params_draft" in st.session_state:
+        st.session_state[txt_key] = st.session_state.pop("_params_draft")
+        st.toast("✅ Parameters updated – review & save", icon="🎉")
+
+    # Ensure the textarea has an initial value (first render only)
+    if txt_key not in st.session_state:
+        refresh_editor_from_params()
+
+    # ---------- editable JSON textarea --------------------------------
+    txt = st.text_area(
+        "Edit JSON",
+        key=txt_key,
+        height=320,
+    )
+
+    # Always keep `params` as the object that drives the UI -------------
+    try:
+        params: dict = json.loads(st.session_state[txt_key] or "{}")
+    except json.JSONDecodeError as e:
+        st.error(f"JSON syntax error: {e}")
+        st.stop()
+
+    # ---------- 3. ADD NEW TOP-LEVEL KEY  ----------------------------------------
+    with st.expander("➕ Add a new top-level key", expanded=False):
+        new_key   = st.text_input("Key name", key="new_top_key")
+        init_type = st.selectbox("Initial type", ["list", "dict", "str", "int"], key="init_type")
+        if st.button("Create key"):
+            if new_key in params:
+                st.warning("Key already exists!")
+            else:
+                params[new_key] = [] if init_type == "list" else {} if init_type == "dict" \
+                                else "" if init_type == "str"  else 0
+                refresh_editor_from_params()
+                st.session_state.pop("new_top_key", None)
+                st.toast("✅ key created")
+                st.rerun()
+
+    st.markdown("---")
+
+    # ---------- 4. QUICK PATCH EXISTING KEYS  -----------------------------------
+    st.markdown("### 🔄 Quick add / update")
+
+    gkey = st.selectbox("Existing key", list(params.keys()), key="qa_sel")
+    ctype = st.selectbox("Value type",
+                        ["string / number", "list item", "dict entry"],
+                        key="qa_type")
+    
+    def commit_and_rerun(new_params: dict):
+        """Safely push new JSON without touching the text-area widget."""
+        st.session_state["_params_draft"] = json.dumps(new_params, indent=2)
+        st.rerun()       
+
+    if ctype == "string / number":
+        val = st.text_input("New value", key="qa_scalar")
+        if st.button("Replace value", key="qa_replace"):
+            params[gkey] = val
+            commit_and_rerun(params)  
+
+    elif ctype == "list item":
+        if not isinstance(params[gkey], list):
+            st.warning("Selected key is not a list")
+        else:
+            itm = st.text_input("Item to append", key="qa_item")
+            if st.button("Append", key="qa_append"):
+                params[gkey].append(itm)
+                commit_and_rerun(params)  
+
+    else:  # dict entry
+        if not isinstance(params[gkey], dict):
+            st.warning("Selected key is not a dict")
+        else:
+            subk = st.text_input("Sub-key", key="qa_subk")
+            subv = st.text_input("Sub-value", key="qa_subv")
+            if st.button("Add / update entry", key="qa_upd"):
+                params[gkey][subk] = subv
+                commit_and_rerun(params)  
+
+    st.markdown("---")
+
+    # ---------- 5. CALL-TARGETS MANAGER (optional) -------------------------------
+    if isinstance(params.get("call_targets"), dict):
+        st.markdown("### 🎯 Maintain `call_targets`")
+
+        ct_dict = params["call_targets"]
+        call_names = list(ct_dict.keys())
+
+        sel = st.selectbox("Select call (or '-- New call --')",
+                        ["-- New call --"] + call_names, key="ct_sel")
+
+        call_key = st.text_input("Call name", value="" if sel == "-- New call --" else sel,
+                                key="ct_name")
+        if call_key:
+            entry = ct_dict.get(call_key, {"TTI": "", "TTS": "", "TTG": ""})
+            c1,c2,c3 = st.columns(3)
+            with c1:  tti = st.text_input("TTI", value=str(entry["TTI"]), key="ct_tti")
+            with c2:  tts = st.text_input("TTS", value=str(entry["TTS"]), key="ct_tts")
+            with c3:  ttg = st.text_input("TTG", value=str(entry["TTG"]), key="ct_ttg")
+
+            def _num(v):
+                try: return int(v) if float(v).is_integer() else float(v)
+                except: return v.strip()
+
+            if st.button("💾 Save / update call", key="ct_save"):
+                ct_dict[call_key] = {"TTI": _num(tti), "TTS": _num(tts), "TTG": _num(ttg)}
+                params["call_targets"] = ct_dict
+                st.session_state[txt_key] = json.dumps(params, indent=2)
+                st.success("Saved (remember to **Save parameters to DB**)")
+
+            if sel != "-- New call --" and st.button("🗑️ Delete call", key="ct_del"):
+                del ct_dict[call_key]
+                params["call_targets"] = ct_dict
+                st.session_state[txt_key] = json.dumps(params, indent=2)
+                st.success("Deleted (remember to **Save parameters to DB**)")
+
+        st.markdown("---")
+
+    # ---------- 6. SAVE EVERYTHING ----------------------------------------------
+    if st.button("💾 Save parameters to DB", key="save_to_db"):
+        try:
+            final_params = json.loads(st.session_state[txt_key])
+            for k, v in final_params.items():
+                upsert_report_param(chosen_report, k, v, DB_PATH)
+            st.success("Parameters saved to database.")
+        except json.JSONDecodeError as e:
+            st.error(f"JSON error: {e}")
