@@ -123,6 +123,17 @@ def init_db(db_path='database/reporting.db'):
             notes         TEXT
         )""")
 
+        # 9) Which modules belong to which report (and in which order)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS report_modules (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_name   TEXT,
+                module_name   TEXT,          -- e.g. 'Budget', must exist in MODULES dict
+                run_order     INTEGER,       -- 1-based ordering
+                enabled       BOOLEAN,       -- ticked/unticked in Admin UI
+                UNIQUE (report_name, module_name)
+            )
+        """)
 
         # UNIQUE index for report_structure
         cursor.execute("""CREATE UNIQUE INDEX IF NOT EXISTS ux_report_structure_rn_alias
@@ -536,3 +547,35 @@ def delete_report_object(
         print(f"Deleted object: {object_name}")
 
 
+# ─────────────────────────────────────────
+# Report ⇢ Module mapping
+# ─────────────────────────────────────────
+def list_report_modules(report_name: str, db_path="database/reporting.db"):
+    """Return DataFrame with id, module_name, run_order, enabled."""
+    import pandas as pd
+    with sqlite3.connect(db_path) as conn:
+        return pd.read_sql_query("""
+            SELECT id, module_name, run_order, enabled
+            FROM report_modules
+            WHERE report_name = ?
+            ORDER BY run_order
+        """, conn, params=(report_name,))
+
+def upsert_report_module(report_name: str, module_name: str,
+                         run_order: int = None, enabled: bool = True,
+                         db_path="database/reporting.db"):
+    with sqlite3.connect(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO report_modules (report_name, module_name, run_order, enabled)
+            VALUES (?,?,?,?)
+            ON CONFLICT(report_name, module_name) DO UPDATE
+            SET run_order = excluded.run_order,
+                enabled   = excluded.enabled
+        """, (report_name, module_name, run_order, int(enabled)))
+        conn.commit()
+
+def delete_report_module(row_id: int, db_path="database/reporting.db"):
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("DELETE FROM report_modules WHERE id = ?", (row_id,))
+        conn.commit()
