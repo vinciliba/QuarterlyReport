@@ -197,3 +197,154 @@ if st.button("🚀 Run module"):
     except Exception as e:
         st.error(f"💥 Module crashed: {e}")
         st.code(traceback.format_exc())
+
+
+
+# ----------------------------- to test ------------------------------ ####
+
+import streamlit as st
+import importlib
+import inspect
+import traceback
+import sys
+import os
+from io import StringIO
+from ingestion.db_utils import load_report_params
+from reporting.quarterly_report.utils import RenderContext, Database, BaseModule
+from datetime import date
+# Removed: from code_editor import code_editor # No longer needed
+
+# ─── Setup ───────────────────────────────────────────────────────────
+st.title("🧠 Module Debugger (External Editor Workflow)")
+
+# ─── Dynamic Report Selection ─────────────────────────────────────────
+# ... (keep this section as is) ...
+report_lookup = {
+    "quarterly_report": "reporting.quarterly_report"
+}
+report_name = st.selectbox("Select report", list(report_lookup.keys()))
+mod_pkg_path = report_lookup[report_name]
+try:
+    report_mod_pkg = importlib.import_module(mod_pkg_path)
+    modules_dict = report_mod_pkg.MODULES
+except Exception as e:
+    st.error(f"❌ Failed to import module registry: {e}")
+    st.stop()
+
+# ─── Module Selection ─────────────────────────────────────────────────
+module_name = st.selectbox("Module", list(modules_dict.keys()))
+
+# --- Get Module Info ---
+try:
+    # Store the original module object in session state to help with reloading
+    if 'current_module_obj' not in st.session_state or st.session_state.get('current_module_name') != module_name:
+        st.session_state['current_module_obj'] = inspect.getmodule(modules_dict[module_name])
+        st.session_state['current_module_name'] = module_name
+
+    mod_cls_name = modules_dict[module_name].__name__ # Get the actual class name string
+    mod_module = st.session_state['current_module_obj']
+    mod_cls = getattr(mod_module, mod_cls_name) # Get class from current module object
+    source_file = inspect.getsourcefile(mod_cls)
+
+except Exception as e:
+    st.error(f"❌ Failed to load module info: {e}")
+    st.code(traceback.format_exc())
+    st.stop()
+
+
+cutoff = st.date_input("Cut-off date", date.today())
+
+# ─── Edit Externally ──────────────────────────────────────────────
+st.markdown("### ✏️ Edit Module Externally")
+if source_file:
+    st.info(f"Please open and edit the following file in VS Code / Jupyter / your preferred editor:")
+    st.code(source_file, language=None) # Display the file path
+    # Optionally display read-only code
+    try:
+        st.markdown("#### Current Code (Read-Only):")
+        current_code = inspect.getsource(mod_cls)
+        st.code(current_code, language="python", line_numbers=True)
+    except Exception as e:
+        st.warning(f"Could not display current code: {e}")
+
+else:
+    st.error("Could not determine the source file location for this module.")
+
+
+# --- Reload Button ---
+if st.button("🔄 Reload Module Code from File"):
+    try:
+        # Reload the module
+        reloaded_module = importlib.reload(mod_module)
+        # Update the module object and class reference in session state
+        st.session_state['current_module_obj'] = reloaded_module
+        mod_cls = getattr(reloaded_module, mod_cls_name) # Re-fetch class from reloaded module
+        st.success(f"✅ Module '{module_name}' reloaded successfully from {source_file}")
+        # Rerun to refresh the displayed code
+        st.experimental_rerun()
+    except Exception as e:
+        st.error(f"💥 Failed to reload module: {e}")
+        st.code(traceback.format_exc())
+
+# ─── Execute Module ───────────────────────────────────────────────────
+if st.button("🚀 Run Reloaded Module"):
+    if not source_file:
+         st.error("Cannot run module as source file location is unknown.")
+         st.stop()
+    try:
+        # Ensure we are using the potentially reloaded class
+        current_mod_module = st.session_state['current_module_obj']
+        current_mod_cls = getattr(current_mod_module, mod_cls_name)
+
+        # Instantiate the class
+        mod = current_mod_cls()
+
+        # Create the RenderContext
+        ctx = RenderContext(
+            db      = Database("database/reporting.db"),
+            params  = load_report_params(report_name, "database/reporting.db"),
+            cutoff  = cutoff.isoformat(),
+            out     = {"tables":{}, "charts":{}, "text":{}},
+        )
+
+        # Capture print output
+        old_stdout = sys.stdout
+        captured_output = StringIO()
+        sys.stdout = captured_output
+
+        try:
+            # Call the run method - simplified assumption it takes ctx
+            # Adjust if your run methods have different signatures
+            result = mod.run(ctx) # Assuming run takes ctx directly based on your original else block
+
+            # --- Display results (keep this part as is) ---
+            print_output = captured_output.getvalue()
+            if print_output:
+                st.text("Print Output:")
+                st.code(print_output)
+            st.success(f"✅ {module_name} finished.")
+            # ... (rest of your result handling: tables, charts, text) ...
+            if isinstance(result, tuple) and len(result) == 2:
+                 success, message = result
+                 if success:
+                     st.write(message)
+                 else:
+                     st.error(message)
+            else:
+                 st.write(result)
+
+            if ctx.out["tables"]:
+                 for name, tbl in ctx.out["tables"].items():
+                     st.subheader(f"📊 Table: {name}")
+                     st.dataframe(tbl)
+            # ... (charts, text) ...
+
+
+        finally:
+            # Restore stdout
+            sys.stdout = old_stdout
+            captured_output.close()
+
+    except Exception as e:
+        st.error(f"💥 Module crashed: {e}")
+        st.code(traceback.format_exc())
