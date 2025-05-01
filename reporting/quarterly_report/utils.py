@@ -20,6 +20,7 @@ class Database:                     # very thin helper
     def read_table(self, name) -> pd.DataFrame:
         return pd.read_sql_query(f"SELECT * FROM {name}", self.conn)
 
-def get_modules():
-    from reporting.quarterly_report import MODULES
+# In utils.py (updated)
+def get_modules(report_name):
+    from reporting.quarterly_report.modules_registry import MODULES
     return MODULES

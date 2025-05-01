@@ -45,6 +45,17 @@ if 'selected_report_after_create' not in st.session_state:
 if 'file_uploader_key_counter' not in st.session_state:
     st.session_state.file_uploader_key_counter = 0
 
+# Track completed modules for staged report generation
+if 'completed_modules' not in st.session_state:
+    st.session_state.completed_modules = []
+
+# Track the last chosen report to persist across reruns
+if 'last_chosen_report' not in st.session_state:
+    st.session_state.last_chosen_report = None
+
+# Track the last cutoff date to persist across reruns
+if 'last_cutoff_date' not in st.session_state:
+    st.session_state.last_cutoff_date = None
 # =================================
 # === End Session State Init ===
 # =================================
@@ -120,96 +131,156 @@ selected_section = sections[selected_section_key]
 # Add a debug print to confirm script execution and selected section
 print(f"DEBUG: Script rerun. Selected section: {selected_section_key} ({selected_section})")
 st.write(f"", unsafe_allow_html=True) # HTML comment for browser source check
+# ──────────────────────────────────────────────────
+# WORKFLOW – Launch & Validation (Refactored)
+# ──────────────────────────────────────────────────
 
-# ──────────────────────────────────────────────────
-# WORKFLOW  – Launch & Validation
-# ──────────────────────────────────────────────────
 if selected_section == "workflow":
-    from ingestion.report_check import check_report_readiness   # ← new helper
+    from ingestion.report_check import check_report_readiness
+    import importlib
+    from pathlib import Path
+    from docx import Document
 
     st.title("📊 Report Launch & Validation")
-    st.markdown(
-        "Validate that all required uploads are present **and** fresh before "
-        "running a report."
-    )
 
-    # ----------------------------------------------
-    # Pick a report
-    # ----------------------------------------------
+    # Step 1: Pick a report
     reports_df = get_all_reports(DB_PATH)
     if reports_df.empty:
         st.info("No reports defined yet. Create one in “Single File Upload”.")
         st.stop()
 
-    chosen_report = st.selectbox(
-        "Choose report to validate", reports_df["report_name"].tolist()
-    )
+    # Persist the chosen report across reruns
+    default_report = st.session_state.last_chosen_report if st.session_state.last_chosen_report in reports_df["report_name"].tolist() else reports_df["report_name"].iloc[0]
+    chosen_report = st.selectbox("Choose report to validate", reports_df["report_name"].tolist(), index=reports_df["report_name"].tolist().index(default_report))
+    st.session_state.last_chosen_report = chosen_report
 
-    # ----------------------------------------------
-    # Pick cutoff & tolerance
-    # ----------------------------------------------
-    cutoff_date = st.date_input("📅 Reporting cutoff date")
-    tolerance_days = st.slider(
-        "⏱️ Tolerance – uploads accepted this many days before cutoff",
-        0,
-        15,
-        3,
-    )
+    # Step 2: Choose cutoff & tolerance
+    default_cutoff = st.session_state.last_cutoff_date if st.session_state.last_cutoff_date else datetime.today()
+    cutoff_date = st.date_input("📅 Reporting cutoff date", value=default_cutoff)
+    st.session_state.last_cutoff_date = cutoff_date
+    tolerance_days = st.slider("⏱️ Tolerance (days before cutoff)", 0, 15, 3)
 
-    # ----------------------------------------------
-    # Run validation (pure util)
-    # ----------------------------------------------
-    validation_df, ready = check_report_readiness(
-        chosen_report, cutoff_date, tolerance_days, db_path=DB_PATH
-    )
-
+    # Step 3: Validate readiness
+    validation_df, ready = check_report_readiness(chosen_report, cutoff_date, tolerance_days, db_path=DB_PATH)
     st.markdown("### Validation results")
     st.dataframe(validation_df, hide_index=True, use_container_width=True)
 
-    # ----------------------------------------------
-    # Outcome
-    # ----------------------------------------------
-    if ready:
-        st.success("🎉 All required tables uploaded and within the valid window!")
+    if not ready:
+        st.error("⛔ Missing or stale uploads detected. Fix them before launch.")
+        st.stop()
 
-        if st.button("🚀 Run Report"):
-            # ── 1️⃣ transient status banner ───────────────────────────
-            status = st.empty()                       # reserve space
+    st.success("🎉 All required tables uploaded and within the valid window!")
+
+    # Step 4: Show available DOCX template
+    template_dir = Path("reporting/templates/docx")
+    template_file = next(
+        (f for f in template_dir.glob("*.docx") if chosen_report.replace(" ", "_") in f.name),
+        None
+    )
+
+    if template_file:
+        st.markdown(f"🖋️ **Template in use:** `{template_file.name}`")
+    else:
+        st.warning(f"No template found for `{chosen_report}` in `/templates/docx/`")
+
+    # Step 5: Load report module + registry
+    report_to_module = {
+        "Quarterly_Report": "reporting.quarterly_report",
+        "Invoice_Summary": "reporting.invoice_summary",
+        # Add more mappings here if needed
+    }
+
+    mod_path = report_to_module.get(chosen_report)
+    if not mod_path:
+        st.warning(f"No Python module path mapped for `{chosen_report}`.")
+        st.stop()
+
+    try:
+        mod = importlib.import_module(mod_path)
+        print(f"Loaded module: {mod}, dir: {dir(mod)}")  # Debug print to verify run_report
+        MODULES = getattr(mod, "MODULES", {})
+    except Exception as e:
+        st.error(f"Error loading report modules: {e}")
+        st.stop()
+
+    if not MODULES:
+        st.warning("No modules found for this report.")
+        st.stop()
+
+    # Step 6: Show progress of completed modules
+    st.markdown("### 📈 Progress")
+    if st.session_state.completed_modules:
+        st.write(f"Completed modules: {', '.join(st.session_state.completed_modules)}")
+    else:
+        st.write("No modules completed yet.")
+
+    # Step 7: Choose subset of modules (optional, exclude completed ones by default)
+    st.markdown("### 🧩 Select modules to run")
+    remaining_modules = [k for k in MODULES.keys() if k not in st.session_state.completed_modules]
+    enabled_module_names = st.multiselect(
+        "Choose modules",
+        list(MODULES.keys()),
+        default=remaining_modules  # Default to uncompleted modules
+    )
+    selected_modules = {k: MODULES[k] for k in enabled_module_names}
+
+    # Step 8: Option to reset the staged report and clear completed modules
+    if st.button("🧹 Reset staged report"):
+        if template_file:
+            st.session_state.staged_docx = Document(str(template_file))
+            st.toast("Staged DOCX initialized from template.", icon="📝")
+        else:
+            st.session_state.staged_docx = Document()
+            st.toast("Staged DOCX initialized empty.", icon="🆕")
+        # Reset completed modules
+        st.session_state.completed_modules = []
+        st.toast("Progress reset.", icon="🔄")
+
+    # Step 9: Run report with selected modules
+    if st.button("🚀 Run Report"):
+        if not selected_modules:
+            st.warning("Please select at least one module to run.")
+        else:
+            status = st.empty()
             status.info(f"Launching report **{chosen_report}** …")
 
-            # ── 2️⃣ run the job inside a spinner ─────────────────────
             try:
-                with st.spinner("Running …"):
-                    report_to_module = {
-                        "Quarterly_Report": "reporting.quarterly.quarterly_report",
-                        "Invoice_Summary": "reporting.invoice_summary",
-                        # add more mappings …
-                    }
-                    mod_path = report_to_module.get(chosen_report)
-
-                    if not mod_path:
-                        raise RuntimeError(f"No module mapped for '{chosen_report}'")
-
-                    import importlib
-                    mod = importlib.import_module(mod_path)
-
+                with st.spinner("Running selected modules…"):
                     if not hasattr(mod, "run_report"):
-                        raise RuntimeError(f"Module '{mod_path}' has no `run_report()`")
+                        raise RuntimeError(f"Module `{mod_path}` has no `run_report()`")
 
-                    ok, msg = mod.run_report(cutoff_date, tolerance_days, db_path=DB_PATH)
+                    ctx, run_results = mod.run_report(
+                        cutoff_date=cutoff_date,
+                        tolerance=tolerance_days,
+                        db_path=DB_PATH,
+                        selected_modules=selected_modules
+                    )
+
             except Exception as e:
-                status.empty()                        # remove blue banner
+                status.empty()
                 st.error(f"💥 Error running report: {e}")
-                import traceback;  st.code(traceback.format_exc())
+                st.code(traceback.format_exc())
             else:
-                status.empty()                        # remove banner when done
-                if ok:
-                    st.success(msg)
-                    st.toast("Report finished", icon="✅")
-                else:
-                    st.error(msg)
+                status.empty()
+                st.markdown("### 📝 Module Run Results")
+                all_ok = True
+                for mod_name, state, msg in run_results:
+                    if state == "✅ Success":
+                        st.success(f"{mod_name}: {state}")
+                        if mod_name not in st.session_state.completed_modules:
+                            st.session_state.completed_modules.append(mod_name)  # Track success
+                    else:
+                        st.error(f"{mod_name}: {state}")
+                        if msg:
+                            st.code(msg)
+                        all_ok = False
 
-                # optional log
+                if all_ok:
+                    st.toast("Report finished", icon="✅")
+                    st.success(f"Report **{chosen_report}** completed successfully.")
+                else:
+                    st.warning("Some modules failed. See details above.")
+
                 log_cutoff(
                     chosen_report,
                     f"Validation_{cutoff_date}",
@@ -217,49 +288,18 @@ if selected_section == "workflow":
                     validated=True,
                     db_path=DB_PATH,
                 )
-    else:
-        st.error("⛔ Missing or stale uploads detected. Fix them before launch.")
 
-
-elif selected_section == "single_upload":
-    st.subheader("📂 Single File Upload & Transformation")
-
-    reports_df = get_all_reports(DB_PATH)
-
-    # Prepare options for the report selectbox
-    report_names = ["-- Create new --"] + reports_df["report_name"].tolist() if not reports_df.empty else ["-- Create new --"]
-
-    # Determine the default *index* for the selectbox
-    default_report_index = 0 # Start with index 0, which is "-- Create new --" by default
-
-    # Check if a report name was stored in session state after a successful creation
-    # And if it exists in the current list of report names
-    if st.session_state.selected_report_after_create:
-        newly_created_report = st.session_state.selected_report_after_create
-        try:
-            # Find the index of the newly created report in the current list of options
-            default_report_index = report_names.index(newly_created_report)
-        except ValueError:
-            # If the report name from state is somehow not in the list (e.g., deleted),
-            # default back to the first item ("-- Create new --")
-            default_report_index = 0
-
-        # Clear the session state variable after checking, so it doesn't persist incorrectly
-        st.session_state.selected_report_after_create = None
-
-
-    # Display the selectbox, using the determined default *index*
-    chosen_report = st.selectbox(
-        "Select or create a report to link the upload to:",
-        report_names,
-        index=default_report_index, # <--- Use index instead of value
-        key="single_upload_report_select" # Unique key
-    )
-
-    st.markdown("---") # Separator
-
-
-    # --- Section for Creating a New Report ---
+    # Step 10: Save staged DOCX (if created)
+    if "staged_docx" in st.session_state:
+        with st.expander("💾 Save or Preview Staged Report", expanded=True):
+            filename = f"partial_{chosen_report}_{cutoff_date}.docx"
+            if st.button("💾 Save to app_files"):
+                out_path = Path("app_files") / filename
+                st.session_state.staged_docx.save(str(out_path))
+                st.success(f"Saved partial report as `{filename}` in `app_files/`")
+    #--------------------------------------------------------------------------
+    # --- Section for Creating a New Report -----------------------------------
+    #--------------------------------------------------------------------------
     if chosen_report == "-- Create new --":
         st.markdown("### Create New Report")
         new_report_name = st.text_input("Enter the name for the new report:", key="new_report_name_input")
