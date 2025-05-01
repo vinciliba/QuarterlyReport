@@ -134,7 +134,7 @@ st.write(f"", unsafe_allow_html=True) # HTML comment for browser source check
 # ──────────────────────────────────────────────────
 # WORKFLOW – Launch & Validation (Refactored)
 # ──────────────────────────────────────────────────
-
+# In ui/streamlit_app.py (replace the existing "workflow" section)
 if selected_section == "workflow":
     from ingestion.report_check import check_report_readiness
     import importlib
@@ -149,7 +149,6 @@ if selected_section == "workflow":
         st.info("No reports defined yet. Create one in “Single File Upload”.")
         st.stop()
 
-    # Persist the chosen report across reruns
     default_report = st.session_state.last_chosen_report if st.session_state.last_chosen_report in reports_df["report_name"].tolist() else reports_df["report_name"].iloc[0]
     chosen_report = st.selectbox("Choose report to validate", reports_df["report_name"].tolist(), index=reports_df["report_name"].tolist().index(default_report))
     st.session_state.last_chosen_report = chosen_report
@@ -167,6 +166,7 @@ if selected_section == "workflow":
 
     if not ready:
         st.error("⛔ Missing or stale uploads detected. Fix them before launch.")
+        st.markdown("Please go to the **Single File Upload** or **Mass Upload** section to upload the required data files.")
         st.stop()
 
     st.success("🎉 All required tables uploaded and within the valid window!")
@@ -182,12 +182,12 @@ if selected_section == "workflow":
         st.markdown(f"🖋️ **Template in use:** `{template_file.name}`")
     else:
         st.warning(f"No template found for `{chosen_report}` in `/templates/docx/`")
+        st.stop()
 
     # Step 5: Load report module + registry
     report_to_module = {
         "Quarterly_Report": "reporting.quarterly_report",
         "Invoice_Summary": "reporting.invoice_summary",
-        # Add more mappings here if needed
     }
 
     mod_path = report_to_module.get(chosen_report)
@@ -197,7 +197,7 @@ if selected_section == "workflow":
 
     try:
         mod = importlib.import_module(mod_path)
-        print(f"Loaded module: {mod}, dir: {dir(mod)}")  # Debug print to verify run_report
+        print(f"Loaded module: {mod}, dir: {dir(mod)}")  # Debug print
         MODULES = getattr(mod, "MODULES", {})
     except Exception as e:
         st.error(f"Error loading report modules: {e}")
@@ -207,24 +207,24 @@ if selected_section == "workflow":
         st.warning("No modules found for this report.")
         st.stop()
 
-    # Step 6: Show progress of completed modules
+    # Step 6: Choose subset of modules
+    st.markdown("### 🧩 Select modules to run")
+    remaining_modules = [k for k in MODULES.keys() if k not in st.session_state.completed_modules]
+    enabled_module_names = st.multiselect(
+        "Choose modules",
+        list(MODULES.keys()),
+        default=remaining_modules
+    )
+    selected_modules = {k: MODULES[k] for k in enabled_module_names}
+
+    # Step 7: Show progress of completed modules
     st.markdown("### 📈 Progress")
     if st.session_state.completed_modules:
         st.write(f"Completed modules: {', '.join(st.session_state.completed_modules)}")
     else:
         st.write("No modules completed yet.")
 
-    # Step 7: Choose subset of modules (optional, exclude completed ones by default)
-    st.markdown("### 🧩 Select modules to run")
-    remaining_modules = [k for k in MODULES.keys() if k not in st.session_state.completed_modules]
-    enabled_module_names = st.multiselect(
-        "Choose modules",
-        list(MODULES.keys()),
-        default=remaining_modules  # Default to uncompleted modules
-    )
-    selected_modules = {k: MODULES[k] for k in enabled_module_names}
-
-    # Step 8: Option to reset the staged report and clear completed modules
+    # Step 8: Option to reset the staged report
     if st.button("🧹 Reset staged report"):
         if template_file:
             st.session_state.staged_docx = Document(str(template_file))
@@ -232,7 +232,6 @@ if selected_section == "workflow":
         else:
             st.session_state.staged_docx = Document()
             st.toast("Staged DOCX initialized empty.", icon="🆕")
-        # Reset completed modules
         st.session_state.completed_modules = []
         st.toast("Progress reset.", icon="🔄")
 
@@ -268,7 +267,7 @@ if selected_section == "workflow":
                     if state == "✅ Success":
                         st.success(f"{mod_name}: {state}")
                         if mod_name not in st.session_state.completed_modules:
-                            st.session_state.completed_modules.append(mod_name)  # Track success
+                            st.session_state.completed_modules.append(mod_name)
                     else:
                         st.error(f"{mod_name}: {state}")
                         if msg:
@@ -278,6 +277,14 @@ if selected_section == "workflow":
                 if all_ok:
                     st.toast("Report finished", icon="✅")
                     st.success(f"Report **{chosen_report}** completed successfully.")
+
+                    # Call the report-specific render_and_export function
+                    if hasattr(mod, "render_and_export"):
+                        final_report_path = mod.render_and_export(chosen_report, cutoff_date, ctx)
+                        st.success(f"Final report saved as `{final_report_path}` in `app_files/`")
+                    else:
+                        st.warning(f"No render_and_export function found for `{chosen_report}`.")
+
                 else:
                     st.warning("Some modules failed. See details above.")
 

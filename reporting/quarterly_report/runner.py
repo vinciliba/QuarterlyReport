@@ -1,11 +1,12 @@
-
+# In reporting/quarterly_report/runner.py
 from ingestion.db_utils import list_report_modules
 from importlib import import_module
 from reporting.registry import REPORT_MODULES_REGISTRY
-from .utils import get_modules
+from reporting.quarterly_report.utils import get_modules
 import streamlit as st
-pkg = import_module(__package__)          # the package we are in
-MODULES = get_modules("Quarterly_Report")                   # registry
+
+pkg = import_module(__package__)  # the package we are in
+MODULES = get_modules("Quarterly_Report")  # registry
 
 def _ordered_enabled(report_name, db_path):
     df = list_report_modules(report_name, db_path)
@@ -32,19 +33,21 @@ def run_report(cutoff_date, tolerance, db_path, selected_modules=None):
     for mod_cls in modules_to_run:
         mod_name = mod_cls.__name__
         try:
-            ctx = mod_cls().run(ctx, cutoff_date, db_path)
+            # Run the module and get the updated context
+            updated_ctx, (success, msg) = mod_cls().run(ctx, cutoff_date, db_path)
+            ctx.update(updated_ctx)  # Merge the updated context
 
-            # Optional: write status to a staged docx if active
+            # Write status to the staged docx if active
             if "staged_docx" in st.session_state:
                 doc = st.session_state.staged_docx
                 doc.add_paragraph(f"✅ {mod_name} completed successfully.")
 
-            results.append((mod_name, "✅ Success", ""))
+            results.append((mod_name, "✅ Success", msg))
         except Exception as e:
             error_msg = str(e)
             results.append((mod_name, "❌ Failed", error_msg))
 
-            # Also optionally write failure to staged_docx
+            # Also write failure to staged_docx
             if "staged_docx" in st.session_state:
                 st.session_state.staged_docx.add_paragraph(f"❌ {mod_name} failed: {error_msg}")
 
