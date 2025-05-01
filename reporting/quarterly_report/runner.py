@@ -3,6 +3,7 @@ from ingestion.db_utils import list_report_modules
 from importlib import import_module
 from reporting.registry import REPORT_MODULES_REGISTRY
 from reporting.quarterly_report.utils import get_modules
+from ingestion.db_utils import insert_variable
 import streamlit as st
 
 pkg = import_module(__package__)  # the package we are in
@@ -16,15 +17,9 @@ def _ordered_enabled(report_name, db_path):
     return [MODULES[m] for m in enabled.module_name if m in MODULES]
 
 def run_report(cutoff_date, tolerance, db_path, selected_modules=None):
-    """
-    Run enabled modules for the Quarterly Report.
-    Optionally accepts a subset of modules (selected_modules) for partial runs.
-    Returns: (ctx, results) where results is a list of (module_name, status, message)
-    """
     ctx = {}
     results = []
 
-    # Determine modules to run
     if selected_modules:
         modules_to_run = selected_modules.values()
     else:
@@ -33,23 +28,20 @@ def run_report(cutoff_date, tolerance, db_path, selected_modules=None):
     for mod_cls in modules_to_run:
         mod_name = mod_cls.__name__
         try:
-            # Run the module and get the updated context
             updated_ctx, (success, msg) = mod_cls().run(ctx, cutoff_date, db_path)
-            ctx.update(updated_ctx)  # Merge the updated context
+            ctx.update(updated_ctx)
 
-            # Write status to the staged docx if active
+            for k, v in updated_ctx.items():
+                insert_variable("Quarterly_Report", mod_name, k, v, db_path, anchor=k)
+
             if "staged_docx" in st.session_state:
-                doc = st.session_state.staged_docx
-                doc.add_paragraph(f"✅ {mod_name} completed successfully.")
+                st.session_state.staged_docx.add_paragraph(f"✅ {mod_name} completed successfully.")
 
             results.append((mod_name, "✅ Success", msg))
         except Exception as e:
             error_msg = str(e)
             results.append((mod_name, "❌ Failed", error_msg))
-
-            # Also write failure to staged_docx
             if "staged_docx" in st.session_state:
                 st.session_state.staged_docx.add_paragraph(f"❌ {mod_name} failed: {error_msg}")
-
-            break  # Optional: fail-fast
+            break
     return ctx, results

@@ -158,7 +158,25 @@ def init_db(db_path='database/reporting.db'):
             CREATE INDEX IF NOT EXISTS idx_report_objects_name
             ON report_objects (object_name);
             """)
+        
 
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS report_variables (
+            report_name TEXT,
+            module_name TEXT,
+            var_name TEXT,
+            value TEXT,
+            anchor_name TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        ''')
+ 
+       # Optional: Add an index for faster lookups
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_report_variables_name
+            ON report_variables(var_name);
+            """)
+        
    
         conn.commit()
 
@@ -579,3 +597,41 @@ def delete_report_module(row_id: int, db_path="database/reporting.db"):
     with sqlite3.connect(db_path) as conn:
         conn.execute("DELETE FROM report_modules WHERE id = ?", (row_id,))
         conn.commit()
+
+#-------------  Create Report Variables  ------------------
+
+
+def insert_variable(report, module, var, value, db_path, anchor=None):
+    con = sqlite3.connect(db_path)
+    con.execute('''
+        INSERT INTO report_variables (report_name, module_name, var_name, anchor_name, value, created_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ''', (report, module, var, anchor or var, json.dumps(value)))
+    con.commit()
+    con.close()
+
+
+def fetch_vars_for_report(report_name, db_path):
+    con = sqlite3.connect(db_path)
+    df = pd.read_sql_query('''
+        SELECT anchor_name, value FROM report_variables
+        WHERE report_name = ?
+    ''', con, params=(report_name,))
+    con.close()
+    context = {}
+    for _, row in df.iterrows():
+        try:
+            context[row["anchor_name"]] = json.loads(row["value"])
+        except (json.JSONDecodeError, TypeError, ValueError):
+            context[row["anchor_name"]] = row["value"]
+    return context
+
+
+def get_variable_status(report_name, db_path):
+    con = sqlite3.connect(db_path)
+    df = pd.read_sql_query('''
+        SELECT *, julianday('now') - julianday(created_at) as age_days FROM report_variables
+        WHERE report_name = ?
+    ''', con, params=(report_name,))
+    con.close()
+    return df

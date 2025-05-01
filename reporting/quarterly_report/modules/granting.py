@@ -9,14 +9,12 @@ class GrantsModule(BaseModule):
     description = "GAP statistics, and tables"
 
     def run(self, ctx: RenderContext, cutoff, db_path: str):
+        anchor_name = "TEST_GRANTING"
         message = "✅ Hello Daniele from GrantsModule!"
         print(message)
 
-        # Add the message to the staged report (staged_docx)
         if "staged_docx" in st.session_state:
-            doc = st.session_state.staged_docx
-            doc.add_paragraph(f"GrantsModule: {message}")
+            st.session_state.staged_docx.add_paragraph(f"GrantsModule: {message}")
 
-        # Return a context dictionary to be used for final template rendering
-        ctx["TEST_GRANTING"] = message
-        return ctx, (True, "✅ GrantsModule ran successfully.")
+        ctx[anchor_name] = message
+        return ctx, (True, f"{anchor_name}:{message}")

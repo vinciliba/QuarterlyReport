@@ -12,11 +12,13 @@ from ingestion.db_utils import (
     get_all_reports, create_new_report,
     define_expected_table, get_suggested_structure,
     load_report_params, upsert_report_param, save_report_object,
-    get_report_object, list_report_objects, delete_report_object
+    get_report_object, list_report_objects, delete_report_object, get_variable_status,
+    fetch_vars_for_report
 )
 from ingestion.report_check import check_report_readiness
 import mammoth, io, docx
 import pyperclip
+from pathlib import Path
 
 DB_PATH = 'database/reporting.db'
 
@@ -114,11 +116,13 @@ init_db(db_path=DB_PATH)
 # Define your sections
 sections = {
     "🚀 Choose Workflow": "workflow",
+    "📤 Export Report"  : "export_report",
     "📂 Single File Upload": "single_upload",
     "📦 Mass Upload": "mass_upload",
     "🔎 View History": "history",
     "🛠️ Admin" :  "report_structure",
     "🖋️ Template Editor": "template_editor",
+    
 }
 
 # Use a selectbox for navigation
@@ -296,17 +300,79 @@ if selected_section == "workflow":
                     db_path=DB_PATH,
                 )
 
-    # Step 10: Save staged DOCX (if created)
+# === streamlit_app.py (new section) ===
+elif selected_section == "export_report":
+    st.title("📤 Export Final Report")
+    reports_df = get_all_reports(DB_PATH)
+    if reports_df.empty:
+        st.info("No reports available.")
+        st.stop()
+        
+    chosen_report = st.selectbox("Select Report", reports_df["report_name"].tolist())
+    df_vars = get_variable_status(chosen_report, DB_PATH)
+
+    def highlight_age(row):
+        return ["background-color: #ffd6d6" if row.age_days > 5 else "" for _ in row]
+
+    st.markdown("### 🧠 Variables Snapshot")
+    st.dataframe(df_vars.style.apply(highlight_age, axis=1), use_container_width=True)
+
+    st.markdown("### 📄 Select Template or Use Existing Partial")
+    template_dir = Path("reporting/templates/docx")
+    available_templates = list(template_dir.glob("*.docx"))
+    template_choices = [str(t.name) for t in available_templates]
+    template_choice = st.selectbox("Choose a template:", template_choices)
+    template_path = template_dir / template_choice
+
+    if st.button("📄 Render Final Report"):
+        from docxtpl import DocxTemplate
+        from jinja2 import Environment, DebugUndefined
+
+        tpl = DocxTemplate(str(template_path))
+        context = fetch_vars_for_report(chosen_report, DB_PATH)
+
+        # Show missing anchors
+        missing = tpl.get_undeclared_template_variables() - context.keys()
+        if missing:
+            st.warning(f"⚠️ Missing anchors: {', '.join(missing)}")
+           
+        env = Environment(undefined=DebugUndefined)
+        tpl.render(context, jinja_env=env)
+
+        output_dir = Path("app_files") / chosen_report / datetime.today().strftime("%Y-%m-%d")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / "Final_Report.docx"
+        tpl.save(str(output_path))
+
+        st.success(f"Final report saved to: {output_path}")
+        with open(output_path, "rb") as f:
+            st.download_button("📥 Download Final Report", f.read(), file_name="Final_Report.docx")
+
     if "staged_docx" in st.session_state:
         with st.expander("💾 Save or Preview Staged Report", expanded=True):
-            filename = f"partial_{chosen_report}_{cutoff_date}.docx"
+            filename = f"partial_{chosen_report}_{datetime.today().strftime('%Y-%m-%d')}.docx"
             if st.button("💾 Save to app_files"):
                 out_path = Path("app_files") / filename
                 st.session_state.staged_docx.save(str(out_path))
                 st.success(f"Saved partial report as `{filename}` in `app_files/`")
+
     #--------------------------------------------------------------------------
     # --- Section for Creating a New Report -----------------------------------
     #--------------------------------------------------------------------------
+elif selected_section == "single_upload":
+    st.title("📂 Single File Upload")
+    # Load reports from DB
+    reports_df = get_all_reports(DB_PATH)
+    report_names = ["-- Create new --"] + reports_df["report_name"].tolist()
+
+    # Default selection logic
+    default_report_name = (
+        st.session_state.selected_report_after_create
+        if st.session_state.selected_report_after_create in report_names
+        else report_names[0]
+    )
+
+    chosen_report = st.selectbox("Choose a report:", report_names, index=report_names.index(default_report_name))
     if chosen_report == "-- Create new --":
         st.markdown("### Create New Report")
         new_report_name = st.text_input("Enter the name for the new report:", key="new_report_name_input")
@@ -1678,144 +1744,150 @@ elif selected_section == "report_structure":
 # ---------------------------------------------------
 # Template Management
 # ---------------------------------------------------
-import streamlit as st
-from docx import Document
-from pathlib import Path
-import base64
-import io
-import docxedit
-import mammoth
+elif selected_section == "template_editor":
+    st.subheader("🛠️ Template Management")
 
-# ─────────────────────── Constants ───────────────────────
-TEMPLATE_DIRECTORY = Path("reporting/templates/docx")
-TEMPLATE_DIRECTORY.mkdir(parents=True, exist_ok=True)
-KEY_TEMPLATE_PATH = "template_docx_path"
+    # ─────────────────────── Imports ───────────────────────
+    import base64
+    import docx
+    import docxedit
+    from docx import Document
+    from pathlib import Path
+    import mammoth
 
-# ─────────────────────── Session State Initialization ───────────────────────
-if KEY_TEMPLATE_PATH not in st.session_state:
-    st.session_state[KEY_TEMPLATE_PATH] = None
+    # ─────────────────────── Streamlit Imports ───────────────────────
+    import streamlit as st
 
-# ─────────────────────── Helper Functions ───────────────────────
-def list_template_files():
-    """Return sorted list of *.docx files in the template directory."""
-    return sorted(path.name for path in TEMPLATE_DIRECTORY.glob("*.docx"))
+    # ─────────────────────── Constants ───────────────────────
+    TEMPLATE_DIRECTORY = Path("reporting/templates/docx")
+    TEMPLATE_DIRECTORY.mkdir(parents=True, exist_ok=True)
+    KEY_TEMPLATE_PATH = "template_docx_path"
 
-def extract_docx_paragraphs(doc):
-    """Extract paragraphs from the DOCX for display in the placeholder selector."""
-    paragraphs = []
-    for para in doc.paragraphs:
-        text = "".join(run.text for run in para.runs)
-        if text.strip():  # Only include non-empty paragraphs
-            paragraphs.append(text)
-    return paragraphs
+    # ─────────────────────── Session State Initialization ───────────────────────
+    if KEY_TEMPLATE_PATH not in st.session_state:
+        st.session_state[KEY_TEMPLATE_PATH] = None
 
-def add_placeholder_to_docx(doc, placeholder_name, para_index=None):
-    """Add a Jinja2 placeholder to the DOCX at a specific paragraph using docxedit."""
-    placeholder = f"{{{{ {placeholder_name} }}}}"
-    if para_index is not None and 0 <= para_index < len(doc.paragraphs):
-        # Use docxedit to insert the placeholder at the specified paragraph
-        current_text = "".join(run.text for run in doc.paragraphs[para_index].runs)
-        if current_text.strip():
-            # Append the placeholder to the existing text in the paragraph
-            new_text = current_text + " " + placeholder
-            docxedit.replace_string(doc, old_string=current_text, new_string=new_text)
+    # ─────────────────────── Helper Functions ───────────────────────
+    def list_template_files():
+        """Return sorted list of *.docx files in the template directory."""
+        return sorted(path.name for path in TEMPLATE_DIRECTORY.glob("*.docx"))
+
+    def extract_docx_paragraphs(doc):
+        """Extract paragraphs from the DOCX for display in the placeholder selector."""
+        paragraphs = []
+        for para in doc.paragraphs:
+            text = "".join(run.text for run in para.runs)
+            if text.strip():  # Only include non-empty paragraphs
+                paragraphs.append(text)
+        return paragraphs
+
+    def add_placeholder_to_docx(doc, placeholder_name, para_index=None):
+        """Add a Jinja2 placeholder to the DOCX at a specific paragraph using docxedit."""
+        placeholder = f"{{{{ {placeholder_name} }}}}"
+        if para_index is not None and 0 <= para_index < len(doc.paragraphs):
+            # Use docxedit to insert the placeholder at the specified paragraph
+            current_text = "".join(run.text for run in doc.paragraphs[para_index].runs)
+            if current_text.strip():
+                # Append the placeholder to the existing text in the paragraph
+                new_text = current_text + " " + placeholder
+                docxedit.replace_string(doc, old_string=current_text, new_string=new_text)
+            else:
+                # If the paragraph is empty, just set the placeholder
+                docxedit.replace_string(doc, old_string="", new_string=placeholder)
         else:
-            # If the paragraph is empty, just set the placeholder
-            docxedit.replace_string(doc, old_string="", new_string=placeholder)
-    else:
-        # Append to the end if no valid index is provided
-        doc.add_paragraph(placeholder)
-    return doc
+            # Append to the end if no valid index is provided
+            doc.add_paragraph(placeholder)
+        return doc
 
-def docx_to_html(docx_path):
-    """Convert DOCX to HTML using mammoth for preview."""
-    try:
-        with open(docx_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file)
-            html_content = result.value  # The converted HTML
-            messages = result.messages  # Any conversion messages/warnings
-            if messages:
-                st.warning("Conversion warnings: " + "; ".join(str(msg) for msg in messages))
-            return html_content
-    except Exception as e:
-        st.error(f"Failed to convert DOCX to HTML: {e}")
-        return None
+    def docx_to_html(docx_path):
+        """Convert DOCX to HTML using mammoth for preview."""
+        try:
+            with open(docx_path, "rb") as docx_file:
+                result = mammoth.convert_to_html(docx_file)
+                html_content = result.value  # The converted HTML
+                messages = result.messages  # Any conversion messages/warnings
+                if messages:
+                    st.warning("Conversion warnings: " + "; ".join(str(msg) for msg in messages))
+                return html_content
+        except Exception as e:
+            st.error(f"Failed to convert DOCX to HTML: {e}")
+            return None
 
-# ─────────────────────── Template Management ───────────────────────
-st.markdown("### 📄 Template File")
-template_files = ["-- new --"] + list_template_files()
-template_selector = st.selectbox(
-    "Choose a file",
-    template_files,
-    key="template_file_selector"
-)
-
-if template_selector == "-- new --":
-    new_file_name = st.text_input(
-        "New file name",
-        value="template.docx",
-        help="Must end with .docx"
+    # ─────────────────────── Template Management ───────────────────────
+    st.markdown("### 📄 Template File")
+    template_files = ["-- new --"] + list_template_files()
+    template_selector = st.selectbox(
+        "Choose a file",
+        template_files,
+        key="template_file_selector"
     )
-    active_template_path = TEMPLATE_DIRECTORY / new_file_name
-    # Create a blank DOCX if it doesn't exist
-    if not active_template_path.exists():
-        doc = Document()
-        doc.add_paragraph("New Template - Edit in Word and re-upload")
-        doc.save(active_template_path)
-else:
-    active_template_path = TEMPLATE_DIRECTORY / template_selector
 
-# Load the template
-st.session_state[KEY_TEMPLATE_PATH] = str(active_template_path)
+    if template_selector == "-- new --":
+        new_file_name = st.text_input(
+            "New file name",
+            value="template.docx",
+            help="Must end with .docx"
+        )
+        active_template_path = TEMPLATE_DIRECTORY / new_file_name
+        # Create a blank DOCX if it doesn't exist
+        if not active_template_path.exists():
+            doc = Document()
+            doc.add_paragraph("New Template - Edit in Word and re-upload")
+            doc.save(active_template_path)
+    else:
+        active_template_path = TEMPLATE_DIRECTORY / template_selector
 
-# Upload DOCX
-uploaded_docx = st.file_uploader("Upload DOCX", type="docx", key="docx_upload")
-if uploaded_docx:
-    active_template_path.write_bytes(uploaded_docx.read())
+    # Load the template
     st.session_state[KEY_TEMPLATE_PATH] = str(active_template_path)
 
-# ─────────────────────── Download for Editing ───────────────────────
-st.markdown("### ✏️ Edit Template")
-st.info(
-    "Streamlit cannot edit DOCX files directly with pixel-perfect fidelity. "
-    "Download the template, edit it in Microsoft Word (or a compatible editor), "
-    "and re-upload it to make formatting changes. Use the section below to add Jinja2 placeholders."
-)
-if active_template_path.exists():
-    with open(active_template_path, "rb") as f:
-        docx_bytes = f.read()
-    b64 = base64.b64encode(docx_bytes).decode()
-    st.markdown(
-        f'<a download="{active_template_path.name}" href="data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,{b64}">Download Template for Editing</a>',
-        unsafe_allow_html=True
+    # Upload DOCX
+    uploaded_docx = st.file_uploader("Upload DOCX", type="docx", key="docx_upload")
+    if uploaded_docx:
+        active_template_path.write_bytes(uploaded_docx.read())
+        st.session_state[KEY_TEMPLATE_PATH] = str(active_template_path)
+
+    # ─────────────────────── Download for Editing ───────────────────────
+    st.markdown("### ✏️ Edit Template")
+    st.info(
+        "Streamlit cannot edit DOCX files directly with pixel-perfect fidelity. "
+        "Download the template, edit it in Microsoft Word (or a compatible editor), "
+        "and re-upload it to make formatting changes. Use the section below to add Jinja2 placeholders."
     )
-else:
-    st.warning("No template selected or uploaded.")
-
-# ─────────────────────── File Actions ───────────────────────
-st.markdown("### 💾 File Actions")
-save_button, download_button, delete_button = st.columns(3)
-
-if save_button.button("💾 Save", disabled=not active_template_path.name.endswith(".docx")):
-    st.success(f"Template is saved at: {active_template_path}")
-
-if download_button.button("📥 Download", disabled=not active_template_path.exists()):
-    try:
+    if active_template_path.exists():
         with open(active_template_path, "rb") as f:
             docx_bytes = f.read()
         b64 = base64.b64encode(docx_bytes).decode()
         st.markdown(
-            f'<a download="{active_template_path.name}" href="data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,{b64}">Click to download</a>',
+            f'<a download="{active_template_path.name}" href="data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,{b64}">Download Template for Editing</a>',
             unsafe_allow_html=True
         )
-    except Exception as e:
-        st.error(f"Download failed: {e}")
+    else:
+        st.warning("No template selected or uploaded.")
 
-if delete_button.button("🗑️ Delete", disabled=not active_template_path.exists()):
-    try:
-        active_template_path.unlink()
-        st.warning(f"Deleted: {active_template_path.name}")
-        st.session_state[KEY_TEMPLATE_PATH] = None
-        st.rerun()
-    except Exception as e:
-        st.error(f"Delete failed: {e}")
+    # ─────────────────────── File Actions ───────────────────────
+    st.markdown("### 💾 File Actions")
+    save_button, download_button, delete_button = st.columns(3)
+
+    if save_button.button("💾 Save", disabled=not active_template_path.name.endswith(".docx")):
+        st.success(f"Template is saved at: {active_template_path}")
+
+    if download_button.button("📥 Download", disabled=not active_template_path.exists()):
+        try:
+            with open(active_template_path, "rb") as f:
+                docx_bytes = f.read()
+            b64 = base64.b64encode(docx_bytes).decode()
+            st.markdown(
+                f'<a download="{active_template_path.name}" href="data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,{b64}">Click to download</a>',
+                unsafe_allow_html=True
+            )
+        except Exception as e:
+            st.error(f"Download failed: {e}")
+
+    if delete_button.button("🗑️ Delete", disabled=not active_template_path.exists()):
+        try:
+            active_template_path.unlink()
+            st.warning(f"Deleted: {active_template_path.name}")
+            st.session_state[KEY_TEMPLATE_PATH] = None
+            st.rerun()
+        except Exception as e:
+            st.error(f"Delete failed: {e}")

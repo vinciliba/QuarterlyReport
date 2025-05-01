@@ -3,6 +3,7 @@ import os
 import pandas as pd
 from datetime import datetime
 from ingestion.db_utils import insert_upload_log
+import sqlite3
 
 def ingest_data(file, selected_sheet=None, db_path='database/reporting.db'):
     ext = os.path.splitext(file.name)[1].lower()
