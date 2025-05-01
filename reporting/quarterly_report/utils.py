@@ -1,4 +1,4 @@
-# reporting/quarterly/utils.py   (simplified)
+## reporting/quarterly/utils.py   (simplified)
 from typing import Any, Dict
 from dataclasses import dataclass
 import sqlite3, pandas as pd

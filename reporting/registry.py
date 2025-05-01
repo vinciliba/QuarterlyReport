@@ -5,3 +5,5 @@ REPORT_MODULES_REGISTRY = {
     "Quarterly_Report": QUARTERLY_MODULES,
     # Add more mappings here
 }
+
+#
