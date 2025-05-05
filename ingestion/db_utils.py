@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any
 import pandas as pd 
 from datetime import date, datetime, timedelta
-
+import logging
 # ─────────────────────────────────────────
 # Init DB with all required tables
 # ─────────────────────────────────────────
@@ -600,17 +600,24 @@ def delete_report_module(row_id: int, db_path="database/reporting.db"):
         conn.commit()
 
 #-------------  Create Report Variables  ------------------
-
+logging.basicConfig(level=logging.DEBUG)
 
 def insert_variable(report, module, var, value, db_path, anchor=None):
-    con = sqlite3.connect(db_path)
-    con.execute('''
-        INSERT INTO report_variables (report_name, module_name, var_name, anchor_name, value, created_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ''', (report, module, var, anchor or var, json.dumps(value)))
-    con.commit()
-    con.close()
-
+    try:
+        con = sqlite3.connect(db_path)
+        logging.debug(f"Inserting variable: report={report}, module={module}, var={var}, anchor={anchor}, db_path={db_path}")
+        serialized_value = json.dumps(value, default=str)  # Handle non-serializable objects
+        con.execute('''
+            INSERT INTO report_variables (report_name, module_name, var_name, anchor_name, value, created_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (report, module, var, anchor or var, serialized_value))
+        con.commit()
+        logging.debug(f"Successfully inserted variable: {var}")
+    except Exception as e:
+        logging.error(f"Failed to insert variable {var}: {str(e)}")
+        raise  # Re-raise to ensure errors are visible
+    finally:
+        con.close()
 
 def fetch_vars_for_report(report_name, db_path):
     con = sqlite3.connect(db_path)
