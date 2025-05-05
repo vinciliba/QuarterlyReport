@@ -4,6 +4,7 @@ from datetime import datetime
 # helper functions
 from typing import Any
 import pandas as pd 
+from datetime import date, datetime, timedelta
 
 # ─────────────────────────────────────────
 # Init DB with all required tables
@@ -635,3 +636,57 @@ def get_variable_status(report_name, db_path):
     ''', con, params=(report_name,))
     con.close()
     return df
+
+
+# === workflow step: derived date computation ===
+def compute_cutoff_related_dates(cutoff_date: date) -> dict:
+    first = cutoff_date.replace(day=1)
+    lastMonth = first - timedelta(days=1)
+    a = date(cutoff_date.year, 1, 1)
+    last_mont_Name = lastMonth.strftime("%b")
+
+    lastYear_date = date(cutoff_date.year - 1, 12, 31)
+    lastYear_year = lastYear_date.year
+    lastYear = lastYear_date.strftime('%d/%m/%Y')
+    previous_month_number = lastMonth.month
+    previous_month_year = lastMonth.year
+
+    if previous_month_number == 12:
+        year = lastYear_year
+        current_year = lastYear_year
+        end_year_report = True
+    else:
+        year = cutoff_date.year
+        current_year = cutoff_date.year
+        end_year_report = False
+
+    last_date = lastMonth.strftime("%d/%m/%Y")
+    first_day = a.strftime("%d/%m/%Y")
+    report_date = lastMonth.strftime("%B %Y")
+    overviewDate = f"{lastMonth.strftime('%B')} {year}"
+    overView_month = lastMonth.strftime("%B")
+    two_Month_ago = first - timedelta(days=31)
+    overview_two_Month_ago = two_Month_ago.strftime("%B")
+
+    today = date.today()
+    current_quarter = (today.month - 1) // 3 + 1
+    if current_quarter == 1:
+        previous_quarter = (4, today.year - 1)
+    else:
+        previous_quarter = (current_quarter - 1, today.year)
+    quarter_period = f"Quarter {previous_quarter[0]} - {previous_quarter[1]}"
+
+    return {
+        "last_month_name": last_mont_Name,
+        "lastYear": lastYear,
+        "last_date": last_date,
+        "first_day": first_day,
+        "report_date": report_date,
+        "overviewDate": overviewDate,
+        "overView_month": overView_month,
+        "overview_two_Month_ago": overview_two_Month_ago,
+        "current_year": current_year,
+        "end_year_report": end_year_report,
+        "quarter_period": quarter_period,
+    }
+

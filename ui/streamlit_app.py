@@ -13,7 +13,7 @@ from ingestion.db_utils import (
     define_expected_table, get_suggested_structure,
     load_report_params, upsert_report_param, save_report_object,
     get_report_object, list_report_objects, delete_report_object, get_variable_status,
-    fetch_vars_for_report
+    fetch_vars_for_report, compute_cutoff_related_dates
 )
 from ingestion.report_check import check_report_readiness
 import mammoth, io, docx
@@ -174,6 +174,32 @@ if selected_section == "workflow":
         st.stop()
 
     st.success("🎉 All required tables uploaded and within the valid window!")
+    
+    # === streamlit_app.py (inject after validation step) ===
+    # Step 3.1: Compute date-based report parameters
+    st.markdown("### 📅 Derived Reporting Dates")
+    if st.button("📆 Generate Derived Dates"):
+        from ingestion.db_utils import compute_cutoff_related_dates, upsert_report_param
+
+        derived = compute_cutoff_related_dates(cutoff_date)
+        for k, v in derived.items():
+            upsert_report_param(chosen_report, k, v, DB_PATH)
+        st.success("✅ Derived date-based parameters saved to report_params.")
+
+    # Step 3.2 Amendment Report Date hardcoding 
+
+    st.subheader("📅 Select Amendments Report Date")
+    amd_report_date = st.date_input("Choose date:", value=datetime.today())
+
+    if st.button("💾 Save Amendments Date"):
+        upsert_report_param(
+            report_name=chosen_report,
+            key="amendments_report_date",
+            value=amd_report_date.isoformat(),
+            db_path=DB_PATH
+        )
+    st.success("✅ Amendments date saved.")
+
 
     # Step 4: Show available DOCX template
     template_dir = Path("reporting/templates/docx")
@@ -299,8 +325,10 @@ if selected_section == "workflow":
                     validated=True,
                     db_path=DB_PATH,
                 )
+#--------------------------------------------------------------------------
+# --- EXPORT REPORT SECTION  ----------------------------------------------
+#--------------------------------------------------------------------------
 
-# === streamlit_app.py (new section) ===
 elif selected_section == "export_report":
     st.title("📤 Export Final Report")
     reports_df = get_all_reports(DB_PATH)
@@ -1481,10 +1509,10 @@ elif selected_section == "report_structure":
     txt_key = "param_editor"           # 1-line alias for the textarea’s key
 
 
-    # ----------  one-off fill of the textarea -------------------------
-    def refresh_editor_from_params() -> None:
-        """Put the current `params` dict into the text-area."""
-        st.session_state[txt_key] = json.dumps(params, indent=2)
+    # # ----------  one-off fill of the textarea -------------------------
+    # def refresh_editor_from_params() -> None:
+    #     """Put the current `params` dict into the text-area."""
+    #     st.session_state[txt_key] = json.dumps(params, indent=2)
 
 
     # --- if a widget (Add-key / Quick-add) set a _params_draft, promote it
@@ -1493,8 +1521,12 @@ elif selected_section == "report_structure":
         st.toast("✅ Parameters updated – review & save", icon="🎉")
 
     # Ensure the textarea has an initial value (first render only)
+    # if txt_key not in st.session_state:
+    #     refresh_editor_from_params()
+
+    # Ensure initial value (BEFORE widget renders)
     if txt_key not in st.session_state:
-        refresh_editor_from_params()
+        st.session_state[txt_key] = json.dumps(params, indent=2)
 
     # ---------- editable JSON textarea --------------------------------
     txt = st.text_area(
@@ -1511,18 +1543,33 @@ elif selected_section == "report_structure":
         st.stop()
 
     # ---------- 3. ADD NEW TOP-LEVEL KEY  ----------------------------------------
+    # with st.expander("➕ Add a new top-level key", expanded=False):
+    #     new_key   = st.text_input("Key name", key="new_top_key")
+    #     init_type = st.selectbox("Initial type", ["list", "dict", "str", "int"], key="init_type")
+    #     if st.button("Create key"):
+    #         if new_key in params:
+    #             st.warning("Key already exists!")
+    #         else:
+    #             params[new_key] = [] if init_type == "list" else {} if init_type == "dict" \
+    #                             else "" if init_type == "str"  else 0
+    #             refresh_editor_from_params()
+    #             st.session_state.pop("new_top_key", None)
+    #             st.toast("✅ key created")
+    #             st.rerun()
+
+    # -------------- Add new top-level key --------------
     with st.expander("➕ Add a new top-level key", expanded=False):
-        new_key   = st.text_input("Key name", key="new_top_key")
+        new_key = st.text_input("Key name", key="new_top_key")
         init_type = st.selectbox("Initial type", ["list", "dict", "str", "int"], key="init_type")
+
         if st.button("Create key"):
             if new_key in params:
                 st.warning("Key already exists!")
             else:
-                params[new_key] = [] if init_type == "list" else {} if init_type == "dict" \
-                                else "" if init_type == "str"  else 0
-                refresh_editor_from_params()
+                params[new_key] = [] if init_type == "list" else {} if init_type == "dict" else "" if init_type == "str" else 0
+                st.session_state["_params_draft"] = json.dumps(params, indent=2)
                 st.session_state.pop("new_top_key", None)
-                st.toast("✅ key created")
+                st.toast("✅ Key created")
                 st.rerun()
 
     st.markdown("---")
