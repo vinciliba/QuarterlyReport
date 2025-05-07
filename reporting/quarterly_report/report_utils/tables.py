@@ -1,9 +1,12 @@
-
 import pandas as pd
-from datetime import date,timedelta
-from ingestion.db_utils import insert_variable
-from plottable import Table
+from datetime import date, timedelta
+from great_tables import GT, md, google_font, style, loc
 import sqlite3
+from ingestion.db_utils import insert_variable
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
 
 def fetch_latest_table_data(conn: sqlite3.Connection, table_name: str, cutoff: pd.Timestamp) -> pd.DataFrame:
     """
@@ -25,14 +28,14 @@ def fetch_latest_table_data(conn: sqlite3.Connection, table_name: str, cutoff: p
 
     closest_uploaded_at = result[0]
 
-    # Now fetch data from the actual table, filtering by uploaded_at
+    # Fetch data from the actual table, filtering by uploaded_at
     df = pd.read_sql_query(
         f"SELECT * FROM {table_name} WHERE uploaded_at = ?",
         conn,
         params=(closest_uploaded_at,)
     )
+    logging.debug(f"Fetched {len(df)} rows from {table_name}")
     return df
-
 
 def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
     df = df[df["Budget Period"] == current_year]
@@ -51,11 +54,37 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
         "Commitment Available": "RAL on Appropriation (7)=(1)-(6)",
         "%": "% consumed of L1 and L2 against Commitment Appropriations (8) = (6)/(1)"
     })
-    insert_variable(report, "BudgetModule", "table_1a_commitment_summary", agg.to_dict(orient="records"), db_path, anchor="table_1a")
-    table = Table(agg)
-    insert_variable(report, "BudgetModule", "anchor_table_1a_commitment_summary", table.to_dict(), db_path, anchor="table_1a_view")
-    return agg
 
+    # Create GreatTables object
+    table = (
+        GT(agg)
+        .tab_header(
+            title="Commitment Appropriations",
+            subtitle="General Overview"
+        )
+        .tab_style(
+            style=style.text(font=google_font(name="IBM Plex Mono")),
+            locations=loc.body()
+        )
+        .tab_stub(rowname_col="Programme")
+        .tab_source_note(source_note="Source: Summa DataWharehouse")
+        .tab_source_note(source_note=md("Table_1a"))
+        .tab_stubhead(label="Programme")
+        .fmt_number(columns=[
+            "Available Commitment Appropriations (1)",
+            "L1 Commitment (2)",
+            "RAL on Appropriation (7)=(1)-(6)"
+        ], accounting=True)
+        .fmt_percent(columns=[
+            "% consumed of L1 and L2 against Commitment Appropriations (8) = (6)/(1)"
+        ])
+    )
+
+    # Insert data and GT table image
+    insert_variable(report, "BudgetModule", "table_1a_commitment_summary", agg.to_dict(orient="records"), db_path, anchor="table_1a", gt_table=table)
+    insert_variable(report, "BudgetModule", "anchor_table_1a_commitment_summary", table.to_dict(), db_path, anchor="table_1a_view", gt_table=table)
+    logging.debug(f"Inserted commitment summary table data and image for {report}")
+    return agg
 
 def build_payment_summary_table(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
     df = df[df["Budget Period"] == current_year]
@@ -74,11 +103,37 @@ def build_payment_summary_table(df: pd.DataFrame, current_year: int, report: str
         "Payment Available": "Remaining Payment Appropriations (3)=(1)-(2)",
         "%": "% Payment Consumed (4)=(2)/(1)"
     })
-    insert_variable(report, "BudgetModule", "table_2a_payment_summary", agg.to_dict(orient="records"), db_path, anchor="table_2a")
-    table = Table(agg)
-    insert_variable(report, "BudgetModule", "anchor_table_2a_payment_summary", table.to_dict(), db_path, anchor="table_2a_view")
-    return agg
 
+    # Create GreatTables object
+    table = (
+        GT(agg)
+        .tab_header(
+            title="Payment Summary",
+            subtitle="General Overview"
+        )
+        .tab_style(
+            style=style.text(font=google_font(name="IBM Plex Mono")),
+            locations=loc.body()
+        )
+        .tab_stub(rowname_col="Programme")
+        .tab_source_note(source_note="Source: Summa DataWharehouse")
+        .tab_source_note(source_note=md("Table_2a"))
+        .tab_stubhead(label="Programme")
+        .fmt_number(columns=[
+            "Payment Appropriations (1)",
+            "Payment Credits consumed (2)",
+            "Remaining Payment Appropriations (3)=(1)-(2)"
+        ], accounting=True)
+        .fmt_percent(columns=[
+            "% Payment Consumed (4)=(2)/(1)"
+        ])
+    )
+
+    # Insert data and GT table image
+    insert_variable(report, "BudgetModule", "table_2a_payment_summary", agg.to_dict(orient="records"), db_path, anchor="table_2a", gt_table=table)
+    insert_variable(report, "BudgetModule", "anchor_table_2a_payment_summary", table.to_dict(), db_path, anchor="table_2a_view", gt_table=table)
+    logging.debug(f"Inserted payment summary table data and image for {report}")
+    return agg
 
 def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
     df["FR ILC Date (dd/mm/yyyy)"] = pd.to_datetime(df["FR ILC Date (dd/mm/yyyy)"], errors="coerce")
@@ -123,11 +178,35 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
         prov_df[prov_cols]
     ], axis=0, ignore_index=True)
 
-    insert_variable(report, "BudgetModule", "table_1a_commitment_detail", combined.to_dict(orient="records"), db_path, anchor="table_1a_detail")
-    table = Table(combined)
-    insert_variable(report, "BudgetModule", "anchor_table_1a_commitment_detail", table.to_dict(), db_path, anchor="table_1a_detail_view")
-    return combined
+    # Create GreatTables object
+    table = (
+        GT(combined)
+        .tab_header(
+            title="Commitment Detail Table 1",
+            subtitle="Global and Provisional Commitments"
+        )
+        .tab_style(
+            style=style.text(font=google_font(name="IBM Plex Mono")),
+            locations=loc.body()
+        )
+        .tab_stub(rowname_col="Commitment Type")
+        .tab_source_note(source_note="Source: Summa DataWharehouse")
+        .tab_source_note(source_note=md("Table_1a_detail"))
+        .tab_stubhead(label="Commitment Type")
+        .fmt_number(columns=[
+            "L1 Commitment (1)", "L2 Commitment (2)", "RAL on L1 Commitment (3)=(1)-(2)",
+            "Direct L2 Commitment (5)", "Consumed Direct L2 Commitment", "RAL on Direct L2 Commitment (6)=(5)-(Consumed)"
+        ], accounting=True)
+        .fmt_percent(columns=[
+            "% L2 on L1 Commitment (4)=(2)/(1)", "% Direct L2 Consumed (7)=(Consumed)/(5)"
+        ])
+    )
 
+    # Insert data and GT table image
+    insert_variable(report, "BudgetModule", "table_1a_commitment_detail", combined.to_dict(orient="records"), db_path, anchor="table_1a_detail", gt_table=table)
+    insert_variable(report, "BudgetModule", "anchor_table_1a_commitment_detail", table.to_dict(), db_path, anchor="table_1a_detail_view", gt_table=table)
+    logging.debug(f"Inserted commitment detail table 1 data and image for {report}")
+    return combined
 
 def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
     df["FR ILC Date (dd/mm/yyyy)"] = pd.to_datetime(df["FR ILC Date (dd/mm/yyyy)"], errors="coerce")
@@ -149,7 +228,31 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
         "RAL on L1 Commitment (3)=(1)-(2)", "% L2 on L1 Commitment (4)=(2)/(1)"
     ]]
 
-    insert_variable(report, "BudgetModule", "table_1b_commitment_detail", result.to_dict(orient="records"), db_path, anchor="table_1b")
-    table = Table(result)
-    insert_variable(report, "BudgetModule", "anchor_table_1b_commitment_detail", table.to_dict(), db_path, anchor="table_1b_view")
-    return result 
+    # Create GreatTables object
+    table = (
+        GT(result)
+        .tab_header(
+            title="Commitment Detail Table 2",
+            subtitle="Global Commitments"
+        )
+        .tab_style(
+            style=style.text(font=google_font(name="IBM Plex Mono")),
+            locations=loc.body()
+        )
+        .tab_source_note(source_note="Source: Summa DataWharehouse")
+        .tab_source_note(source_note=md("Table_1b"))
+        .tab_stubhead(label="Fund Reservation Description")
+        .fmt_number(columns=[
+            "L1 Commitment (1)", "L2 Commitment (2)", "RAL on L1 Commitment (3)=(1)-(2)"
+        ], accounting=True)
+        .fmt_percent(columns=[
+            "% L2 on L1 Commitment (4)=(2)/(1)"
+        ])
+    )
+
+    # Insert data and GT table image
+    insert_variable(report, "BudgetModule", "table_1b_commitment_detail", result.to_dict(orient="records"), db_path, anchor="table_1b", gt_table=table)
+    insert_variable(report, "BudgetModule", "anchor_table_1b_commitment_detail", table.to_dict(), db_path, anchor="table_1b_view", gt_table=table)
+    logging.debug(f"Inserted commitment detail table 2 data and image for {report}")
+    return result
+

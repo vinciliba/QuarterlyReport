@@ -13,7 +13,7 @@ from ingestion.db_utils import (
     define_expected_table, get_suggested_structure,
     load_report_params, upsert_report_param, save_report_object,
     get_report_object, list_report_objects, delete_report_object, get_variable_status,
-    fetch_vars_for_report, compute_cutoff_related_dates
+    fetch_vars_for_report, compute_cutoff_related_dates, fetch_gt_image
 )
 from ingestion.report_check import check_report_readiness
 import mammoth, io, docx
@@ -328,8 +328,45 @@ if selected_section == "workflow":
 #--------------------------------------------------------------------------
 # --- EXPORT REPORT SECTION  ----------------------------------------------
 #--------------------------------------------------------------------------
-
 elif selected_section == "export_report":
+    from docxtpl import DocxTemplate, InlineImage
+    from jinja2 import Environment, DebugUndefined
+    from io import BytesIO
+    from PIL import Image
+
+    # ------------------------------------------------------------------
+    # 1. build the context in ONE pass directly from the table
+    # ------------------------------------------------------------------
+    def build_docx_context(report_name: str, db_path: str) -> dict:
+        con = sqlite3.connect(db_path)
+        df = pd.read_sql_query(
+            """
+            SELECT anchor_name, value, gt_image
+            FROM   report_variables
+            WHERE  report_name = ?
+            ORDER  BY created_at
+            """,
+            con,
+            params=(report_name,),
+        )
+        con.close()
+
+        context = {}
+        for _, row in df.iterrows():
+            anchor = row["anchor_name"]          # e.g. "table_1a"
+            if row["gt_image"]:                  # <- BLOB is not NULL → use picture
+                context[anchor] = InlineImage(
+                    tpl,                         #  tpl is the DocxTemplate instance
+                    BytesIO(row["gt_image"]),
+                    width=docx.shared.Inches(5))
+            else:                                # no picture → use the data
+                try:
+                    context[anchor] = json.loads(row["value"])
+                except (TypeError, ValueError):
+                    context[anchor] = row["value"]   # plain string / number
+        return context
+
+
     st.title("📤 Export Final Report")
     reports_df = get_all_reports(DB_PATH)
     if reports_df.empty:
@@ -337,13 +374,50 @@ elif selected_section == "export_report":
         st.stop()
         
     chosen_report = st.selectbox("Select Report", reports_df["report_name"].tolist())
-    df_vars = get_variable_status(chosen_report, DB_PATH)
+    try:
+        df_vars = get_variable_status(chosen_report, DB_PATH)
+    except Exception as e:
+        st.error(f"Failed to fetch variable status: {str(e)}")
+        st.stop()
 
     def highlight_age(row):
         return ["background-color: #ffd6d6" if row.age_days > 5 else "" for _ in row]
 
     st.markdown("### 🧠 Variables Snapshot")
-    st.dataframe(df_vars.style.apply(highlight_age, axis=1), use_container_width=True)
+    try:
+        st.dataframe(df_vars.style.apply(highlight_age, axis=1), use_container_width=True)
+    except Exception as e:
+        st.error(f"Failed to display DataFrame: {str(e)}")
+        st.write("DataFrame preview (raw):")
+        st.write(df_vars.to_dict())  # Fallback display
+        st.stop()
+
+    # Add a dropdown to select tables for visualization
+    st.markdown("### 📊 Select Tables to Visualize")
+    available_tables = df_vars["var_name"].tolist()
+    selected_tables = st.multiselect(
+        "Choose table(s) to visualize",
+        options=available_tables,
+        default=available_tables[0] if available_tables else None
+    )
+
+    # Display GreatTables images only for selected tables
+    if selected_tables:
+        st.markdown("### 📊 GreatTables Images")
+        for var_name in selected_tables:
+            gt_image, anchor_name = fetch_gt_image(chosen_report, var_name, DB_PATH)
+            if gt_image:
+                try:
+                    image = Image.open(BytesIO(gt_image))
+                    # Transform anchor_name for display caption
+                    template_key = anchor_name.replace("table", "template") if anchor_name else var_name.replace("table", "template")
+                    st.image(image, caption=f"Table Image for {template_key} ({var_name})", use_container_width=True)
+                except Exception as e:
+                    st.warning(f"Failed to display image for {var_name}: {str(e)}")
+            else:
+                st.warning(f"No image found for {var_name}")
+    else:
+        st.info("No tables selected for visualization.")
 
     st.markdown("### 📄 Select Template or Use Existing Partial")
     template_dir = Path("reporting/templates/docx")
@@ -353,17 +427,31 @@ elif selected_section == "export_report":
     template_path = template_dir / template_choice
 
     if st.button("📄 Render Final Report"):
-        from docxtpl import DocxTemplate
-        from jinja2 import Environment, DebugUndefined
-
         tpl = DocxTemplate(str(template_path))
-        context = fetch_vars_for_report(chosen_report, DB_PATH)
+        context = build_docx_context(chosen_report, DB_PATH)
+
+        # Add GreatTables images to the context using the correct anchor name
+        for var_name in context.keys():
+            gt_image, anchor_name = fetch_gt_image(chosen_report, var_name, DB_PATH)
+            if gt_image:
+                image_stream = BytesIO(gt_image)
+                # Transform anchor_name to match template placeholder (e.g., 'table_1a' to 'template_1a')
+                if anchor_name:
+                    template_key = anchor_name.replace("table", "template")  # e.g., 'table_1a' -> 'template_1a'
+                else:
+                    template_key = var_name.replace("table", "template")  # Fallback
+                context[template_key] = InlineImage(tpl, image_stream, width=docx.shared.Inches(5.0))
+
+        # Debug: Log the context keys to verify anchors
+        st.write("Debug: Context keys available for template rendering:", list(context.keys()))
 
         # Show missing anchors
-        missing = tpl.get_undeclared_template_variables() - context.keys()
+        missing = tpl.get_undeclared_template_variables() - set(context.keys())
         if missing:
             st.warning(f"⚠️ Missing anchors: {', '.join(missing)}")
-           
+        else:
+            st.success("All template anchors matched successfully!")
+
         env = Environment(undefined=DebugUndefined)
         tpl.render(context, jinja_env=env)
 
@@ -383,7 +471,6 @@ elif selected_section == "export_report":
                 out_path = Path("app_files") / filename
                 st.session_state.staged_docx.save(str(out_path))
                 st.success(f"Saved partial report as `{filename}` in `app_files/`")
-
     #--------------------------------------------------------------------------
     # --- Section for Creating a New Report -----------------------------------
     #--------------------------------------------------------------------------

@@ -167,6 +167,7 @@ def init_db(db_path='database/reporting.db'):
             module_name TEXT,
             var_name TEXT,
             value TEXT,
+            gt_image BLOB,
             anchor_name TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -602,15 +603,29 @@ def delete_report_module(row_id: int, db_path="database/reporting.db"):
 #-------------  Create Report Variables  ------------------
 logging.basicConfig(level=logging.DEBUG)
 
-def insert_variable(report, module, var, value, db_path, anchor=None):
+def insert_variable(report, module, var, value, db_path, anchor=None, gt_table=None):
     try:
         con = sqlite3.connect(db_path)
         logging.debug(f"Inserting variable: report={report}, module={module}, var={var}, anchor={anchor}, db_path={db_path}")
+        
+        # Serialize the value (e.g., DataFrame or other data)
         serialized_value = json.dumps(value, default=str)  # Handle non-serializable objects
+        
+        # Handle GreatTables image if provided
+        gt_image = None
+        if gt_table is not None:
+            temp_file = f"temp_{var}.png"
+            gt_table.save(temp_file)  # Save GreatTables as PNG (requires playwright)
+            with open(temp_file, "rb") as f:
+                gt_image = f.read()  # Read as binary for BLOB
+            os.remove(temp_file)  # Clean up temporary file
+            logging.debug(f"Saved GT table as PNG and read as binary for BLOB storage for {var}")
+
+        # Insert into database
         con.execute('''
-            INSERT INTO report_variables (report_name, module_name, var_name, anchor_name, value, created_at)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (report, module, var, anchor or var, serialized_value))
+            INSERT INTO report_variables (report_name, module_name, var_name, anchor_name, value, gt_image, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (report, module, var, anchor or var, serialized_value, gt_image))
         con.commit()
         logging.debug(f"Successfully inserted variable: {var}")
     except Exception as e:
@@ -634,15 +649,81 @@ def fetch_vars_for_report(report_name, db_path):
             context[row["anchor_name"]] = row["value"]
     return context
 
+def fetch_gt_image(report_name, var_name, db_path):
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.execute('''
+            SELECT gt_image, anchor_name
+            FROM report_variables
+            WHERE report_name = ? AND var_name = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        ''', (report_name, var_name))
+        result = cursor.fetchone()
+        logging.debug(f"fetch_gt_image result for {var_name}: {result}")
+        if result:
+            gt_image, anchor_name = result
+            return gt_image, anchor_name if anchor_name else var_name  # Fallback to var_name if anchor_name is None
+        return None, None
+    except Exception as e:
+        logging.error(f"Error fetching gt_image for {var_name}: {str(e)}")
+        raise
+    finally:
+        conn.close()
 
 def get_variable_status(report_name, db_path):
     con = sqlite3.connect(db_path)
-    df = pd.read_sql_query('''
-        SELECT *, julianday('now') - julianday(created_at) as age_days FROM report_variables
-        WHERE report_name = ?
-    ''', con, params=(report_name,))
-    con.close()
-    return df
+    try:
+        # Query all columns except gt_image, which is a BLOB
+        df = pd.read_sql_query('''
+            SELECT var_name, value, created_at,
+                   julianday('now') - julianday(created_at) as age_days
+            FROM report_variables
+            WHERE report_name = ?
+        ''', con, params=(report_name,))
+
+        # Debug: Log the raw DataFrame
+        logging.debug(f"Raw DataFrame dtypes:\n{df.dtypes}")
+        logging.debug(f"Raw DataFrame head:\n{df.head().to_string()}")
+
+        # Ensure all columns are string-safe
+        # Handle var_name
+        df['var_name'] = df['var_name'].astype(str)
+
+        # Handle value column: decode JSON and convert to string for display
+        def safe_json_load(x):
+            try:
+                return json.loads(x) if x else None
+            except json.JSONDecodeError as e:
+                logging.warning(f"Failed to decode JSON in value column: {x[:100]}... Error: {str(e)}")
+                return "Invalid JSON"
+
+        def safe_str(x):
+            try:
+                if isinstance(x, (dict, list)):
+                    return str(x)[:100] + "..."
+                return str(x) if x is not None else "N/A"
+            except Exception as e:
+                logging.warning(f"Failed to convert to string: {x}. Error: {str(e)}")
+                return "Unrepresentable Data"
+
+        df['value'] = df['value'].apply(safe_json_load)
+        df['value'] = df['value'].apply(safe_str)
+
+        # Handle created_at
+        df['created_at'] = df['created_at'].astype(str)
+
+        # Handle age_days
+        df['age_days'] = df['age_days'].astype(float).round(2)
+
+        logging.debug(f"Processed DataFrame head:\n{df.head().to_string()}")
+        logging.debug(f"Fetched variable status for report '{report_name}' with {len(df)} rows")
+        return df
+    except Exception as e:
+        logging.error(f"Error fetching variable status for report '{report_name}': {str(e)}")
+        raise
+    finally:
+        con.close()
 
 
 # === workflow step: derived date computation ===
@@ -696,4 +777,3 @@ def compute_cutoff_related_dates(cutoff_date: date) -> dict:
         "end_year_report": end_year_report,
         "quarter_period": quarter_period,
     }
-

@@ -24,3 +24,5 @@ class Database:                     # very thin helper
 def get_modules(report_name):
     from reporting.quarterly_report.modules_registry import MODULES
     return MODULES
+
+
