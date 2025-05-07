@@ -6,6 +6,8 @@ from typing import Any
 import pandas as pd 
 from datetime import date, datetime, timedelta
 import logging
+from pathlib import Path
+from typing import Any
 # ─────────────────────────────────────────
 # Init DB with all required tables
 # ─────────────────────────────────────────
@@ -160,17 +162,17 @@ def init_db(db_path='database/reporting.db'):
             ON report_objects (object_name);
             """)
         
-
         cursor.execute('''
-        CREATE TABLE IF NOT EXISTS report_variables (
-            report_name TEXT,
-            module_name TEXT,
-            var_name TEXT,
-            value TEXT,
-            gt_image BLOB,
-            anchor_name TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
+            CREATE TABLE IF NOT EXISTS report_variables (
+                report_name TEXT,
+                module_name TEXT,
+                var_name TEXT,
+                value TEXT,
+                gt_image BLOB,
+                anchor_name TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(report_name, var_name)
+            )
         ''')
  
        # Optional: Add an index for faster lookups
@@ -603,34 +605,60 @@ def delete_report_module(row_id: int, db_path="database/reporting.db"):
 #-------------  Create Report Variables  ------------------
 logging.basicConfig(level=logging.DEBUG)
 
-def insert_variable(report, module, var, value, db_path, anchor=None, gt_table=None):
+
+def insert_variable(
+    report: str,
+    module: str,
+    var: str,
+    value: Any,
+    db_path: str,
+    anchor: str | None = None,
+    gt_table=None,
+) -> None:
+    """
+    Overwrite the row (report_name, var_name) with a new value (and picture).
+
+    Exactly ONE row per variable is kept.
+    """
+    con = sqlite3.connect(db_path)
+    cur = con.cursor()
     try:
-        con = sqlite3.connect(db_path)
-        logging.debug(f"Inserting variable: report={report}, module={module}, var={var}, anchor={anchor}, db_path={db_path}")
-        
-        # Serialize the value (e.g., DataFrame or other data)
-        serialized_value = json.dumps(value, default=str)  # Handle non-serializable objects
-        
-        # Handle GreatTables image if provided
+        # 1) remove any previous copy of this variable
+        cur.execute(
+            "DELETE FROM report_variables WHERE report_name = ? AND var_name = ?",
+            (report, var),
+        )
+
+        # 2) serialise the Python value
+        val_json = json.dumps(value, default=str)
+
+        # 3) optional: render great‑tables object to PNG → bytes
         gt_image = None
         if gt_table is not None:
-            temp_file = f"temp_{var}.png"
-            gt_table.save(temp_file)  # Save GreatTables as PNG (requires playwright)
-            with open(temp_file, "rb") as f:
-                gt_image = f.read()  # Read as binary for BLOB
-            os.remove(temp_file)  # Clean up temporary file
-            logging.debug(f"Saved GT table as PNG and read as binary for BLOB storage for {var}")
+            tmp = Path(f"__gt_{var}.png")
+            gt_table.save(tmp)                 # playwright renders PNG
+            gt_image = tmp.read_bytes()
+            tmp.unlink(missing_ok=True)
 
-        # Insert into database
-        con.execute('''
-            INSERT INTO report_variables (report_name, module_name, var_name, anchor_name, value, gt_image, created_at)
+        # 4) insert the fresh row
+        cur.execute(
+            """
+            INSERT INTO report_variables
+                  (report_name, module_name, var_name,
+                   anchor_name, value, gt_image, created_at)
             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (report, module, var, anchor or var, serialized_value, gt_image))
+            """,
+            (report, module, var, anchor or var, val_json, gt_image),
+        )
+
         con.commit()
-        logging.debug(f"Successfully inserted variable: {var}")
-    except Exception as e:
-        logging.error(f"Failed to insert variable {var}: {str(e)}")
-        raise  # Re-raise to ensure errors are visible
+        logging.debug("Stored variable %s for report %s (rowid=%s)",
+                      var, report, cur.lastrowid)
+
+    except Exception as exc:
+        con.rollback()
+        logging.error("insert_variable failed for %s/%s: %s", report, var, exc)
+        raise
     finally:
         con.close()
 
