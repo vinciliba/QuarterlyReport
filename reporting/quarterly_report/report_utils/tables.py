@@ -206,7 +206,8 @@ def build_payment_summary_tables(
             "Payment Appropriation": "Available_Payment_Appropriations",
             "Paid Amount": "Paid_Amount",
             "Payment Available": "Remaining_Payment_Appropriation",
-            "%": "ratio_consumed_Payment_Appropriations"
+            "%": "ratio_consumed_Payment_Appropriations",
+            "Budget_Address_Type": "Budget Address Type"
         })
 
         # -------- Add total row ---------------------------------------------------
@@ -226,7 +227,7 @@ def build_payment_summary_tables(
             GT(agg)
             .tab_stubhead("Programme")
             .tab_stubhead("Fund Source")
-            .tab_stubhead("Budget_Address_Type")
+            .tab_stubhead("Budget Address Type")
 
             .fmt_number(columns=[
                 "Available_Payment_Appropriations",
