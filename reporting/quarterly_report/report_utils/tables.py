@@ -9,7 +9,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
     
 BLUE        = "#004A99"
-LIGHT_BLUE = "#064E9F"
+LIGHT_BLUE = "#d6e6f4"
 GRID_CLR    = "#004A99"
 DARK_BLUE   = "#01244B"
 DARK_GREY =   '#242425'
@@ -44,89 +44,166 @@ def fetch_latest_table_data(conn: sqlite3.Connection, table_name: str, cutoff: p
     return df
 
 def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
-    df = df[df["Budget Period"] == current_year]
-    df = df[df["Fund Source"].isin(["VOBU", "EFTA"])]
-    df["Programme"] = df["Functional Area Desc"].replace({
+    # Avoid SettingWithCopyWarning by using .copy()
+    df = df[df["Budget Period"] == current_year].copy()
+    df = df[df["Fund Source"].isin(["VOBU", "EFTA"])].copy()
+
+    # Map Functional Area to Programme
+    df.loc[:, "Programme"] = df["Functional Area Desc"].replace({
         "HORIZONEU_21_27": "HE",
         "H2020_14_20": "H2020"
     })
-    agg = df.groupby("Programme")[
-        ["Commitment Appropriation", "Committed Amount", "Commitment Available"]
-    ].sum().reset_index()
-    agg["%"] = agg["Committed Amount"] / agg["Commitment Appropriation"]
-    agg = agg.rename(columns={
-        "Commitment Appropriation": "Available Commitment Appropriations (1)",
-        "Committed Amount": "L1 Commitment (2)",
-        "Commitment Available": "RAL on Appropriation (7)=(1)-(6)",
-        "%": "% consumed of L1 and L2 against Commitment Appropriations (8) = (6)/(1)"
-    })
-    agg = agg.loc[agg["Programme"] == "HE"]
 
+    # Filter for HE programme
+    df = df.loc[df["Programme"] == "HE"].copy()
+
+    # Budget‑type mapping helper
+    def map_budget_type(val):
+        if pd.isna(val):
+            return None
+        v = str(val).upper()
+        if "EMPTY" in v: return "Main Calls"
+        if "EXPERTS" in v: return "Experts"
+        return val
+
+    df.loc[:, "Budget_Address_Type"] = df["Budget Address"].apply(map_budget_type)
+
+    # Budget‑type mapping helper
+    def map_fund_type(val):
+        if pd.isna(val):
+            return None
+        v = str(val).upper()
+        if "VOBU" in v: return "VOBU/EFTA"
+        if "EFTA" in v: return "VOBU/EFTA"
+        if "IAR2/2" in v: return "VOBU/EFTA"
+        return val
+
+    df['Fund Source'] = df['Fund Source'].apply(map_fund_type)
+
+    # Group by Fund Source and Budget_Address_Type
+    agg = df.groupby(["Fund Source", "Budget_Address_Type"])[
+        ["Commitment Appropriation", "Committed Amount", 'Commitment Available ']
+    ].sum().reset_index()
+
+    agg["%"] = agg["Committed Amount"] / agg["Commitment Appropriation"]
+
+    agg = agg.rename(columns={
+        "Commitment Appropriation": "Available_Commitment_Appropriations",
+        "Committed Amount": "L1_Commitment",
+        'Commitment Available ': "RAC_on_Appropriation",  # Fixed space in column name
+        "%": "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations",
+        "Budget_Address_Type": "Budget Address Type"
+    })
+
+    # -------- Add total row ---------------------------------------------------
+    total_row = pd.DataFrame({
+        "Fund Source": ['VOBU/EFTA'],
+        "Budget Address Type": ['Total'],
+        "Available_Commitment_Appropriations": [agg["Available_Commitment_Appropriations"].sum()],
+        "L1_Commitment": [agg["L1_Commitment"].sum()],
+        "RAC_on_Appropriation": [agg["RAC_on_Appropriation"].sum()],
+        "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations": [agg["L1_Commitment"].sum() / agg["Available_Commitment_Appropriations"].sum()]
+    })
+    agg = pd.concat([agg, total_row], ignore_index=True)
+
+    # -------- GreatTables object -------------------------------------------
     tbl = (
-        GT(agg)
-        # .tab_header("Commitment Appropriations", subtitle="General Overview")
-        # .tab_stub(rowname_col="Programme")
-        .tab_stubhead("Programme")
+        GT(
+            agg,
+            rowname_col="Budget Address Type",
+            groupname_col="Fund Source"
+        )
+        .tab_header("HE")
+        .tab_stubhead(label="Budget Address Type")
         # ── formats ────────────────────────────────────────────────────────────
-    
         .fmt_number(columns=[
             "Available_Commitment_Appropriations",
             "L1_Commitment",
-            "RAL_on_Appropriation"
+            "RAC_on_Appropriation"  # Fixed column name (RAL → RAC)
         ], accounting=True, decimals=2)
         .fmt_percent(
             columns="ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations",
             decimals=2
         )
-   
         # ── Set custom column labels with <br> for line breaks ─────────────────
         .cols_label(
-        Available_Commitment_Appropriations = html("Available Commitment Appropriations<br>(1)"),
-        L1_Commitment = html("L1 Commitment<br>(2)"),
-        RAL_on_Appropriation = html("RAL on Appropriation<br>(3)=(1)-(2)"),
-        ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations  = html("% consumed of L1 and L2<br>against Commitment Appropriations <br> (4) = (2)/(1)")
-    )
+            Available_Commitment_Appropriations=html("Available Commitment Appropriations<br>(1)"),
+            L1_Commitment=html("L1 Commitments or <br> Direct L2 <br>(2)"),
+            RAC_on_Appropriation=html("RAC on Appropriation<br>(3)=(1)-(2)"),
+            ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations=html("% Commitment Appropriations by <br> L1 and Direct L2 Commitments <br> (4) = (2)/(1)")
+        )
         # ── Arial everywhere ──────────────────────────────────────────────────
         .opt_table_font(font="Arial")
         # ── HEADER + STUB COLOUR ──────────────────────────────────────────────
         .tab_style(
-                    style = [
-                            style.fill(color= BLUE),        
-                            style.text(color="white", weight="bold", align='center'),
-                            style.css("word-wrap: break-word; white-space: normal; max-width: 200px;"),
-                            style.css("line-height: 1.2; margin-bottom: 5px;")
-                    ],
-                    locations = loc.column_labels()
-                  ) 
+            style=[
+                style.text(color=DARK_BLUE, weight="bold"),
+                style.fill(color=LIGHT_BLUE),
+                style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
+                style.css("max-width:200px; line-height:1.2"),
+            ],
+            locations=loc.row_groups()
+        )  # Fixed syntax by closing the .tab_style() call properly
         .tab_style(
-                    style = [
-                        style.fill(color= BLUE),
-                        style.text(color="white", weight="bold"),
-                    ],
-                    locations = loc.stubhead()
-                   )
-        
+            style=[
+                style.fill(color=BLUE),
+                style.text(color="white", weight="bold", align='center'),
+                style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
+            ],
+            locations=loc.column_labels()
+        )
+        .tab_style(
+            style=[
+                style.fill(color=BLUE),
+                style.text(color="white", weight="bold"),
+                style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
+            ],
+            locations=loc.stubhead()
+        )
+
+        .tab_style(
+            style=[
+                style.text(color= DARK_BLUE, weight="bold"),
+            ],
+            locations=loc.header()
+        )
         # ── GRID LINES ────────────────────────────────────────────────────────
         .tab_style(
-            style = style.borders(sides=["all"], color=DARK_BLUE , weight='2px'),
-            locations = loc.body()
+        style.borders(weight="1px", color=DARK_BLUE),
+        loc.stub(),
+
+         )
+        .tab_style(
+            style=style.borders(sides=["all"], color=DARK_BLUE, weight='2px'),
+            locations=loc.body()
         )
         .tab_style(
-            style = style.borders( color=DARK_BLUE, weight='2px'),
-            locations = loc.column_labels()
+            style=style.borders(color=DARK_BLUE, weight='2px'),
+            locations=loc.column_labels()
         )
-
         .tab_style(
-            style = style.borders( color=DARK_BLUE, weight='2px'),
-            locations = loc.stubhead()
+            style=style.borders(color=DARK_BLUE, weight='2px'),
+            locations=loc.stubhead()
         )
-
+        .tab_style(
+            style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+            locations=loc.body(rows=agg.index[-1])  # Apply to the last row (total)
+        )
+        .tab_style(
+            style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
+            locations=loc.stub(rows=[-1])
+        )
         # ── ROW STRIPING ───────────────────────────────────────────────────────
-        .tab_options(table_body_border_bottom_color = DARK_BLUE , 
-                       table_body_border_bottom_width = '2px')
-
-        .tab_options(table_body_border_top_color=DARK_BLUE,
-                         table_body_border_top_width="2px")
+        .tab_options(table_body_border_bottom_color=DARK_BLUE,
+                     table_body_border_bottom_width="2px")
+        .tab_options(table_border_right_color=DARK_BLUE,
+                     table_border_right_width="2px")
+        .tab_options(table_border_left_color=DARK_BLUE,
+                     table_border_left_width="2px")
+        .tab_options(table_border_top_color=DARK_BLUE,
+                     table_border_top_width="2px")
+        .tab_options(column_labels_border_top_color=DARK_BLUE,
+                     column_labels_border_top_width="2px")
         # ── SOURCE NOTE ────────────────────────────────────────────────────────
         .tab_source_note("Source: Summa DataWarehouse")
         .tab_source_note("BO Report: C0_Budgetary_Execution_Details")
@@ -177,7 +254,7 @@ def build_payment_summary_tables(
         if pd.isna(val):
             return None
         v = str(val).upper()
-        if "EMPTY" in v: return "Main Call"
+        if "EMPTY" in v: return "Main Calls"
         if "EXPERTS" in v: return "Experts"
         return val
 
@@ -260,16 +337,15 @@ def build_payment_summary_tables(
             )
             .opt_table_font(font="Arial")
 
-              .tab_style(
+            .tab_style(
                 style = [style.text(weight="bold", color=DARK_BLUE)],
                 locations= loc.header(),
                 )
-
             .tab_style(
-            style=[style.fill(color=BLUE),
-                   style.text(color="white", weight="bold", align="center"),
-                   style.css("text-align: center;vertical-align: middle; max-width:200px; line-height:1.2")],
-            locations=loc.column_labels())
+                style=[style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align="center"),
+                    style.css("text-align: center;vertical-align: middle; max-width:200px; line-height:1.2")],
+                locations=loc.column_labels())
             .tab_style(
                 style=[style.fill(color=BLUE),
                     style.text(color="white", weight="bold"),
@@ -277,9 +353,9 @@ def build_payment_summary_tables(
                 locations=loc.stubhead())
 
             .tab_style(
-            style.borders(weight="1px", color=DARK_BLUE),
-            loc.stub(),
-            )
+                style.borders(weight="1px", color=DARK_BLUE),
+                loc.stub(),
+               )
 
             .tab_style(
                 style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
@@ -292,7 +368,7 @@ def build_payment_summary_tables(
                 style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
                 locations=loc.body(rows=agg.index[-1]))  # Apply to the last row (total)
 
-             .tab_style(
+            .tab_style(
                 style = [style.fill( color="#E6E6FA"), style.text(weight="bold")],
                 locations= loc.stub(rows=[-1]),
                 )
@@ -333,76 +409,251 @@ def build_payment_summary_tables(
 
 def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
     df["FR ILC Date (dd/mm/yyyy)"] = pd.to_datetime(df["FR ILC Date (dd/mm/yyyy)"], errors="coerce")
+
     next_year = current_year + 1
     eoy_next = pd.Timestamp(f"{next_year}-12-31")
     eoy_this = pd.Timestamp(f"{current_year}-12-31")
 
-    global_df = df[(df["FR Earmarked Document Type Desc"] == "Global Commitment") &
-                   (df["FR ILC Date (dd/mm/yyyy)"] == eoy_next)].copy()
-    global_df = global_df.rename(columns={
-        "FR Accepted Amount": "L1 Commitment (1)",
-        "FR Consumption by PO Amount": "L2 Commitment (2)",
-        "FR Fund Reservation Desc": "Fund Reservation Description"
-    })
-    global_df["RAL on L1 Commitment (3)=(1)-(2)"] = global_df["L1 Commitment (1)"] - global_df["L2 Commitment (2)"]
-    global_df["% L2 on L1 Commitment (4)=(2)/(1)"] = global_df["L2 Commitment (2)"] / global_df["L1 Commitment (1)"]
-    global_df["Commitment Type"] = "Global"
+    # Budget‑type mapping helper
+    def map_budget_type(val):
+        if pd.isna(val):
+            return None
+        v = str(val).upper()
+        if "VOBU" in v: return "VOBU/EFTA/IAR2/2"
+        if "EFTA" in v: return "VOBU/EFTA/IAR2/2"
+        if "IAR2/2" in v: return "VOBU/EFTA/IAR2/2"
+        return val
 
-    prov_df = df[(df["FR Earmarked Document Type Desc"] == "Provisional Commitment") &
-                 (df["FR ILC Date (dd/mm/yyyy)"] == eoy_this) &
-                 (df["FR Fund Reservation Desc"] == "Experts")].copy()
-    prov_df = prov_df.rename(columns={
-        "FR Accepted Amount": "Direct L2 Commitment (5)",
-        "FR Consumption by Payment Amount": "Consumed Direct L2 Commitment"
+    df.loc[:, 'Fund Source'] = df['Fund Source'].apply(map_budget_type)
+
+    
+    def map_fund_type(val):
+            if pd.isna(val):
+                return None
+            v = str(val).strip().upper()
+            if "GLOBAL" in v and "COMMITMENT" in v:
+                return "MainCalls"
+            if "PROVISIONAL" in v and "COMMITMENT" in v:
+                return "Experts"
+            return val
+
+    df.loc[:, 'Source_Type'] = df['FR Earmarked Document Type Desc'].apply(map_fund_type)
+
+    # ---------- GLOBAL COMMITMENTS -------------------------------------
+    global_df = df[(df["Source_Type"] == "MainCalls") &
+                   (df["FR ILC Date (dd/mm/yyyy)"] == eoy_next) & (df['Fund Source'] == "VOBU/EFTA/IAR2/2")].copy()
+
+    logging.debug(f"Global Commitments - Rows after filter: {len(global_df)}")
+
+    global_df = global_df.rename(columns={
+        "FR Accepted Amount": "L1_Commitment_or_Direct_L2_1",
+        "FR Consumption by PO Amount": "L2_Commitment_or_Payment_2"
     })
-    prov_df["RAL on Direct L2 Commitment (6)=(5)-(Consumed)"] = prov_df["Direct L2 Commitment (5)"] - prov_df["Consumed Direct L2 Commitment"]
-    prov_df["% Direct L2 Consumed (7)=(Consumed)/(5)"] = prov_df["Consumed Direct L2 Commitment"] / prov_df["Direct L2 Commitment (5)"]
-    prov_df["Fund Reservation Description"] = "Experts"
-    prov_df["Commitment Type"] = "Provisional"
+
+    agg_global = (global_df
+                  .groupby(["FR Fund Reservation Desc", "Fund Source"],
+                           as_index=False)[
+                      ["L1_Commitment_or_Direct_L2_1", "L2_Commitment_or_Payment_2"]]
+                  .sum())
+
+    agg_global["RAC_on_L1_Commitment_or_RAL_Direct_L2_3"] = agg_global["L1_Commitment_or_Direct_L2_1"] + agg_global["L2_Commitment_or_Payment_2"]
+    agg_global["Commitment_Implementation_rate_4"] = agg_global["L2_Commitment_or_Payment_2"] / (-1 * agg_global["L1_Commitment_or_Direct_L2_1"])
+
+    global_df = agg_global[[
+        "FR Fund Reservation Desc", "Fund Source", "L1_Commitment_or_Direct_L2_1", "L2_Commitment_or_Payment_2",
+        "RAC_on_L1_Commitment_or_RAL_Direct_L2_3", "Commitment_Implementation_rate_4"
+    ]]
 
     global_cols = [
-        "Commitment Type", "Fund Reservation Description", "L1 Commitment (1)", "L2 Commitment (2)",
-        "RAL on L1 Commitment (3)=(1)-(2)", "% L2 on L1 Commitment (4)=(2)/(1)"
+        "FR Fund Reservation Desc", "Fund Source", "L1_Commitment_or_Direct_L2_1", "L2_Commitment_or_Payment_2",
+        "RAC_on_L1_Commitment_or_RAL_Direct_L2_3", "Commitment_Implementation_rate_4"
     ]
+
+    # ---------- PROVISIONAL COMMITMENTS -------------------------------------
+    prov_df = df[(df["Source_Type"] == "Experts") &
+                    (df["FR ILC Date (dd/mm/yyyy)"] ==  eoy_this)  & (df['Fund Source'] == "VOBU/EFTA/IAR2/2")].copy()
+
+    logging.debug(f"Provisional Commitments - Rows after filter: {len(prov_df)}")
+
+    prov_df = prov_df.rename(columns={
+        "FR Accepted Amount": "L1_Commitment_or_Direct_L2_1",
+        "FR Consumption by Payment Amount": "L2_Commitment_or_Payment_2"
+    })
+
+    prov_df["FR Fund Reservation Desc"] = 'Experts'
+
+    agg_prov = (prov_df
+                .groupby(["FR Fund Reservation Desc", "Fund Source"],
+                         as_index=False)[
+                    ["L1_Commitment_or_Direct_L2_1", "L2_Commitment_or_Payment_2"]]
+                .sum())
+
+    agg_prov["RAC_on_L1_Commitment_or_RAL_Direct_L2_3"] = agg_prov["L1_Commitment_or_Direct_L2_1"] + agg_prov["L2_Commitment_or_Payment_2"]
+    agg_prov["Commitment_Implementation_rate_4"] = agg_prov["L2_Commitment_or_Payment_2"] / (-1 * agg_prov["L1_Commitment_or_Direct_L2_1"])
+
+    prov_df = agg_prov[[
+        "FR Fund Reservation Desc", "Fund Source", "L1_Commitment_or_Direct_L2_1", "L2_Commitment_or_Payment_2",
+        "RAC_on_L1_Commitment_or_RAL_Direct_L2_3", "Commitment_Implementation_rate_4"
+    ]]
+
     prov_cols = [
-        "Commitment Type", "Fund Reservation Description", "Direct L2 Commitment (5)",
-        "Consumed Direct L2 Commitment", "RAL on Direct L2 Commitment (6)=(5)-(Consumed)", "% Direct L2 Consumed (7)=(Consumed)/(5)"
+        "FR Fund Reservation Desc", "Fund Source", "L1_Commitment_or_Direct_L2_1", "L2_Commitment_or_Payment_2",
+        "RAC_on_L1_Commitment_or_RAL_Direct_L2_3", "Commitment_Implementation_rate_4"
     ]
 
-    combined = pd.concat([
-        global_df[global_cols],
-        prov_df[prov_cols]
-    ], axis=0, ignore_index=True)
+    # Check if both DataFrames are empty
+    if global_df.empty and prov_df.empty:
+        logging.warning("Both Global and Provisional Commitment DataFrames are empty. Returning an empty DataFrame.")
+        # Create an empty DataFrame with the correct structure
+        empty_df = pd.DataFrame(columns=global_cols)
+        return empty_df
 
-    # Create GreatTables object
-    table = (
-        GT(combined)
-        .tab_header(
-            title="Commitment Detail Table 1",
-            subtitle="Global and Provisional Commitments"
-        )
-        .tab_style(
-            style=style.text(font=google_font(name="IBM Plex Mono")),
-            locations=loc.body()
-        )
-        .tab_stub(rowname_col="Commitment Type")
-        .tab_source_note(source_note="Source: Summa DataWharehouse")
-        .tab_source_note(source_note=md("Table_1a_detail"))
-        .tab_stubhead(label="Commitment Type")
-        .fmt_number(columns=[
-            "L1 Commitment (1)", "L2 Commitment (2)", "RAL on L1 Commitment (3)=(1)-(2)",
-            "Direct L2 Commitment (5)", "Consumed Direct L2 Commitment", "RAL on Direct L2 Commitment (6)=(5)-(Consumed)"
-        ], accounting=True)
-        .fmt_percent(columns=[
-            "% L2 on L1 Commitment (4)=(2)/(1)", "% Direct L2 Consumed (7)=(Consumed)/(5)"
-        ])
-    )
+    # Prepare DataFrames for concatenation
+    concat_dfs = []
+    if not global_df.empty:
+        concat_dfs.append(global_df[global_cols])
+    if not prov_df.empty:
+        concat_dfs.append(prov_df[prov_cols])
 
-    # Insert data and GT table image
-    insert_variable(report, "BudgetModule", "table_1a_commitment_detail", combined.to_dict(orient="records"), db_path, anchor="table_1a_detail", gt_table=table)
-    insert_variable(report, "BudgetModule", "anchor_table_1a_commitment_detail", table.to_dict(), db_path, anchor="table_1a_detail_view", gt_table=table)
-    logging.debug(f"Inserted commitment detail table 1 data and image for {report}")
-    return combined
+    # Concatenate only if there are DataFrames to concatenate
+    if concat_dfs:
+        combined = pd.concat(concat_dfs, axis=0, ignore_index=True)
+    else:
+        # This case should already be handled above, but adding for completeness
+        combined = pd.DataFrame(columns=global_cols)
+
+    # -------- Add subtotals by Fund Source -----------------------------------
+    if not combined.empty:
+        # Group by Fund Source and compute subtotals
+        subtotals = combined.groupby("Fund Source", as_index=False).agg({
+            "L1_Commitment_or_Direct_L2_1": "sum",
+            "L2_Commitment_or_Payment_2": "sum",
+            "RAC_on_L1_Commitment_or_RAL_Direct_L2_3": "sum",
+        })
+
+        # Add the ratio for subtotals
+        subtotals["Commitment_Implementation_rate_4"] = subtotals["L2_Commitment_or_Payment_2"] / (-1 * subtotals["L1_Commitment_or_Direct_L2_1"])
+        subtotals["FR Fund Reservation Desc"] = "Subtotal"
+
+        # Concatenate original data with subtotals
+        final_rows = []
+        for fund_source in combined["Fund Source"].unique():
+            # Rows for this Fund Source
+            group_rows = combined[combined["Fund Source"] == fund_source].copy()
+            final_rows.append(group_rows)
+            # Corresponding subtotal row
+            subtotal_row = subtotals[subtotals["Fund Source"] == fund_source].copy()
+            final_rows.append(subtotal_row)
+
+        # Combine all rows into the final DataFrame
+        agg_with_subtotals = pd.concat(final_rows, ignore_index=True)
+    else:
+        agg_with_subtotals = combined  # Empty DataFrame with correct columns
+
+    # -------- GreatTables object -------------------------------------------
+    # Only create the table if there is data
+    if not agg_with_subtotals.empty:
+        tbl = (
+            GT(
+                agg_with_subtotals,
+                rowname_col="FR Fund Reservation Desc",
+                groupname_col="Fund Source"
+            )
+            .tab_header(
+                title="HE"
+            )
+            .tab_style(
+                style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
+                locations=loc.header()
+            )
+            .tab_stubhead(label="Commitment Type (L1 or L2 Direct)")
+            .tab_style(
+                style=[
+                    style.text(color=DARK_BLUE, weight="bold", font='Arial'),
+                    style.fill(color=LIGHT_BLUE),
+                    style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE}"),
+                    style.css("max-width:200px; line-height:1.2"),
+                ],
+                locations=loc.row_groups()
+            )
+            .fmt_number(columns=[
+                "L1_Commitment_or_Direct_L2_1",
+                "L2_Commitment_or_Payment_2",
+                "RAC_on_L1_Commitment_or_RAL_Direct_L2_3"
+            ], accounting=True, decimals=2)
+            .fmt_percent(
+                columns="Commitment_Implementation_rate_4",
+                decimals=2
+            )
+            .cols_label(
+                L1_Commitment_or_Direct_L2_1=html("L1 Commitment or Direct L2<br>(1)"),
+                L2_Commitment_or_Payment_2=html("L2 Commitment or Payment<br>(2)"),
+                RAC_on_L1_Commitment_or_RAL_Direct_L2_3=html("RAC on L1 Commitment or RAL Direct L2<br>(3) = (1) + (2)"),
+                Commitment_Implementation_rate_4=html("% Commitment Implementation Rate<br>(4) = (2) / (1)")
+            )
+            .opt_table_font(font="Arial")
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align="center"),
+                    style.css("max-width:200px; line-height:1.2")
+                ],
+                locations=loc.column_labels()
+            )
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align="center"),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
+                ],
+                locations=loc.stubhead()
+            )
+            .tab_style(
+                style=style.borders(weight="1px", color=DARK_BLUE),
+                locations=loc.stub()
+            )
+            .tab_style(
+                style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                locations=loc.body()
+            )
+            .tab_style(
+                style=style.borders(color=DARK_BLUE, weight="2px"),
+                locations=[loc.column_labels(), loc.stubhead()]
+            )
+            .tab_style(
+                style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+                locations=loc.body(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
+            )
+            .tab_options(table_body_border_bottom_color=DARK_BLUE,
+                         table_body_border_bottom_width="2px")
+            .tab_options(table_border_right_color=DARK_BLUE,
+                         table_border_right_width="2px")
+            .tab_options(table_border_left_color=DARK_BLUE,
+                         table_border_left_width="2px")
+            .tab_options(table_border_top_color=DARK_BLUE,
+                         table_border_top_width="2px")
+            .tab_options(column_labels_border_top_color=DARK_BLUE,
+                         column_labels_border_top_width="2px")
+            .tab_source_note("Source: Summa DataWarehouse")
+            .tab_source_note("BO Report: C0_COMMITMENTS_SUMMA")
+        )
+
+        # -------- store --------------------------------------------------------
+        insert_variable(
+            report=report,
+            module="BudgetModule",
+            var=f"table_1b_L1_current_year",
+            value=agg_with_subtotals.to_dict(orient="records"),
+            db_path=db_path,
+            anchor=f"table_1b",
+            gt_table=tbl,
+        )
+
+        logging.debug("Stored 1b table and data")
+    else:
+        logging.debug("No data to store for table 1b (empty DataFrame).")
+
+    return agg_with_subtotals
 
 def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
     df["FR ILC Date (dd/mm/yyyy)"] = pd.to_datetime(df["FR ILC Date (dd/mm/yyyy)"], errors="coerce")
