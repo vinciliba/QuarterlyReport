@@ -1,9 +1,10 @@
 import pandas as pd
-from datetime import date, timedelta
+from datetime import datetime, date
 from great_tables import GT, md, google_font, style, loc, html
 import sqlite3
-from ingestion.db_utils import insert_variable
+from ingestion.db_utils import insert_variable, upsert_report_param
 import logging
+from typing import Optional, Dict
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -14,397 +15,556 @@ GRID_CLR    = "#004A99"
 DARK_BLUE   = "#01244B"
 DARK_GREY =   '#242425'
 
-def fetch_latest_table_data(conn: sqlite3.Connection, table_name: str, cutoff: pd.Timestamp) -> pd.DataFrame:
-    """
-    Fetch data from the upload with uploaded_at closest to cutoff.
-    """
-    cutoff_str = cutoff.isoformat()
 
-    # Find the closest uploaded_at for the given table_alias
-    query = f"""
-        SELECT uploaded_at
+def fetch_latest_table_data(conn: sqlite3.Connection, table_alias: str, cutoff: pd.Timestamp) -> pd.DataFrame:
+    cutoff_str = cutoff.isoformat()
+    logging.debug(f"Fetching latest data for table_alias: {table_alias}, cutoff: {cutoff_str}")
+    
+    query = """
+        SELECT uploaded_at, id
         FROM upload_log
         WHERE table_alias = ?
         ORDER BY ABS(strftime('%s', uploaded_at) - strftime('%s', ?))
         LIMIT 1
     """
-    result = conn.execute(query, (table_name, cutoff_str)).fetchone()
+    result = conn.execute(query, (table_alias, cutoff_str)).fetchone()
+    logging.debug(f"Upload log query result for {table_alias}: {result}")
+
     if not result:
-        raise ValueError(f"No uploads found for table '{table_name}' near cutoff {cutoff_str}")
+        logging.warning(f"No uploads found for table alias '{table_alias}' near cutoff {cutoff_str}")
+        return pd.DataFrame()  # Return empty DataFrame instead of raising ValueError
 
-    closest_uploaded_at = result[0]
-
-    # Fetch data from the actual table, filtering by uploaded_at
+    closest_uploaded_at, upload_id = result
+    logging.debug(f"Selected upload_id: {upload_id}, uploaded_at: {closest_uploaded_at}")
+    
     df = pd.read_sql_query(
-        f"SELECT * FROM {table_name} WHERE uploaded_at = ?",
+        f"SELECT * FROM {table_alias} WHERE upload_id = ?",
         conn,
-        params=(closest_uploaded_at,)
+        params=(upload_id,)
     )
-    logging.debug(f"Fetched {len(df)} rows from {table_name}")
+    logging.debug(f"Fetched {len(df)} rows from {table_alias}")
     return df
 
 def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
-    # Avoid SettingWithCopyWarning by using .copy()
-    df = df[df["Budget Period"] == current_year].copy()
-    df = df[df["Fund Source"].isin(["VOBU", "EFTA"])].copy()
-
-    # Map Functional Area to Programme
-    df.loc[:, "Programme"] = df["Functional Area Desc"].replace({
-        "HORIZONEU_21_27": "HE",
-        "H2020_14_20": "H2020"
-    })
-
-    # Filter for HE programme
-    df = df.loc[df["Programme"] == "HE"].copy()
-
-    # Budget‑type mapping helper
-    def map_budget_type(val):
-        if pd.isna(val):
-            return None
-        v = str(val).upper()
-        if "EMPTY" in v: return "Main Calls"
-        if "EXPERTS" in v: return "Experts"
-        return val
-
-    df.loc[:, "Budget_Address_Type"] = df["Budget Address"].apply(map_budget_type)
-
-    # Budget‑type mapping helper
-    def map_fund_type(val):
-        if pd.isna(val):
-            return None
-        v = str(val).upper()
-        if "VOBU" in v: return "VOBU/EFTA"
-        if "EFTA" in v: return "VOBU/EFTA"
-        if "IAR2/2" in v: return "VOBU/EFTA"
-        return val
-
-    df['Fund Source'] = df['Fund Source'].apply(map_fund_type)
-
-    # Group by Fund Source and Budget_Address_Type
-    agg = df.groupby(["Fund Source", "Budget_Address_Type"])[
-        ["Commitment Appropriation", "Committed Amount", 'Commitment Available ']
-    ].sum().reset_index()
-
-    agg["%"] = agg["Committed Amount"] / agg["Commitment Appropriation"]
-
-    agg = agg.rename(columns={
-        "Commitment Appropriation": "Available_Commitment_Appropriations",
-        "Committed Amount": "L1_Commitment",
-        'Commitment Available ': "RAC_on_Appropriation",  # Fixed space in column name
-        "%": "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations",
-        "Budget_Address_Type": "Budget Address Type"
-    })
-
-    # -------- Add total row ---------------------------------------------------
-    total_row = pd.DataFrame({
-        "Fund Source": ['VOBU/EFTA'],
-        "Budget Address Type": ['Total'],
-        "Available_Commitment_Appropriations": [agg["Available_Commitment_Appropriations"].sum()],
-        "L1_Commitment": [agg["L1_Commitment"].sum()],
-        "RAC_on_Appropriation": [agg["RAC_on_Appropriation"].sum()],
-        "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations": [agg["L1_Commitment"].sum() / agg["Available_Commitment_Appropriations"].sum()]
-    })
-    agg = pd.concat([agg, total_row], ignore_index=True)
-
-    # -------- GreatTables object -------------------------------------------
-    tbl = (
-        GT(
-            agg,
-            rowname_col="Budget Address Type",
-            groupname_col="Fund Source"
-        )
-        .tab_header("HE")
-        .tab_stubhead(label="Budget Address Type")
-        # ── formats ────────────────────────────────────────────────────────────
-        .fmt_number(columns=[
-            "Available_Commitment_Appropriations",
-            "L1_Commitment",
-            "RAC_on_Appropriation"  # Fixed column name (RAL → RAC)
-        ], accounting=True, decimals=2)
-        .fmt_percent(
-            columns="ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations",
-            decimals=2
-        )
-        # ── Set custom column labels with <br> for line breaks ─────────────────
-        .cols_label(
-            Available_Commitment_Appropriations=html("Available Commitment Appropriations<br>(1)"),
-            L1_Commitment=html("L1 Commitments or <br> Direct L2 <br>(2)"),
-            RAC_on_Appropriation=html("RAC on Appropriation<br>(3)=(1)-(2)"),
-            ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations=html("% Commitment Appropriations by <br> L1 and Direct L2 Commitments <br> (4) = (2)/(1)")
-        )
-        # ── Arial everywhere ──────────────────────────────────────────────────
-        .opt_table_font(font="Arial")
-        # ── HEADER + STUB COLOUR ──────────────────────────────────────────────
-        .tab_style(
-            style=[
-                style.text(color=DARK_BLUE, weight="bold"),
-                style.fill(color=LIGHT_BLUE),
-                style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
-                style.css("max-width:200px; line-height:1.2"),
-            ],
-            locations=loc.row_groups()
-        )  # Fixed syntax by closing the .tab_style() call properly
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align='center'),
-                style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
-            ],
-            locations=loc.column_labels()
-        )
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold"),
-                style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
-            ],
-            locations=loc.stubhead()
-        )
-
-        .tab_style(
-            style=[
-                style.text(color= DARK_BLUE, weight="bold"),
-            ],
-            locations=loc.header()
-        )
-        # ── GRID LINES ────────────────────────────────────────────────────────
-        .tab_style(
-        style.borders(weight="1px", color=DARK_BLUE),
-        loc.stub(),
-
-         )
-        .tab_style(
-            style=style.borders(sides=["all"], color=DARK_BLUE, weight='2px'),
-            locations=loc.body()
-        )
-        .tab_style(
-            style=style.borders(color=DARK_BLUE, weight='2px'),
-            locations=loc.column_labels()
-        )
-        .tab_style(
-            style=style.borders(color=DARK_BLUE, weight='2px'),
-            locations=loc.stubhead()
-        )
-        .tab_style(
-            style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
-            locations=loc.body(rows=agg.index[-1])  # Apply to the last row (total)
-        )
-        .tab_style(
-            style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
-            locations=loc.stub(rows=[-1])
-        )
-        # ── ROW STRIPING ───────────────────────────────────────────────────────
-        .tab_options(table_body_border_bottom_color=DARK_BLUE,
-                     table_body_border_bottom_width="2px")
-        .tab_options(table_border_right_color=DARK_BLUE,
-                     table_border_right_width="2px")
-        .tab_options(table_border_left_color=DARK_BLUE,
-                     table_border_left_width="2px")
-        .tab_options(table_border_top_color=DARK_BLUE,
-                     table_border_top_width="2px")
-        .tab_options(column_labels_border_top_color=DARK_BLUE,
-                     column_labels_border_top_width="2px")
-        # ── SOURCE NOTE ────────────────────────────────────────────────────────
-        .tab_source_note("Source: Summa DataWarehouse")
-        .tab_source_note("BO Report: C0_Budgetary_Execution_Details")
-    )
-
-    # Insert data and GT table image
-    insert_variable(
-        report=report,
-        module="BudgetModule",
-        var="table_1a_commitment_summary",
-        value=agg.to_dict(orient="records"),
-        db_path=db_path,
-        anchor="table_1a",
-        gt_table=tbl
-    )
-    return agg
-
+    """
+    Builds a commitment summary table for the HE programme, grouped by Fund Source and Budget Address Type.
+    
+    Args:
+        df (pd.DataFrame): Input DataFrame with commitment data.
+        current_year (int): The year to filter the Budget Period.
+        report (str): Name of the report for storing the table.
+        db_path (str): Path to the SQLite database for storing the table.
+    
+    Returns:
+        pd.DataFrame: Aggregated table with commitment summary.
+    """
+    # Define expected columns for validation
+    expected_columns = [
+        "Budget Period", "Fund Source", "Functional Area Desc", 
+        "Budget Address", "Commitment Appropriation", 
+        "Committed Amount", "Commitment Available "
+    ]
+    
+    # Validate input DataFrame
+    if not isinstance(df, pd.DataFrame):
+        logging.error("Input 'df' is not a pandas DataFrame.")
+        return pd.DataFrame(columns=[
+            "Fund Source", "Budget Address Type", "Available_Commitment_Appropriations",
+            "L1_Commitment", "RAC_on_Appropriation", 
+            "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations"
+        ])
+    
+    if df.empty:
+        logging.warning("Input DataFrame is empty. Returning empty DataFrame with expected columns.")
+        return pd.DataFrame(columns=[
+            "Fund Source", "Budget Address Type", "Available_Commitment_Appropriations",
+            "L1_Commitment", "RAC_on_Appropriation", 
+            "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations"
+        ])
+    
+    # Check for missing columns
+    missing_columns = [col for col in expected_columns if col not in df.columns]
+    if missing_columns:
+        logging.error(f"Missing required columns: {missing_columns}")
+        return pd.DataFrame(columns=[
+            "Fund Source", "Budget Address Type", "Available_Commitment_Appropriations",
+            "L1_Commitment", "RAC_on_Appropriation", 
+            "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations"
+        ])
+    
+    # Log input DataFrame info
+    logging.debug(f"Input DataFrame shape: {df.shape}")
+    logging.debug(f"Input DataFrame columns: {df.columns.tolist()}")
+    
+    try:
+        # Filter for current year and specific Fund Sources
+        df = df[df["Budget Period"] == current_year].copy()
+        logging.debug(f"After filtering Budget Period == {current_year}: {df.shape[0]} rows")
+        
+        df = df[df["Fund Source"].isin(["VOBU", "EFTA"])].copy()
+        logging.debug(f"After filtering Fund Source in ['VOBU', 'EFTA']: {df.shape[0]} rows")
+        
+        # Map Functional Area to Programme
+        df.loc[:, "Programme"] = df["Functional Area Desc"].replace({
+            "HORIZONEU_21_27": "HE",
+            "H2020_14_20": "H2020"
+        })
+        
+        # Filter for HE programme
+        df = df.loc[df["Programme"] == "HE"].copy()
+        logging.debug(f"After filtering Programme == 'HE': {df.shape[0]} rows")
+        
+        if df.empty:
+            logging.warning("DataFrame is empty after filtering. Returning empty DataFrame.")
+            return pd.DataFrame(columns=[
+                "Fund Source", "Budget Address Type", "Available_Commitment_Appropriations",
+                "L1_Commitment", "RAC_on_Appropriation", 
+                "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations"
+            ])
+        
+        # Budget-type mapping helper
+        def map_budget_type(val):
+            if pd.isna(val):
+                return None
+            v = str(val).upper()
+            if "EMPTY" in v:
+                return "Main Calls"
+            if "EXPERTS" in v:
+                return "Experts"
+            return val
+        
+        df.loc[:, "Budget_Address_Type"] = df["Budget Address"].apply(map_budget_type)
+        logging.debug(f"Unique Budget_Address_Type values: {df['Budget_Address_Type'].unique()}")
+        
+        # Fund-type mapping helper
+        def map_fund_type(val):
+            if pd.isna(val):
+                return None
+            v = str(val).upper()
+            if "VOBU" in v:
+                return "VOBU/EFTA"
+            if "EFTA" in v:
+                return "VOBU/EFTA"
+            if "IAR2/2" in v:
+                return "VOBU/EFTA"
+            return val
+        
+        df['Fund Source'] = df['Fund Source'].apply(map_fund_type)
+        logging.debug(f"Unique Fund Source values after mapping: {df['Fund Source'].unique()}")
+        
+        # Group by Fund Source and Budget_Address_Type
+        agg = df.groupby(["Fund Source", "Budget_Address_Type"])[
+            ["Commitment Appropriation", "Committed Amount", "Commitment Available "]
+        ].sum().reset_index()
+        logging.debug(f"Aggregated DataFrame shape: {agg.shape}")
+        
+        # Compute percentage
+        agg["%"] = agg["Committed Amount"] / agg["Commitment Appropriation"].replace(0, pd.NA)
+        agg["%"] = agg["%"].fillna(0)  # Handle division by zero
+        
+        # Rename columns
+        agg = agg.rename(columns={
+            "Commitment Appropriation": "Available_Commitment_Appropriations",
+            "Committed Amount": "L1_Commitment",
+            "Commitment Available ": "RAC_on_Appropriation",
+            "%": "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations",
+            "Budget_Address_Type": "Budget Address Type"
+        })
+        
+        # Add total row
+        try:
+            total_row = pd.DataFrame({
+                "Fund Source": ["VOBU/EFTA"],
+                "Budget Address Type": ["Total"],
+                "Available_Commitment_Appropriations": [agg["Available_Commitment_Appropriations"].sum()],
+                "L1_Commitment": [agg["L1_Commitment"].sum()],
+                "RAC_on_Appropriation": [agg["RAC_on_Appropriation"].sum()],
+                "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations": [
+                    agg["L1_Commitment"].sum() / agg["Available_Commitment_Appropriations"].sum()
+                    if agg["Available_Commitment_Appropriations"].sum() != 0 else 0
+                ]
+            })
+            agg = pd.concat([agg, total_row], ignore_index=True)
+            logging.debug(f"Final aggregated DataFrame with total row: {agg.shape}")
+        except Exception as e:
+            logging.error(f"Error adding total row: {str(e)}")
+            return agg  # Proceed without total row if it fails
+        
+        # Build GreatTables object
+        try:
+            tbl = (
+                GT(
+                    agg,
+                    rowname_col="Budget Address Type",
+                    groupname_col="Fund Source"
+                )
+                .tab_header("HE")
+                .tab_stubhead(label="Budget Address Type")
+                # Formats
+                .fmt_number(columns=[
+                    "Available_Commitment_Appropriations",
+                    "L1_Commitment",
+                    "RAC_on_Appropriation"
+                ], accounting=True, decimals=2)
+                .fmt_percent(
+                    columns="ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations",
+                    decimals=2
+                )
+                # Custom column labels
+                .cols_label(
+                    Available_Commitment_Appropriations=html("Available Commitment Appropriations<br>(1)"),
+                    L1_Commitment=html("L1 Commitments or <br> Direct L2 <br>(2)"),
+                    RAC_on_Appropriation=html("RAC on Appropriation<br>(3)=(1)-(2)"),
+                    ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations=html(
+                        "% Commitment Appropriations by <br> L1 and Direct L2 Commitments <br> (4) = (2)/(1)"
+                    )
+                )
+                # Arial font
+                .opt_table_font(font="Arial")
+                # Header and stub styling
+                .tab_style(
+                    style=[
+                        style.text(color=DARK_BLUE, weight="bold"),
+                        style.fill(color=LIGHT_BLUE),
+                        style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
+                        style.css("max-width:200px; line-height:1.2"),
+                    ],
+                    locations=loc.row_groups()
+                )
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align='center'),
+                        style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
+                    ],
+                    locations=loc.column_labels()
+                )
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold"),
+                        style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
+                    ],
+                    locations=loc.stubhead()
+                )
+                .tab_style(
+                    style=[
+                        style.text(color=DARK_BLUE, weight="bold"),
+                    ],
+                    locations=loc.header()
+                )
+                # Grid lines
+                .tab_style(
+                    style=style.borders(weight="1px", color=DARK_BLUE),
+                    locations=loc.stub()
+                )
+                .tab_style(
+                    style=style.borders(sides=["all"], color=DARK_BLUE, weight='2px'),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(color=DARK_BLUE, weight='2px'),
+                    locations=loc.column_labels()
+                )
+                .tab_style(
+                    style=style.borders(color=DARK_BLUE, weight='2px'),
+                    locations=loc.stubhead()
+                )
+                # Style total row
+                .tab_style(
+                    style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+                    locations=loc.body(rows=agg.index[-1])
+                )
+                .tab_style(
+                    style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
+                    locations=loc.stub(rows=[-1])
+                )
+                # Table borders
+                .tab_options(table_body_border_bottom_color=DARK_BLUE, table_body_border_bottom_width="2px")
+                .tab_options(table_border_right_color=DARK_BLUE, table_border_right_width="2px")
+                .tab_options(table_border_left_color=DARK_BLUE, table_border_left_width="2px")
+                .tab_options(table_border_top_color=DARK_BLUE, table_border_top_width="2px")
+                .tab_options(column_labels_border_top_color=DARK_BLUE, column_labels_border_top_width="2px")
+                # Source notes
+                .tab_source_note("Source: Summa DataWarehouse")
+                .tab_source_note("BO Report: C0_Budgetary_Execution_Details")
+            )
+        except Exception as e:
+            logging.error(f"Error building GreatTables object: {str(e)}")
+            # Return the aggregated DataFrame without styling if table creation fails
+            return agg
+        
+        # Store the table
+        try:
+            insert_variable(
+                report=report,
+                module="BudgetModule",
+                var="table_1a_commitment_summary",
+                value=agg.to_dict(orient="records"),
+                db_path=db_path,
+                anchor="table_1a",
+                gt_table=tbl
+            )
+            logging.debug("Successfully stored table_1a_commitment_summary")
+        except Exception as e:
+            logging.error(f"Error storing table: {str(e)}")
+            # Continue even if storage fails, as the table is already built
+        
+        return agg
+    
+    except Exception as e:
+        logging.error(f"Unexpected error in build_commitment_summary_table: {str(e)}")
+        return pd.DataFrame(columns=[
+            "Fund Source", "Budget Address Type", "Available_Commitment_Appropriations",
+            "L1_Commitment", "RAC_on_Appropriation", 
+            "ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations"
+        ])
 
 # ──────────────────────────────────────────────────────────────────────────────
 
 def build_payment_summary_tables(
-        df: pd.DataFrame,
-        current_year: int,
-        report: str,
-        db_path: str
-) -> dict[str, pd.DataFrame]:
+    df: pd.DataFrame,
+    current_year: int,
+    report: str,
+    db_path: str
+) -> Dict[str, pd.DataFrame]:
     """
-    Build & store one payment‑summary table per programme (HE, H2020).
+    Build & store one payment-summary table per programme (HE, H2020).
 
-    Returns
-    -------
-    dict
-        keys  = programme code ("HE", "H2020")
-        value = aggregated DataFrame for that programme
+    Args:
+        df (pd.DataFrame): Input DataFrame with payment data.
+        current_year (int): The year to filter the Budget Period.
+        report (str): Name of the report for storing the tables.
+        db_path (str): Path to the SQLite database for storing the tables.
+
+    Returns:
+        dict
+            keys = programme code ("HE", "H2020")
+            value = aggregated DataFrame for that programme
     """
-    # ---------- common pre‑filtering ---------------------------------------------------
-    # Create a new DataFrame with a copy to avoid SettingWithCopyWarning
-    df = df[(df["Budget Period"] == current_year) & (df["Fund Source"].isin(["VOBU", "EFTA"]))].copy()
+    # Define expected columns for validation
+    expected_columns = [
+        "Budget Period", "Fund Source", "Functional Area Desc",
+        "Budget Address", "Payment Appropriation", "Paid Amount", "Payment Available"
+    ]
 
-    # Map Functional Area → Programme
-    df.loc[:, "Programme"] = df["Functional Area Desc"].replace({
-        "HORIZONEU_21_27": "HE",
-        "H2020_14_20": "H2020"
-    })
+    # Validate input DataFrame
+    if not isinstance(df, pd.DataFrame):
+        logging.error("Input 'df' is not a pandas DataFrame.")
+        return {"HE": pd.DataFrame(), "H2020": pd.DataFrame()}
 
-    # Budget‑type mapping helper
-    def map_budget_type(val):
-        if pd.isna(val):
-            return None
-        v = str(val).upper()
-        if "EMPTY" in v: return "Main Calls"
-        if "EXPERTS" in v: return "Experts"
-        return val
+    if df.empty:
+        logging.warning("Input DataFrame is empty. Returning empty DataFrames for all programmes.")
+        return {"HE": pd.DataFrame(), "H2020": pd.DataFrame()}
 
-    df.loc[:, "Budget_Address_Type"] = df["Budget Address"].apply(map_budget_type)
+    # Check for missing columns
+    missing_columns = [col for col in expected_columns if col not in df.columns]
+    if missing_columns:
+        logging.error(f"Missing required columns: {missing_columns}")
+        return {"HE": pd.DataFrame(), "H2020": pd.DataFrame()}
 
-    # Set Fund Source for all rows
-    df.loc[:, "Fund Source"] = 'VOBU/EFTA'
+    # Log input DataFrame info
+    logging.debug(f"Input DataFrame shape: {df.shape}")
+    logging.debug(f"Input DataFrame columns: {df.columns.tolist()}")
 
-    # ---------- iterate over the two programmes ---------------------------------------
-    results: dict[str, pd.DataFrame] = {}
-    for programme in ("HE", "H2020"):
-        df_p = df[df["Programme"] == programme].copy()
+    try:
+        # Common pre-filtering
+        df = df[(df["Budget Period"] == current_year) & (df["Fund Source"].isin(["VOBU", "EFTA"]))].copy()
+        logging.debug(f"After pre-filtering (Budget Period == {current_year} & Fund Source in ['VOBU', 'EFTA']): {df.shape[0]} rows")
 
-        if df_p.empty:
-            logging.warning("No rows for programme %s", programme)
-            continue
-
-        # -------- aggregation ------------------------------------------------------
-        agg = (df_p
-               .groupby(["Fund Source", "Budget_Address_Type"],
-                        as_index=False)[
-                    ["Payment Appropriation", "Paid Amount",
-                     "Payment Available"]]
-               .sum())
-
-        agg["%"] = agg["Paid Amount"] / agg["Payment Appropriation"]
-
-        agg = agg.rename(columns={
-            "Payment Appropriation": "Available_Payment_Appropriations",
-            "Paid Amount": "Paid_Amount",
-            "Payment Available": "Remaining_Payment_Appropriation",
-            "%": "ratio_consumed_Payment_Appropriations",
-            "Budget_Address_Type": "Budget Address Type"
+        # Map Functional Area → Programme
+        df.loc[:, "Programme"] = df["Functional Area Desc"].replace({
+            "HORIZONEU_21_27": "HE",
+            "H2020_14_20": "H2020"
         })
+        logging.debug(f"Unique Programme values: {df['Programme'].unique()}")
 
-        # -------- Add total row ---------------------------------------------------
-        total_row = pd.DataFrame({
-            # "Programme": ["Total"],
-            "Fund Source": ['VOBU/EFTA'],
-            "Budget Address Type": ['Total'],
-            "Available_Payment_Appropriations": [agg["Available_Payment_Appropriations"].sum()],
-            "Paid_Amount": [agg["Paid_Amount"].sum()],
-            "Remaining_Payment_Appropriation": [agg["Remaining_Payment_Appropriation"].sum()],
-            "ratio_consumed_Payment_Appropriations": [agg["Paid_Amount"].sum() / agg["Available_Payment_Appropriations"].sum()]
-        })
-        agg = pd.concat([agg, total_row], ignore_index=True)
+        # Budget-type mapping helper
+        def map_budget_type(val):
+            if pd.isna(val):
+                return None
+            v = str(val).upper()
+            if "EMPTY" in v:
+                return "Main Calls"
+            if "EXPERTS" in v:
+                return "Experts"
+            return val
 
-        # -------- GreatTables object -------------------------------------------
-        tbl = (
-            GT(agg,
-              rowname_col="Budget Address Type",
-              groupname_col="Fund Source"
-              )
-            .tab_stubhead(label="Budget Address Type")
-            .tab_style(
-                style=[
-                    style.text(color="white", weight="bold"),
-                    style.fill(color=LIGHT_BLUE),
-                    style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
-                    style.css("max-width:200px; line-height:1.2"),
-                ],
-                locations=loc.row_groups()
-            )
-            .tab_header(
-                title=f"{programme}",
-            )
-            .fmt_number(columns=[
-                "Available_Payment_Appropriations",
-                "Paid_Amount",
-                "Remaining_Payment_Appropriation"
-            ], accounting=True, decimals=2)
-            .fmt_percent(
-                columns="ratio_consumed_Payment_Appropriations",
-                decimals=2)
-            .cols_label(
-                Available_Payment_Appropriations=html("Payment Appropriations<br>(1)"),
-                Paid_Amount=html("Payment Credits consumed<br>(Acceptance Date)<br>(2)"),
-                Remaining_Payment_Appropriation=html("Remaining Payment Appropriations<br>(3)=(1)-(2)"),
-                ratio_consumed_Payment_Appropriations=html("% Payment Consumed<br>(4) = (2)/(1)")
-            )
-            .opt_table_font(font="Arial")
+        df.loc[:, "Budget_Address_Type"] = df["Budget Address"].apply(map_budget_type)
+        logging.debug(f"Unique Budget_Address_Type values: {df['Budget_Address_Type'].unique()}")
 
-            .tab_style(
-                style = [style.text(weight="bold", color=DARK_BLUE)],
-                locations= loc.header(),
-                )
-            .tab_style(
-                style=[style.fill(color=BLUE),
-                    style.text(color="white", weight="bold", align="center"),
-                    style.css("text-align: center;vertical-align: middle; max-width:200px; line-height:1.2")],
-                locations=loc.column_labels())
-            .tab_style(
-                style=[style.fill(color=BLUE),
-                    style.text(color="white", weight="bold"),
-                    style.css("text-align: center;vertical-align: middle; max-width:200px; line-height:1.2")],
-                locations=loc.stubhead())
+        # Set Fund Source for all rows
+        df.loc[:, "Fund Source"] = "VOBU/EFTA"
+        logging.debug(f"Fund Source set to: {df['Fund Source'].unique()}")
 
-            .tab_style(
-                style.borders(weight="1px", color=DARK_BLUE),
-                loc.stub(),
-               )
+        # Iterate over the two programmes
+        results: Dict[str, pd.DataFrame] = {}
+        for programme in ("HE", "H2020"):
+            df_p = df[df["Programme"] == programme].copy()
 
-            .tab_style(
-                style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                locations=loc.body())
-            .tab_style(
-                style=style.borders(color=DARK_BLUE, weight="2px"),
-                locations=[loc.column_labels(), loc.stubhead()])
+            if df_p.empty:
+                logging.warning(f"No rows for programme {programme}. Skipping.")
+                results[programme] = pd.DataFrame(columns=[
+                    "Fund Source", "Budget Address Type", "Available_Payment_Appropriations",
+                    "Paid_Amount", "Remaining_Payment_Appropriation", "ratio_consumed_Payment_Appropriations"
+                ])
+                continue
 
-            .tab_style(
-                style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
-                locations=loc.body(rows=agg.index[-1]))  # Apply to the last row (total)
+            try:
+                # Aggregation
+                agg = (df_p
+                       .groupby(["Fund Source", "Budget_Address_Type"],
+                                as_index=False)[
+                           ["Payment Appropriation", "Paid Amount", "Payment Available"]
+                       ].sum())
+                logging.debug(f"Aggregated DataFrame for {programme} shape: {agg.shape}")
 
-            .tab_style(
-                style = [style.fill( color="#E6E6FA"), style.text(weight="bold")],
-                locations= loc.stub(rows=[-1]),
-                )
+                # Compute percentage with zero division handling
+                agg["%"] = agg["Paid Amount"] / agg["Payment Appropriation"].replace(0, pd.NA)
+                agg["%"] = agg["%"].fillna(0)
 
-            .tab_options(table_body_border_bottom_color=DARK_BLUE,
-                     table_body_border_bottom_width="2px")
-            .tab_options(table_border_right_color=DARK_BLUE,
-                        table_border_right_width="2px")
-            .tab_options(table_border_left_color=DARK_BLUE,
-                        table_border_left_width="2px")
-            .tab_options(table_border_top_color=DARK_BLUE,
-                        table_border_top_width="2px")
-            .tab_options(column_labels_border_top_color=DARK_BLUE,
-                        column_labels_border_top_width="2px")
-            .tab_source_note("Source: Summa DataWarehouse")
-            .tab_source_note("BO Report: C0_Budgetary_Execution_Details")
-        )
+                # Rename columns
+                agg = agg.rename(columns={
+                    "Payment Appropriation": "Available_Payment_Appropriations",
+                    "Paid Amount": "Paid_Amount",
+                    "Payment Available": "Remaining_Payment_Appropriation",
+                    "%": "ratio_consumed_Payment_Appropriations",
+                    "Budget_Address_Type": "Budget Address Type"
+                })
 
-        # -------- store --------------------------------------------------------
-        insert_variable(
-            report=report,
-            module="BudgetModule",
-            var=f"table_2a_{programme}_data",
-            value=agg.to_dict(orient="records"),
-            db_path=db_path,
-            anchor=f"table_2a_{programme}",
-            gt_table=tbl,
-        )
+                # Add total row
+                try:
+                    total_row = pd.DataFrame({
+                        "Fund Source": ["VOBU/EFTA"],
+                        "Budget Address Type": ["Total"],
+                        "Available_Payment_Appropriations": [agg["Available_Payment_Appropriations"].sum()],
+                        "Paid_Amount": [agg["Paid_Amount"].sum()],
+                        "Remaining_Payment_Appropriation": [agg["Remaining_Payment_Appropriation"].sum()],
+                        "ratio_consumed_Payment_Appropriations": [
+                            agg["Paid_Amount"].sum() / agg["Available_Payment_Appropriations"].sum()
+                            if agg["Available_Payment_Appropriations"].sum() != 0 else 0
+                        ]
+                    })
+                    agg = pd.concat([agg, total_row], ignore_index=True)
+                    logging.debug(f"Final aggregated DataFrame for {programme} with total row: {agg.shape}")
+                except Exception as e:
+                    logging.error(f"Error adding total row for {programme}: {str(e)}")
+                    continue  # Skip to next programme if total row fails
 
-        logging.debug("Stored 2a table for programme %s (%d rows)",
-                      programme, len(agg))
+                # Build GreatTables object
+                try:
+                    tbl = (
+                        GT(agg,
+                           rowname_col="Budget Address Type",
+                           groupname_col="Fund Source"
+                           )
+                        .tab_stubhead(label="Budget Address Type")
+                        .tab_style(
+                            style=[
+                                style.text(color="white", weight="bold"),
+                                style.fill(color=LIGHT_BLUE),
+                                style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
+                                style.css("max-width:200px; line-height:1.2"),
+                            ],
+                            locations=loc.row_groups()
+                        )
+                        .tab_header(title=f"{programme}")
+                        .fmt_number(columns=[
+                            "Available_Payment_Appropriations",
+                            "Paid_Amount",
+                            "Remaining_Payment_Appropriation"
+                        ], accounting=True, decimals=2)
+                        .fmt_percent(
+                            columns="ratio_consumed_Payment_Appropriations",
+                            decimals=2
+                        )
+                        .cols_label(
+                            Available_Payment_Appropriations=html("Payment Appropriations<br>(1)"),
+                            Paid_Amount=html("Payment Credits consumed<br>(Acceptance Date)<br>(2)"),
+                            Remaining_Payment_Appropriation=html("Remaining Payment Appropriations<br>(3)=(1)-(2)"),
+                            ratio_consumed_Payment_Appropriations=html("% Payment Consumed<br>(4) = (2)/(1)")
+                        )
+                        .opt_table_font(font="Arial")
+                        .tab_style(
+                            style=[style.text(weight="bold", color=DARK_BLUE)],
+                            locations=loc.header()
+                        )
+                        .tab_style(
+                            style=[style.fill(color=BLUE),
+                                   style.text(color="white", weight="bold", align="center"),
+                                   style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")],
+                            locations=loc.column_labels()
+                        )
+                        .tab_style(
+                            style=[style.fill(color=BLUE),
+                                   style.text(color="white", weight="bold"),
+                                   style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")],
+                            locations=loc.stubhead()
+                        )
+                        .tab_style(
+                            style=style.borders(weight="1px", color=DARK_BLUE),
+                            locations=loc.stub()
+                        )
+                        .tab_style(
+                            style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                            locations=loc.body()
+                        )
+                        .tab_style(
+                            style=style.borders(color=DARK_BLUE, weight="2px"),
+                            locations=[loc.column_labels(), loc.stubhead()]
+                        )
+                        .tab_style(
+                            style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+                            locations=loc.body(rows=agg.index[-1])
+                        )
+                        .tab_style(
+                            style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
+                            locations=loc.stub(rows=[-1])
+                        )
+                        .tab_options(table_body_border_bottom_color=DARK_BLUE, table_body_border_bottom_width="2px")
+                        .tab_options(table_border_right_color=DARK_BLUE, table_border_right_width="2px")
+                        .tab_options(table_border_left_color=DARK_BLUE, table_border_left_width="2px")
+                        .tab_options(table_border_top_color=DARK_BLUE, table_border_top_width="2px")
+                        .tab_options(column_labels_border_top_color=DARK_BLUE, column_labels_border_top_width="2px")
+                        .tab_source_note("Source: Summa DataWarehouse")
+                        .tab_source_note("BO Report: C0_Budgetary_Execution_Details")
+                    )
+                except Exception as e:
+                    logging.error(f"Error building GreatTables object for {programme}: {str(e)}")
+                    results[programme] = agg  # Store unstyled DataFrame if styling fails
+                    continue
 
-        results[programme] = agg
+                # Store the table
+                try:
+                    insert_variable(
+                        report=report,
+                        module="BudgetModule",
+                        var=f"table_2a_{programme}_data",
+                        value=agg.to_dict(orient="records"),
+                        db_path=db_path,
+                        anchor=f"table_2a_{programme}",
+                        gt_table=tbl
+                    )
+                    logging.debug(f"Stored table_2a_{programme}_data ({len(agg)} rows)")
+                except Exception as e:
+                    logging.error(f"Error storing table for {programme}: {str(e)}")
+                    # Continue even if storage fails, as the table is already built
 
-    #---- END loop ------
-    return results
+                results[programme] = agg
+
+            except Exception as e:
+                logging.error(f"Unexpected error processing {programme}: {str(e)}")
+                results[programme] = pd.DataFrame(columns=[
+                    "Fund Source", "Budget Address Type", "Available_Payment_Appropriations",
+                    "Paid_Amount", "Remaining_Payment_Appropriation", "ratio_consumed_Payment_Appropriations"
+                ])
+
+        return results
+
+    except Exception as e:
+        logging.error(f"Unexpected error in build_payment_summary_tables: {str(e)}")
+        return {"HE": pd.DataFrame(), "H2020": pd.DataFrame()}
+#-------------------------------------------------------------------------------------------------
 
 
 def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
@@ -654,6 +814,8 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
         logging.debug("No data to store for table 1b (empty DataFrame).")
 
     return agg_with_subtotals
+#-------------------------------------------------------------------------------------------------
+
 
 def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
     df["FR ILC Date (dd/mm/yyyy)"] = pd.to_datetime(df["FR ILC Date (dd/mm/yyyy)"], errors="coerce")
@@ -745,7 +907,7 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
             decimals=2)
         .cols_label(
             L1_Commitment_1=html("L1 Commitment<br>(1)"),
-            L2_Commitment_2=html("L2 Commitments<br>(2)"),
+            L2_Commitment_2=html("L2 Commitment<br>(2)"),
             RAC_on_L1_Commitment_3=html("RAC on L1 Commitment <br>(3) = (1) - (2)"),
             ratio_L2_on_L1_Commitment_4=html("% L1 consumed by L2 (indirect)<br> (4) = (2) / (1)")
         )
@@ -776,10 +938,6 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
             style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
             locations=loc.body(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
         )
-        .tab_style(
-                style = [style.fill( color="#E6E6FA"), style.text(weight="bold")],
-                locations= loc.stub(rows=[-1]),
-                )
         .tab_options(table_body_border_bottom_color=DARK_BLUE,
                      table_body_border_bottom_width="2px")
         .tab_options(table_border_right_color=DARK_BLUE,
@@ -809,7 +967,6 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
     logging.debug("Stored 1c table and data")
 
     return agg_with_subtotals
-
 # ------------------------------------------------------------------
 # 1. build the context in ONE pass directly from the table
 # ------------------------------------------------------------------
