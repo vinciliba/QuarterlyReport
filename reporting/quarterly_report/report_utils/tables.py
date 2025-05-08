@@ -381,49 +381,152 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
     df["FR ILC Date (dd/mm/yyyy)"] = pd.to_datetime(df["FR ILC Date (dd/mm/yyyy)"], errors="coerce")
     eoy_this = pd.Timestamp(f"{current_year}-12-31")
 
+    # Budget‑type mapping helper
+    def map_budget_type(val):
+        if pd.isna(val):
+            return None
+        v = str(val).upper()
+        if "VOBU" in v: return "VOBU/EFTA/IAR2/2"
+        if "EFTA" in v: return "VOBU/EFTA/IAR2/2"
+        if "IAR2/2" in v: return "VOBU/EFTA/IAR2/2"
+        return val
+
+    df['Fund Source'] = df['Fund Source'].apply(map_budget_type)
+
     filtered = df[(df["FR Earmarked Document Type Desc"] == "Global Commitment") &
                   (df["FR ILC Date (dd/mm/yyyy)"] == eoy_this)].copy()
+
     filtered = filtered.rename(columns={
-        "FR Fund Reservation Desc": "Fund Reservation Description",
-        "FR Accepted Amount": "L1 Commitment (1)",
-        "FR Consumption by PO Amount": "L2 Commitment (2)"
+        "FR Accepted Amount": "L1_Commitment_1",
+        "FR Consumption by PO Amount": "L2_Commitment_2"
     })
 
-    filtered["RAL on L1 Commitment (3)=(1)-(2)"] = filtered["L1 Commitment (1)"] - filtered["L2 Commitment (2)"]
-    filtered["% L2 on L1 Commitment (4)=(2)/(1)"] = filtered["L2 Commitment (2)"] / filtered["L1 Commitment (1)"]
+    agg = (filtered
+           .groupby(["FR Fund Reservation Desc", "Fund Source"],
+                    as_index=False)[
+               ["L1_Commitment_1", "L2_Commitment_2"]]
+           .sum())
 
-    result = filtered[[
-        "Fund Reservation Description", "L1 Commitment (1)", "L2 Commitment (2)",
-        "RAL on L1 Commitment (3)=(1)-(2)", "% L2 on L1 Commitment (4)=(2)/(1)"
+    agg["RAC_on_L1_Commitment_3"] = agg["L1_Commitment_1"] + agg["L2_Commitment_2"]
+    agg["ratio_L2_on_L1_Commitment_4"] = agg["L2_Commitment_2"] / (-1 * agg["L1_Commitment_1"])
+
+    agg = agg[[
+        "FR Fund Reservation Desc", "Fund Source", "L1_Commitment_1", "L2_Commitment_2",
+        "RAC_on_L1_Commitment_3", "ratio_L2_on_L1_Commitment_4"
     ]]
 
-    # Create GreatTables object
-    table = (
-        GT(result)
-        .tab_header(
-            title="Commitment Detail Table 2",
-            subtitle="Global Commitments"
+    # -------- Add subtotals by Fund Source -----------------------------------
+    # Group by Fund Source and compute subtotals
+    subtotals = agg.groupby("Fund Source", as_index=False).agg({
+        "L1_Commitment_1": "sum",
+        "L2_Commitment_2": "sum",
+        "RAC_on_L1_Commitment_3": "sum",
+    })
+
+    # Add the ratio for subtotals
+    subtotals["ratio_L2_on_L1_Commitment_4"] = subtotals["L2_Commitment_2"] / (-1 * subtotals["L1_Commitment_1"])
+    subtotals["FR Fund Reservation Desc"] = "Subtotal"
+
+    # Concatenate original data with subtotals
+    final_rows = []
+    for fund_source in agg["Fund Source"].unique():
+        # Rows for this Fund Source
+        group_rows = agg[agg["Fund Source"] == fund_source].copy()
+        final_rows.append(group_rows)
+        # Corresponding subtotal row
+        subtotal_row = subtotals[subtotals["Fund Source"] == fund_source].copy()
+        final_rows.append(subtotal_row)
+
+    # Combine all rows into the final DataFrame
+    agg_with_subtotals = pd.concat(final_rows, ignore_index=True)
+
+    # -------- GreatTables object -------------------------------------------
+    tbl = (
+        GT(
+            agg_with_subtotals,
+            rowname_col="FR Fund Reservation Desc",
+            groupname_col="Fund Source"
         )
+        .tab_stubhead(label="L1 Commitments")
         .tab_style(
-            style=style.text(font=google_font(name="IBM Plex Mono")),
-            locations=loc.body()
+            style=[
+                style.text(color="white", weight="bold"),
+                style.fill(color=LIGHT_BLUE),
+                style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE};border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE}"),
+                style.css("max-width:200px; line-height:1.2"),
+            ],
+            locations=loc.row_groups()
         )
-        .tab_source_note(source_note="Source: Summa DataWharehouse")
-        .tab_source_note(source_note=md("Table_1b"))
-        .tab_stubhead(label="Fund Reservation Description")
         .fmt_number(columns=[
-            "L1 Commitment (1)", "L2 Commitment (2)", "RAL on L1 Commitment (3)=(1)-(2)"
-        ], accounting=True)
-        .fmt_percent(columns=[
-            "% L2 on L1 Commitment (4)=(2)/(1)"
-        ])
+            "L1_Commitment_1",
+            "L2_Commitment_2",
+            "RAC_on_L1_Commitment_3"
+        ], accounting=True, decimals=2)
+        .fmt_percent(
+            columns="ratio_L2_on_L1_Commitment_4",
+            decimals=2)
+        .cols_label(
+            L1_Commitment_1=html("L1 Commitment<br>(1)"),
+            L2_Commitment_2=html("L2 Commitments<br>(2)"),
+            RAC_on_L1_Commitment_3=html("RAC on L1 Commitment <br>(3) = (1) - (2)"),
+            ratio_L2_on_L1_Commitment_4=html("% L1 consumed by L2 (indirect)<br> (4) = (2) / (1)")
+        )
+        .opt_table_font(font="Arial")
+        .tab_style(
+            style=[style.fill(color=BLUE),
+                   style.text(color="white", weight="bold", align="center"),
+                   style.css("max-width:200px; line-height:1.2")],
+            locations=loc.column_labels())
+        .tab_style(
+            style=[style.fill(color=BLUE),
+                   style.text(color="white", weight="bold"),
+                   style.css("text-align: center;vertical-align: middle; max-width:200px; line-height:1.2")],
+            locations=loc.stubhead())
+
+        .tab_style(
+        style.borders(weight="1px", color=DARK_BLUE),
+        loc.stub(),
+         )
+
+        .tab_style(
+            style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+            locations=loc.body())
+        .tab_style(
+            style=style.borders(color=DARK_BLUE, weight="2px"),
+            locations=[loc.column_labels(), loc.stubhead()])
+        .tab_style(
+            style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+            locations=loc.body(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
+        )
+        .tab_options(table_body_border_bottom_color=DARK_BLUE,
+                     table_body_border_bottom_width="2px")
+        .tab_options(table_border_right_color=DARK_BLUE,
+                     table_border_right_width="2px")
+        .tab_options(table_border_left_color=DARK_BLUE,
+                     table_border_left_width="2px")
+        .tab_options(table_border_top_color=DARK_BLUE,
+                     table_border_top_width="2px")
+        .tab_options(column_labels_border_top_color=DARK_BLUE,
+                     column_labels_border_top_width="2px")
+
+        .tab_source_note("Source: Summa DataWarehouse")
+        .tab_source_note("BO Report: C0_COMMITMENTS_SUMMA")
     )
 
-    # Insert data and GT table image
-    insert_variable(report, "BudgetModule", "table_1b_commitment_detail", result.to_dict(orient="records"), db_path, anchor="table_1b", gt_table=table)
-    insert_variable(report, "BudgetModule", "anchor_table_1b_commitment_detail", table.to_dict(), db_path, anchor="table_1b_view", gt_table=table)
-    logging.debug(f"Inserted commitment detail table 2 data and image for {report}")
-    return result
+    # -------- store --------------------------------------------------------
+    insert_variable(
+        report=report,
+        module="BudgetModule",
+        var=f"table_1c_L1_previous_year",
+        value=agg_with_subtotals.to_dict(orient="records"),
+        db_path=db_path,
+        anchor=f"table_1c",
+        gt_table=tbl,
+    )
+
+    logging.debug("Stored 1c table and data")
+
+    return agg_with_subtotals
 
 # ------------------------------------------------------------------
 # 1. build the context in ONE pass directly from the table
