@@ -259,7 +259,7 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
                     locations=loc.stub()
                 )
                 .tab_style(
-                    style=style.borders(sides=["all"], color=DARK_BLUE, weight='2px'),
+                    style=style.borders(sides=["all"], color=DARK_BLUE, weight='1px'),
                     locations=loc.body()
                 )
                 .tab_style(
@@ -731,7 +731,7 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
                 style=[
                     style.text(color=DARK_BLUE, weight="bold", font='Arial'),
                     style.fill(color=LIGHT_BLUE),
-                    style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE}"),
+                    style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
                     style.css("max-width:200px; line-height:1.2"),
                 ],
                 locations=loc.row_groups()
@@ -784,6 +784,10 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
                 style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
                 locations=loc.body(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
             )
+            .tab_style(
+                style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
+                locations=loc.stub(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
+            )
             .tab_options(table_body_border_bottom_color=DARK_BLUE,
                          table_body_border_bottom_width="2px")
             .tab_options(table_border_right_color=DARK_BLUE,
@@ -794,6 +798,7 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
                          table_border_top_width="2px")
             .tab_options(column_labels_border_top_color=DARK_BLUE,
                          column_labels_border_top_width="2px")
+
             .tab_source_note("Source: Summa DataWarehouse")
             .tab_source_note("BO Report: C0_COMMITMENTS_SUMMA")
         )
@@ -815,7 +820,6 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
 
     return agg_with_subtotals
 #-------------------------------------------------------------------------------------------------
-
 
 def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
     df["FR ILC Date (dd/mm/yyyy)"] = pd.to_datetime(df["FR ILC Date (dd/mm/yyyy)"], errors="coerce")
@@ -892,7 +896,7 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
             style=[
                 style.text(color=DARK_BLUE, weight="bold", font='Arial'),
                 style.fill(color=LIGHT_BLUE),
-                style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE};border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE}"),
+                style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
                 style.css("max-width:200px; line-height:1.2"),
             ],
             locations=loc.row_groups()
@@ -912,6 +916,10 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
             ratio_L2_on_L1_Commitment_4=html("% L1 consumed by L2 (indirect)<br> (4) = (2) / (1)")
         )
         .opt_table_font(font="Arial")
+        .tab_style(
+                    style=[style.text(weight="bold", color=DARK_BLUE)],
+                    locations=loc.header()
+                    )
         .tab_style(
             style=[style.fill(color=BLUE),
                    style.text(color="white", weight="bold", align="center"),
@@ -938,6 +946,10 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
             style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
             locations=loc.body(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
         )
+        .tab_style(
+                style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
+                locations=loc.stub(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
+            )
         .tab_options(table_body_border_bottom_color=DARK_BLUE,
                      table_body_border_bottom_width="2px")
         .tab_options(table_border_right_color=DARK_BLUE,
@@ -967,6 +979,7 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
     logging.debug("Stored 1c table and data")
 
     return agg_with_subtotals
+          
 # ------------------------------------------------------------------
 # 1. build the context in ONE pass directly from the table
 # ------------------------------------------------------------------
