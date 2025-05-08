@@ -396,6 +396,16 @@ def get_suggested_structure(report_name, db_path='database/reporting.db'):
         cur.execute(sql, (report_name,))
         return [r[0] for r in cur.fetchall()]
 
+def alias_exists(alias: str, db_path: str = "database/reporting.db") -> bool:
+    """
+    Return True if <alias> appears in file_alias_map.alias, else False.
+    """
+    with sqlite3.connect(db_path) as con:
+        cur = con.execute(
+            "SELECT 1 FROM file_alias_map WHERE alias = ? LIMIT 1", (alias,)
+        )
+        return cur.fetchone() is not None
+    
 # ─────────────────────────────────────────
 # Report structure helpers  (ADD this)
 # ─────────────────────────────────────────
@@ -805,3 +815,35 @@ def compute_cutoff_related_dates(cutoff_date: date) -> dict:
         "end_year_report": end_year_report,
         "quarter_period": quarter_period,
     }
+
+# ingestion/db_utils.py
+def get_existing_rule_for_report(report, filename, db_path="database/reporting.db"):
+    """
+    Return (sheet_name, start_row) for <filename>.
+    • If sheet_rules has a report_name column → use it.
+    • Otherwise fall back to any rule that matches the filename only.
+    """
+    with sqlite3.connect(db_path) as con:
+        # 1. detect columns
+        cols = [c[1] for c in con.execute("PRAGMA table_info(sheet_rules)")]
+
+        if "report_name" in cols:
+            row = con.execute(
+                """SELECT sheet_name, start_row
+                     FROM sheet_rules
+                    WHERE report_name = ? AND filename = ?
+                    LIMIT 1""",
+                (report, filename)
+            ).fetchone()
+            if row:        # exact (report+file) rule found
+                return row
+
+        # 2. fallback: any rule for this filename
+        row = con.execute(
+            """SELECT sheet_name, start_row
+                 FROM sheet_rules
+                WHERE filename = ?
+                LIMIT 1""",
+            (filename,)
+        ).fetchone()
+        return row if row else (None, None)

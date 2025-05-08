@@ -13,7 +13,7 @@ from ingestion.db_utils import (
     define_expected_table, get_suggested_structure,
     load_report_params, upsert_report_param, save_report_object,
     get_report_object, list_report_objects, delete_report_object, get_variable_status,
-    fetch_vars_for_report, compute_cutoff_related_dates, fetch_gt_image
+    fetch_vars_for_report, compute_cutoff_related_dates, fetch_gt_image, insert_variable, get_existing_rule_for_report
 )
 from ingestion.report_check import check_report_readiness
 import mammoth, io, docx
@@ -184,6 +184,16 @@ if selected_section == "workflow":
         derived = compute_cutoff_related_dates(cutoff_date)
         for k, v in derived.items():
             upsert_report_param(chosen_report, k, v, DB_PATH)
+
+        # 2) store ONLY the quarter_period in report_variables
+        insert_variable(
+            report = chosen_report,
+            module = "DateParams",            # any module label you like
+            var    = "quarter_period",        # variable name
+            value  = derived["quarter_period"],
+            db_path= DB_PATH,
+            anchor = "quarter_period"         # anchor name = var name
+        )
         st.success("✅ Derived date-based parameters saved to report_params.")
 
     # Step 3.2 Amendment Report Date hardcoding 
@@ -471,9 +481,9 @@ elif selected_section == "export_report":
                 out_path = Path("app_files") / filename
                 st.session_state.staged_docx.save(str(out_path))
                 st.success(f"Saved partial report as `{filename}` in `app_files/`")
-    #--------------------------------------------------------------------------
-    # --- Section for Creating a New Report -----------------------------------
-    #--------------------------------------------------------------------------
+#--------------------------------------------------------------------------
+# --- SINGLE UPLOAD -----------------------------------
+#--------------------------------------------------------------------------
 elif selected_section == "single_upload":
     st.title("📂 Single File Upload")
     # Load reports from DB
@@ -843,172 +853,121 @@ elif selected_section == "single_upload":
                     st.error("❌ Upload failed: Could not load data from file.")
 
 
-    # --- End of single upload section --- 
-
+# ------------------------------------------------------------------
+# 4) MASS UPLOAD
+# ------------------------------------------------------------------
 elif selected_section == "mass_upload":
-    # --- Section: Mass Upload (Original Tab 2) ---
-    print("DEBUG: Entering mass_upload section") # Debug print
-    try:
-        st.subheader("📦 Mass Upload from `app_files/`")
-        st.write("Place .xlsx or .csv files in the `app_files/` directory.")
+    st.subheader("📦 Mass Upload")
 
+    # ─────────────────────────── 1. drag-and-drop ──────────────────────────
+    uploads = st.file_uploader(
+        "Drag & drop .xlsx / .xls / .csv files here, or click to select",
+        type=["xlsx", "xls", "csv"],
+        accept_multiple_files=True
+    )
+    for uf in uploads:
+        dest = Path("app_files") / uf.name
+        dest.write_bytes(uf.getbuffer())
+        st.success(f"Saved **{uf.name}** to `app_files/`")
 
-        reports_df = get_all_reports(DB_PATH)
-        # st.write("🛠️ Debug: Reports loaded:", reports_df.shape) # Keep debug if helpful
+    # ─────────────────────────── 2. choose report ──────────────────────────
+    reports_df = get_all_reports(DB_PATH)
+    if reports_df.empty:
+        st.warning("No reports yet – create one in *Single File Upload*.")
+        st.stop()
 
-        if reports_df.empty:
-            st.warning("⚠️ No reports found. Please create a report in 'Single File Upload' section first.")
+    chosen_report = st.selectbox("Report:", reports_df["report_name"])
+
+    all_files = [f for f in os.listdir("app_files")
+                 if f.lower().endswith((".csv", ".xlsx", ".xls"))]
+    if not all_files:
+        st.info("No files found in `app_files/`.")
+        st.stop()
+
+    # ─────────────────────────── 3. pre-flight checks ──────────────────────
+    ready_files, not_ready = [], []
+
+    for file in all_files:
+        alias = get_alias_for_file(file, DB_PATH)
+        sheet, start_row = get_existing_rule_for_report(chosen_report, file, DB_PATH)
+
+        if alias and alias_exists(alias, DB_PATH) and sheet:
+            ready_files.append((file, alias, sheet, start_row or 0))
         else:
-            chosen_report = st.selectbox("Select report to upload files for:", reports_df["report_name"].tolist())
+            not_ready.append(file)
 
-            all_files = [f for f in os.listdir("app_files") if f.endswith((".csv", ".xlsx", ".xls"))]
-            # st.write("🛠️ Debug: Files found:", all_files) # Keep debug if helpful
+    # display status
+    if ready_files:
+        st.success("Files ready for upload: " + ", ".join(f"`{f[0]}`" for f in ready_files))
+    if not_ready:
+        st.warning(
+            "Files **not ready** (missing alias or loading rule): "
+            + ", ".join(f"`{f}`" for f in not_ready)
+            + ".\nOpen **Single File Upload** to create the missing alias/rule."
+        )
 
-            if not all_files:
-                st.info("📂 No files found in the `app_files/` folder.")
-            else:
-                st.write("🗂️ Files ready for upload:", all_files)
+    # ─────────────────────────── 4. upload button ──────────────────────────
+    if ready_files:
+        if st.button("🚀 Upload All Ready Files"):
+            ok_cnt, fail_cnt = 0, 0
+            with st.spinner("Uploading…"):
+                for file, alias, sheet, start_row in ready_files:
+                    fp = Path("app_files") / file
+                    ext = fp.suffix.lower()
 
-                if st.button("🚀 Upload All"):
-                    st.info("Starting mass upload...")
-                    upload_successful_count = 0
-                    upload_failed_count = 0
-                    for file in all_files:
-                        st.write(f"--- Processing `{file}` ---")
-                        file_path = os.path.join("app_files", file)
-                        filename_wo_ext = os.path.splitext(file)[0]
-                        ext = os.path.splitext(file)[1].lower()
+                    # 4a read file
+                    try:
+                        if ext in {".xlsx", ".xls"}:
+                            df = pd.read_excel(fp, sheet_name=sheet, skiprows=start_row)
+                        else:
+                            df = pd.read_csv(fp, skiprows=start_row)
+                    except Exception as e:
+                        st.error(f"❌ **{file}** – read error: {e}")
+                        fail_cnt += 1
+                        continue
 
-                        # --- Get Rules ---
-                        sheet, start_row = get_existing_rule(file, DB_PATH)
-                        start_row = start_row or 0
-                        sheet_to_use = sheet # Initialize sheet_to_use
-
-
-                        df = None
+                    # 4b transform rules (if any)
+                    rules = get_transform_rules(file, sheet, DB_PATH)
+                    if rules:
                         try:
-                            # --- Read File ---
-                            if ext in [".xlsx", ".xls"]:
-                                try:
-                                    xls = pd.ExcelFile(file_path)
-                                    if not sheet or sheet not in xls.sheet_names:
-                                        st.warning(f"⚠️ `{file}`: No valid sheet rule found or sheet '{sheet}' not in file. Skipping.")
-                                        upload_failed_count += 1
-                                        continue # Skip this file
-                                    sheet_to_use = sheet # Use saved sheet
-                                    df = xls.parse(sheet_to_use, skiprows=start_row)
-                                except FileNotFoundError:
-                                     st.error(f"❌ `{file}`: File not found during processing. Skipping.")
-                                     upload_failed_count += 1
-                                     continue
-                                except Exception as parse_error:
-                                     st.error(f"❌ `{file}`: Error parsing sheet '{sheet_to_use}' starting at row {start_row}: {parse_error}. Skipping.")
-                                     print(traceback.format_exc())
-                                     upload_failed_count += 1
-                                     continue
-
-                            elif ext == ".csv":
-                                sheet_to_use = "CSV_SHEET" # Placeholder for CSV rule lookup
-                                try:
-                                     df = pd.read_csv(file_path, skiprows=start_row)
-                                except FileNotFoundError:
-                                     st.error(f"❌ `{file}`: File not found during processing. Skipping.")
-                                     upload_failed_count += 1
-                                     continue
-                                except Exception as csv_error:
-                                     st.error(f"❌ `{file}`: Error reading CSV file starting at row {start_row}: {csv_error}. Skipping.")
-                                     print(traceback.format_exc())
-                                     upload_failed_count += 1
-                                     continue
-                            else:
-                                st.warning(f"⚠️ `{file}`: Unsupported file format. Skipping.")
-                                upload_failed_count += 1
-                                continue
-
-                            # --- Apply Transform Rules ---
-                            rules = get_transform_rules(file, sheet_to_use, DB_PATH)
-                            if rules and df is not None:
-                                included_cols_original_names = [r["original_column"] for r in rules if r["included"] and r["original_column"] in df.columns]
-                                rename_map = {r["original_column"]: r["renamed_column"] for r in rules if r["included"] and r["original_column"] in df.columns}
-
-                                try:
-                                     df = df[included_cols_original_names]
-                                     df.rename(columns=rename_map, inplace=True)
-                                     st.write(f"Applied transform rules for `{file}`.")
-                                except KeyError as e:
-                                     st.error(f"❌ `{file}`: Error applying transformations - column missing: {e}. Skipping.")
-                                     upload_failed_count += 1
-                                     continue
-                                except Exception as e:
-                                     st.error(f"❌ `{file}`: Unexpected error applying transformations: {e}. Skipping.")
-                                     print(traceback.format_exc())
-                                     upload_failed_count += 1
-                                     continue
-
-
-                            # --- Upload to DB ---
-                            if df is not None and not df.empty:
-                                # --- Alias Handling ---
-                                # In mass upload, you need a way to get the alias for each file.
-                                # Option A: Assume alias is filename_wo_ext (less flexible)
-                                # Option B: Look up alias in file_alias_map based on filename
-                                # Option B is better. Need to ensure files were 'registered' with an alias first (e.g., via Single Upload or another process)
-                                # If no alias is found, should it be skipped?
-                                file_alias = get_alias_for_file(file, DB_PATH)
-                                if not file_alias:
-                                     st.warning(f"⚠️ `{file}`: No alias registered for this file. Skipping upload. Please register it first (e.g., via Single Upload).")
-                                     upload_failed_count += 1
-                                     continue
-
-                                now = datetime.now().isoformat()
-                                default_raw_table_name = f"raw_{filename_wo_ext.lower()}" # Still track this
-
-                                with sqlite3.connect(DB_PATH) as conn:
-                                     # Insert upload log using the alias
-                                    upload_id = insert_upload_log(
-                                         file, default_raw_table_name, df.shape[0], df.shape[1], chosen_report, table_alias=file_alias, db_path=DB_PATH
-                                     )
-
-                                    # Update alias status (needs file_id)
-                                    cur = conn.cursor()
-                                    cur.execute("SELECT id FROM file_alias_map WHERE filename = ?", (file,))
-                                    file_id_row = cur.fetchone()
-                                    file_id = file_id_row[0] if file_id_row else None # Should exist if get_alias_for_file worked
-
-                                    if file_id:
-                                         update_alias_status(file_alias, file, db_path=DB_PATH)
-
-
-                                    # Save the data to a table named after the alias
-                                    final_table_name_in_db = file_alias # Use alias for final tables
-                                    df["upload_id"] = upload_id # Add upload_id column
-                                    df["uploaded_at"] = now # Add uploaded_at column
-
-                                    # Save to DB
-                                    df.to_sql(final_table_name_in_db, conn, index=False, if_exists="replace") # Use replace
-
-
-                                st.success(f"✅ Uploaded `{file}` to table `{final_table_name_in_db}` (Alias: `{file_alias}`).")
-                                upload_successful_count += 1
-                            elif df is not None and df.empty:
-                                st.warning(f"⚠️ `{file}`: File processed successfully, but resulted in an empty dataframe after applying rules. No data uploaded.")
-                                upload_failed_count += 1
-                            # else df is None -> already handled by continue
-
+                            keep = [r["original_column"] for r in rules
+                                    if r["included"] and r["original_column"] in df.columns]
+                            rename = {r["original_column"]: r["renamed_column"]
+                                      for r in rules if r["included"] and r["original_column"] in df.columns}
+                            df = df[keep].rename(columns=rename)
                         except Exception as e:
-                            st.error(f"❌ An unhandled error occurred processing `{file}`: {e}")
-                            print(traceback.format_exc()) # Print traceback to console
-                            upload_failed_count += 1
-                        st.write("--- Done processing `{file}` ---")
+                            st.error(f"❌ **{file}** – transform error: {e}")
+                            fail_cnt += 1
+                            continue
 
-                    st.markdown("---") # Separator after mass upload
-                    st.info(f"Mass Upload Summary: {upload_successful_count} successful, {upload_failed_count} failed.")
-                    st.rerun() # Rerun to show updated status/history
+                    # 4c write to DB
+                    try:
+                        upload_id = insert_upload_log(
+                            file, f"raw_{fp.stem.lower()}",
+                            df.shape[0], df.shape[1], chosen_report,
+                            table_alias=alias, db_path=DB_PATH
+                        )
+                        df["upload_id"] = upload_id
+                        df["uploaded_at"] = datetime.now().isoformat()
 
-    except Exception as e:
-        st.error(f"💥 An error occurred in the Mass Upload section: {e}")
-        print(traceback.format_exc()) # Print traceback to console
+                        with sqlite3.connect(DB_PATH) as con:
+                            df.to_sql(alias, con, if_exists="replace", index=False)
 
+                        update_alias_status(alias, file, DB_PATH)
+                        st.success(f"✅ {file} → table **{alias}**")
+                        ok_cnt += 1
+                    except Exception as e:
+                        st.error(f"❌ **{file}** – DB error: {e}")
+                        traceback.print_exc()
+                        fail_cnt += 1
+
+            st.info(f"Upload summary – {ok_cnt} OK · {fail_cnt} failed")
+    else:
+        st.info("No file is fully configured yet, so the upload button is hidden.")
+
+# ------------------------------------------------------------------
+# 5) HISTORY
+# ------------------------------------------------------------------
 elif selected_section == "history":
     # --- Section: Upload History & Management ---
     print("DEBUG: Entering history section")
@@ -1595,13 +1554,6 @@ elif selected_section == "report_structure":
     # ---------- editable JSON textarea ----------------------------------
     txt_key = "param_editor"           # 1-line alias for the textarea’s key
 
-
-    # # ----------  one-off fill of the textarea -------------------------
-    # def refresh_editor_from_params() -> None:
-    #     """Put the current `params` dict into the text-area."""
-    #     st.session_state[txt_key] = json.dumps(params, indent=2)
-
-
     # --- if a widget (Add-key / Quick-add) set a _params_draft, promote it
     if "_params_draft" in st.session_state:
         st.session_state[txt_key] = st.session_state.pop("_params_draft")
@@ -1629,20 +1581,6 @@ elif selected_section == "report_structure":
         st.error(f"JSON syntax error: {e}")
         st.stop()
 
-    # ---------- 3. ADD NEW TOP-LEVEL KEY  ----------------------------------------
-    # with st.expander("➕ Add a new top-level key", expanded=False):
-    #     new_key   = st.text_input("Key name", key="new_top_key")
-    #     init_type = st.selectbox("Initial type", ["list", "dict", "str", "int"], key="init_type")
-    #     if st.button("Create key"):
-    #         if new_key in params:
-    #             st.warning("Key already exists!")
-    #         else:
-    #             params[new_key] = [] if init_type == "list" else {} if init_type == "dict" \
-    #                             else "" if init_type == "str"  else 0
-    #             refresh_editor_from_params()
-    #             st.session_state.pop("new_top_key", None)
-    #             st.toast("✅ key created")
-    #             st.rerun()
 
     # -------------- Add new top-level key --------------
     with st.expander("➕ Add a new top-level key", expanded=False):
