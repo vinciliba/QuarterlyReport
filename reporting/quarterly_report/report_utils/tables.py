@@ -726,7 +726,7 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
                 style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
                 locations=loc.header()
             )
-            .tab_stubhead(label="Commitment Type (L1 or L2 Direct)")
+            .tab_stubhead(label="Budget Address Type")
             .tab_style(
                 style=[
                     style.text(color=DARK_BLUE, weight="bold", font='Arial'),
@@ -746,9 +746,9 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
                 decimals=2
             )
             .cols_label(
-                L1_Commitment_or_Direct_L2_1=html("L1 Commitment or Direct L2<br>(1)"),
-                L2_Commitment_or_Payment_2=html("L2 Commitment or Payment<br>(2)"),
-                RAC_on_L1_Commitment_or_RAL_Direct_L2_3=html("RAC on L1 Commitment or RAL Direct L2<br>(3) = (1) + (2)"),
+                L1_Commitment_or_Direct_L2_1=html("L1 Commitments <br> or Direct L2 Commitments<br>(1)"),
+                L2_Commitment_or_Payment_2=html("L2 Commitments or Payments<br>(2)"),
+                RAC_on_L1_Commitment_or_RAL_Direct_L2_3=html("RAC on L1 Commitments or RAL Direct L2<br>(3) = (1) + (2)"),
                 Commitment_Implementation_rate_4=html("% Commitment Implementation Rate<br>(4) = (2) / (1)")
             )
             .opt_table_font(font="Arial")
