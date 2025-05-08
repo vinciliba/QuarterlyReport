@@ -214,9 +214,9 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
                 .cols_label(
                     Available_Commitment_Appropriations=html("Available Commitment Appropriations<br>(1)"),
                     L1_Commitment=html("L1 Commitments or <br> Direct L2 <br>(2)"),
-                    RAC_on_Appropriation=html("RAC on Appropriation<br>(3)=(1)-(2)"),
+                    RAC_on_Appropriation=html("RAC on Appropriation<br>(3) = (1) - (2)"),
                     ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations=html(
-                        "% Commitment Appropriations by <br> L1 and Direct L2 Commitments <br> (4) = (2)/(1)"
+                        "% Commitment Appropriations by <br> L1 and Direct L2 Commitments <br> (4) = (2) / (1)"
                     )
                 )
                 # Arial font
@@ -481,8 +481,8 @@ def build_payment_summary_tables(
                         .cols_label(
                             Available_Payment_Appropriations=html("Payment Appropriations<br>(1)"),
                             Paid_Amount=html("Payment Credits consumed<br>(Acceptance Date)<br>(2)"),
-                            Remaining_Payment_Appropriation=html("Remaining Payment Appropriations<br>(3)=(1)-(2)"),
-                            ratio_consumed_Payment_Appropriations=html("% Payment Consumed<br>(4) = (2)/(1)")
+                            Remaining_Payment_Appropriation=html("Remaining Payment Appropriations<br>(3) = (1) - (2)"),
+                            ratio_consumed_Payment_Appropriations=html("% Payment Consumed<br>(4) = (2) / (1)")
                         )
                         .opt_table_font(font="Arial")
                         .tab_style(
@@ -910,9 +910,9 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
             columns="ratio_L2_on_L1_Commitment_4",
             decimals=2)
         .cols_label(
-            L1_Commitment_1=html("L1 Commitment<br>(1)"),
-            L2_Commitment_2=html("L2 Commitment<br>(2)"),
-            RAC_on_L1_Commitment_3=html("RAC on L1 Commitment <br>(3) = (1) - (2)"),
+            L1_Commitment_1=html("L1 Commitments<br>(1)"),
+            L2_Commitment_2=html("L2 Commitments<br>(2)"),
+            RAC_on_L1_Commitment_3=html("RAC on L1 Commitments <br>(3) = (1) - (2)"),
             ratio_L2_on_L1_Commitment_4=html("% L1 consumed by L2 (indirect)<br> (4) = (2) / (1)")
         )
         .opt_table_font(font="Arial")
