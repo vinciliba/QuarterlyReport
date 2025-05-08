@@ -461,7 +461,7 @@ def build_payment_summary_tables(
                         .tab_stubhead(label="Budget Address Type")
                         .tab_style(
                             style=[
-                                style.text(color="white", weight="bold"),
+                                style.text(color=DARK_BLUE, weight="bold", font='Arial'),
                                 style.fill(color=LIGHT_BLUE),
                                 style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
                                 style.css("max-width:200px; line-height:1.2"),
@@ -890,7 +890,7 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
         .tab_stubhead(label="L1 Commitments")
         .tab_style(
             style=[
-                style.text(color="white", weight="bold"),
+                style.text(color=DARK_BLUE, weight="bold", font='Arial'),
                 style.fill(color=LIGHT_BLUE),
                 style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE};border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE}"),
                 style.css("max-width:200px; line-height:1.2"),
