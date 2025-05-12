@@ -24,7 +24,8 @@ BUDGET_FOLLOWUP_ALIAS = "budget_follow_up_report"
 ETHICS_ALIAS          = "ethics_requirements_and_issues"
 
 EXCLUDE_TOPICS        = [
-    "ERC-2023-SJI-1", "ERC-2023-SJI",
+    "ERC-2023-SJI-1", 
+    "ERC-2023-SJI",
     "ERC-2024-PERA",
     "HORIZON-ERC-2022-VICECHAIRS-IBA",
     "HORIZON-ERC-2023-VICECHAIRS-IBA",
@@ -247,3 +248,4 @@ class GrantsModule(BaseModule):
 
         log.info("GrantsModule finished – %s rows processed.", len(df_grants))
         return ctx
+
