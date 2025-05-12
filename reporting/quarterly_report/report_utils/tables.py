@@ -4,7 +4,7 @@ from great_tables import GT, md, google_font, style, loc, html
 import sqlite3
 from ingestion.db_utils import insert_variable, upsert_report_param
 import logging
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -44,6 +44,11 @@ def fetch_latest_table_data(conn: sqlite3.Connection, table_alias: str, cutoff: 
     )
     logging.debug(f"Fetched {len(df)} rows from {table_alias}")
     return df
+
+
+# ------------------------------------------------------------------
+# 1. BUDGET MODULE
+# ------------------------------------------------------------------
 
 def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: str, db_path: str) -> pd.DataFrame:
     """
@@ -1011,3 +1016,286 @@ def build_docx_context(report_name: str, db_path: str) -> dict:
             except (TypeError, ValueError):
                 context[anchor] = row["value"]   # plain string / number
     return context
+
+# ------------------------------------------------------------------
+# 2. GRANTING MODULE
+# ------------------------------------------------------------------
+
+def build_signatures_table(
+    df: pd.DataFrame,
+    cutoff: datetime,
+    scope_months: list,
+    exclude_topics: list,
+    report: str,
+    db_path: str
+) -> Dict[str, Union[pd.DataFrame, GT]]:
+    """
+    Build a table summarizing grant signatures and under-preparation projects by topic.
+
+    Args:
+        df (pd.DataFrame): Input DataFrame with grant data.
+        cutoff (datetime): Cutoff date to determine the current quarter and filter data.
+        scope_months (list): List of months to include in the report.
+        exclude_topics (list): List of topics to exclude from the analysis.
+        report (str): Name of the report for storing the table.
+        db_path (str): Path to the SQLite database for storing the table.
+
+    Returns:
+        dict
+            keys = "data" (DataFrame), "table" (GreatTable object)
+    """
+    # Define expected columns for validation
+    expected_columns = ["GA Signature - Commission", "Topic", "SIGNED", "STATUS "]
+
+    # Validate input DataFrame
+    if not isinstance(df, pd.DataFrame):
+        logging.error("Input 'df' is not a pandas DataFrame.")
+        return {"data": pd.DataFrame(), "table": None}
+
+    if df.empty:
+        logging.warning("Input DataFrame is empty. Returning empty DataFrame and None table.")
+        return {"data": pd.DataFrame(), "table": None}
+
+    # Check for missing columns
+    missing_columns = [col for col in expected_columns if col not in df.columns]
+    if missing_columns:
+        logging.error(f"Missing required columns: {missing_columns}")
+        return {"data": pd.DataFrame(), "table": None}
+
+    # Log input DataFrame info
+    logging.debug(f"Input DataFrame shape: {df.shape}")
+    logging.debug(f"Input DataFrame columns: {df.columns.tolist()}")
+
+    try:
+        # Filter in-scope data for signed grants
+        in_scope = (
+            df["GA Signature - Commission"].dt.year.eq(cutoff.year) &
+            df["GA Signature - Commission"].dt.month_name().isin(scope_months)
+        )
+
+        signed = df.loc[in_scope].copy()
+        signed = signed[~signed["Topic"].isin(exclude_topics)]
+
+        # Create pivot table for signed data
+        tab3_signed = (
+            signed.pivot_table(
+                index=signed["GA Signature - Commission"].dt.month_name(),
+                columns="Topic",
+                values="SIGNED",
+                aggfunc="sum",
+                fill_value=0,
+            )
+            .reindex(scope_months)
+            .reset_index(names="Signature Month")
+        )
+
+        # Add TOTAL column for signed data
+        tab3_signed["TOTAL"] = tab3_signed.iloc[:, 1:].sum(axis=1)
+
+        # Define a mapping of months to quarters
+        month_to_quarter = {
+            "January": 1, "February": 1, "March": 1,
+            "April": 2, "May": 2, "June": 2,
+            "July": 3, "August": 3, "September": 3,
+            "October": 4, "November": 4, "December": 4
+        }
+
+        # Add a quarter column to tab3_signed
+        tab3_signed["Quarter"] = tab3_signed["Signature Month"].map(month_to_quarter)
+
+        # Determine the current quarter based on cutoff date
+        current_quarter = (cutoff.month - 1) // 3 + 1
+
+        # Prepare final DataFrame for signed data with conditional quarterly aggregation
+        if not tab3_signed.empty:
+            final_rows = []
+            
+            # Check if the data contains exactly three months
+            unique_months = tab3_signed["Signature Month"].nunique()
+            max_quarter = tab3_signed["Quarter"].max()
+
+            if unique_months == 3 and max_quarter == 1:
+                # Special case: exactly three months, all in Quarter 1, show individually
+                final_rows.append(tab3_signed.drop(columns=["Quarter"]))
+            else:
+                # General case: aggregate previous quarters, show current quarter months individually
+                for quarter in sorted(tab3_signed["Quarter"].unique()):
+                    quarter_data = tab3_signed[tab3_signed["Quarter"] == quarter].copy()
+                    
+                    if quarter < current_quarter:
+                        # Aggregate previous quarters into a single row
+                        quarter_sum = quarter_data.iloc[:, 1:-1].sum(numeric_only=True)
+                        quarter_row = pd.DataFrame({
+                            "Signature Month": [f"Quarter {quarter}"],
+                            **{col: [quarter_sum[col]] for col in quarter_data.columns[1:-2]},
+                            "TOTAL": [quarter_sum["TOTAL"]]
+                        })
+                        final_rows.append(quarter_row)
+                    else:
+                        # Keep individual months for the current quarter
+                        quarter_data = quarter_data.drop(columns=["Quarter"])
+                        final_rows.append(quarter_data)
+
+            # Compute Grand Total for signed data
+            col_totals = pd.DataFrame(tab3_signed.iloc[:, 1:-1].sum(), columns=["Grand Total"]).T
+            col_totals.insert(0, "Signature Month", "Grand Total")
+            for col in tab3_signed.columns[1:-2]:
+                col_totals[col] = tab3_signed[col].sum()
+
+            # Combine signed data rows
+            agg_with_totals = pd.concat(final_rows + [col_totals], ignore_index=True)
+        else:
+            agg_with_totals = tab3_signed
+
+        agg_with_totals['Status'] = 'Signed'
+        logging.debug(f"Signed data processed. Shape: {agg_with_totals.shape}")
+
+        # Under-preparation in-scope
+        under_prep = df[df['STATUS '].eq("UNDER_PREPARATION")]
+        under_prep = under_prep[~under_prep["Topic"].isin(exclude_topics)]
+
+        # --- UNDER-PREPARATION • one “total” row --------------------------------
+        tab3_prep = (
+            under_prep
+            .assign(UNDER_PREP=1)
+            .pivot_table(
+                columns="Topic",
+                values="UNDER_PREP",
+                aggfunc="sum",
+                fill_value=0,
+            )
+        )
+
+        # Label the row
+        tab3_prep.index = ["Total Under Prep"]
+        tab3_prep = tab3_prep.reset_index(names="Signature Month")
+
+        # Add TOTAL column for under preparation data
+        tab3_prep["TOTAL"] = tab3_prep.iloc[:, 1:].sum(axis=1)
+
+        tab3_prep['Status'] = 'Under Preparation'
+        logging.debug(f"Under Preparation data processed. Shape: {tab3_prep.shape}")
+
+        # Merge agg_with_totals with tab3_prep
+        final_df = pd.concat([agg_with_totals, tab3_prep], ignore_index=True)
+        logging.debug(f"Final DataFrame shape: {final_df.shape}")
+
+        # Define columns to display in the table (starting from index 1)
+        display_columns = final_df.columns[1:-1].tolist()  # Exclude "Signature Month" and "Status"
+
+        # Define colors
+        DARK_BLUE = "#00008B"
+        LIGHT_BLUE = "#ADD8E6"
+        BLUE = "#0000FF"
+
+        # Create the great table
+        if not final_df.empty:
+            tbl = (
+                GT(
+                    final_df,
+                    rowname_col="Signature Month",
+                    groupname_col="Status"
+                )
+                .tab_header(
+                    title="Signatures and Under Preparation by Topic"
+                )
+                .tab_style(
+                    style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
+                    locations=loc.header()
+                )
+                .tab_stubhead(label="Signature Month")
+                .tab_style(
+                    style=[
+                        style.text(color=DARK_BLUE, weight="bold", font='Arial'),
+                        style.fill(color=LIGHT_BLUE),
+                        style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
+                        style.css("max-width:200px; line-height:1.2"),
+                    ],
+                    locations=loc.row_groups()
+                )
+                .fmt_number(
+                    columns=display_columns,
+                    decimals=0,
+                    use_seps=True
+                )
+                .cols_label(
+                    **{col: html(col.replace("_", " ").replace("SyG", "SyG")) for col in display_columns}
+                )
+                .opt_table_font(font='Arial')
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align="center"),
+                        style.css("max-width:200px; line-height:1.2")
+                    ],
+                    locations=loc.column_labels(columns=display_columns)
+                )
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align="center"),
+                        style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
+                    ],
+                    locations=loc.stubhead()
+                )
+                .tab_style(
+                    style=style.borders(weight="1px", color=DARK_BLUE),
+                    locations=loc.stub()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                    locations=loc.body(columns=display_columns)
+                )
+                .tab_style(
+                    style=style.borders(color=DARK_BLUE, weight="2px"),
+                    locations=[loc.column_labels(columns=display_columns), loc.stubhead()]
+                )
+                .tab_style(
+                    style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
+                    locations=loc.body(
+                        rows=final_df.index[final_df["Signature Month"] == "Grand Total"].tolist(),
+                        columns=display_columns
+                    )
+                )
+                .tab_style(
+                    style=[style.fill(color="#D3D3D3"), style.text(weight="bold")],
+                    locations=loc.stub(rows=final_df.index[final_df["Signature Month"] == "Grand Total"].tolist())
+                )
+                .tab_options(
+                    table_body_border_bottom_color=DARK_BLUE,
+                    table_body_border_bottom_width="2px",
+                    table_border_right_color=DARK_BLUE,
+                    table_border_right_width="2px",
+                    table_border_left_color=DARK_BLUE,
+                    table_border_left_width="2px",
+                    table_border_top_color=DARK_BLUE,
+                    table_border_top_width="2px",
+                    column_labels_border_top_color=DARK_BLUE,
+                    column_labels_border_top_width="2px"
+                )
+                .tab_source_note("Source: Quarterly Report Data")
+            )
+        else:
+            tbl = None
+            logging.warning("Final DataFrame is empty. Skipping table creation.")
+
+        # Store the table (similar to the example)
+        try:
+            insert_variable(
+                report=report,
+                module="GrantsModule",
+                var="table_3_signatures_data",
+                value=final_df.to_dict(orient="records"),
+                db_path=db_path,
+                anchor="table_3_signatures",
+                gt_table=tbl
+            )
+            logging.debug(f"Stored table_3_signatures_data ({len(final_df)} rows)")
+        except Exception as e:
+            logging.error(f"Error storing table: {str(e)}")
+
+        return {"data": final_df, "table": tbl}
+
+    except Exception as e:
+        logging.error(f"Unexpected error in build_signatures_table: {str(e)}")
+        return {"data": pd.DataFrame(), "table": None}
