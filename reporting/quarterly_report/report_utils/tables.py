@@ -15,37 +15,6 @@ GRID_CLR    = "#004A99"
 DARK_BLUE   = "#01244B"
 DARK_GREY =   '#242425'
 
-
-# def fetch_latest_table_data(conn: sqlite3.Connection, table_alias: str, cutoff: pd.Timestamp) -> pd.DataFrame:
-#     cutoff_str = cutoff.isoformat()
-#     logging.debug(f"Fetching latest data for table_alias: {table_alias}, cutoff: {cutoff_str}")
-    
-#     query = """
-#         SELECT uploaded_at, id
-#         FROM upload_log
-#         WHERE table_alias = ?
-#         ORDER BY ABS(strftime('%s', uploaded_at) - strftime('%s', ?))
-#         LIMIT 1
-#     """
-#     result = conn.execute(query, (table_alias, cutoff_str)).fetchone()
-#     logging.debug(f"Upload log query result for {table_alias}: {result}")
-
-#     if not result:
-#         logging.warning(f"No uploads found for table alias '{table_alias}' near cutoff {cutoff_str}")
-#         return pd.DataFrame()  # Return empty DataFrame instead of raising ValueError
-
-#     closest_uploaded_at, upload_id = result
-#     logging.debug(f"Selected upload_id: {upload_id}, uploaded_at: {closest_uploaded_at}")
-    
-#     df = pd.read_sql_query(
-#         f"SELECT * FROM {table_alias} WHERE upload_id = ?",
-#         conn,
-#         params=(upload_id,)
-#     )
-#     logging.debug(f"Fetched {len(df)} rows from {table_alias}")
-#     return df
-
-
 # ------------------------------------------------------------------
 # 1. BUDGET MODULE
 # ------------------------------------------------------------------
@@ -1284,13 +1253,13 @@ def build_signatures_table(
             insert_variable(
                 report=report,
                 module="GrantsModule",
-                var="table_3_signatures_data",
+                var="table_3a_signatures_data",
                 value=final_df.to_dict(orient="records"),
                 db_path=db_path,
                 anchor="table_3_signatures",
                 gt_table=tbl
             )
-            logging.debug(f"Stored table_3_signatures_data ({len(final_df)} rows)")
+            logging.debug(f"Stored table_3a_signatures_data ({len(final_df)} rows)")
         except Exception as e:
             logging.error(f"Error storing table: {str(e)}")
 
@@ -1298,4 +1267,344 @@ def build_signatures_table(
 
     except Exception as e:
         logging.error(f"Unexpected error in build_signatures_table: {str(e)}")
+        return {"data": pd.DataFrame(), "table": None}
+
+
+def build_commitments_table(
+    df: pd.DataFrame,
+    cutoff: datetime,
+    scope_months: list,
+    exclude_topics: list,
+    report: str,
+    db_path: str
+) -> Dict[str, Union[pd.DataFrame, GT]]:
+    """
+    Build a table summarizing grant signatures and under-preparation projects by topic.
+
+    Args:
+        df (pd.DataFrame): Input DataFrame with grant data.
+        cutoff (datetime): Cutoff date to determine the current quarter and filter data.
+        scope_months (list): List of months to include in the report.
+        exclude_topics (list): List of topics to exclude from the analysis.
+        report (str): Name of the report for storing the table.
+        db_path (str): Path to the SQLite database for storing the table.
+
+    Returns:
+        dict
+            keys = "data" (DataFrame), "table" (GreatTable object)
+    """
+    # Define expected columns for validation
+    expected_columns = ["GA Signature - Commission", "Topic", "SIGNED", "STATUS "]
+
+    # Validate input DataFrame
+    if not isinstance(df, pd.DataFrame):
+        logging.error("Input 'df' is not a pandas DataFrame.")
+        return {"data": pd.DataFrame(), "table": None}
+
+    if df.empty:
+        logging.warning("Input DataFrame is empty. Returning empty DataFrame and None table.")
+        return {"data": pd.DataFrame(), "table": None}
+
+    # Check for missing columns
+    missing_columns = [col for col in expected_columns if col not in df.columns]
+    if missing_columns:
+        logging.error(f"Missing required columns: {missing_columns}")
+        return {"data": pd.DataFrame(), "table": None}
+
+    # Log input DataFrame info
+    logging.debug(f"Input DataFrame shape: {df.shape}")
+    logging.debug(f"Input DataFrame columns: {df.columns.tolist()}")
+
+    try:
+
+        in_scope = (
+                    df["Commitment AO visa"].dt.year.eq(cutoff.year)  &
+                    df["Commitment AO visa"].dt.month_name().isin(scope_months)
+                )
+
+        committed = df.loc[in_scope].copy()
+        committed = committed[~committed["Topic"].isin(exclude_topics)]
+
+        tab3_commit   = (
+                committed.pivot_table(
+                    index=committed["Commitment AO visa"].dt.month_name(),
+                    columns="Topic",
+                    values="Eu contribution",
+                    aggfunc="sum",
+                    fill_value=0,
+                )
+                .reindex(scope_months)           # Jan-… only those in scope
+                .reset_index(names="Commitment Month")
+            )
+
+        tab3_commit["TOTAL"] = tab3_commit.iloc[:, 1:].sum(axis=1)
+
+        # Define a mapping of months to quarters
+        month_to_quarter = {
+            "January": 1, "February": 1, "March": 1,
+            "April": 2, "May": 2, "June": 2,
+            "July": 3, "August": 3, "September": 3,
+            "October": 4, "November": 4, "December": 4
+        }
+
+        # Add a quarter column to tab3_signed
+        tab3_commit["Quarter"] = tab3_commit["Commitment Month"].map(month_to_quarter)
+
+        # Determine the current quarter based on cutoff date (May 12, 2025 -> Quarter 2)
+        current_quarter = (cutoff.month - 1) // 3 + 1  # Quarter 2 for May
+
+        # Prepare final DataFrame with conditional quarterly aggregation
+        if not tab3_commit.empty:
+            final_rows = []
+            
+            # Check if the data contains exactly three months
+            unique_months = tab3_commit["Commitment Month"].nunique()
+            max_quarter = tab3_commit["Quarter"].max()
+
+            if unique_months == 3 and max_quarter == 1:
+                # Special case: exactly three months, all in Quarter 1, show individually
+                final_rows.append(tab3_commit.drop(columns=["Quarter"]))
+            else:
+                # General case: aggregate previous quarters, show current quarter months individually
+                for quarter in sorted(tab3_commit["Quarter"].unique()):
+                    quarter_data = tab3_commit[tab3_commit["Quarter"] == quarter].copy()
+                    
+                    if quarter < current_quarter:
+                        # Aggregate previous quarters into a single row
+                        quarter_sum = quarter_data.iloc[:, 1:-1].sum(numeric_only=True)
+                        quarter_row = pd.DataFrame({
+                            "Commitment Month": [f"Quarter {quarter}"],
+                            **{col: [quarter_sum[col]] for col in quarter_data.columns[1:-2]},  # Topics
+                            "TOTAL": [quarter_sum["TOTAL"]]
+                        })
+                        final_rows.append(quarter_row)
+                    else:
+                        # Keep individual months for the current quarter
+                        quarter_data = quarter_data.drop(columns=["Quarter"])
+                        final_rows.append(quarter_data)
+
+            # Compute Grand Total
+            col_totals = pd.DataFrame(tab3_commit.iloc[:, 1:-1].sum(), columns=["Grand Total"]).T
+            col_totals.insert(0, "Commitment Month", "Grand Total")
+            for col in tab3_commit.columns[1:-2]:  # Add totals for each topic column
+                col_totals[col] = tab3_commit[col].sum()
+
+            # Combine all rows
+            agg_with_totals = pd.concat(final_rows + [col_totals], ignore_index=True)
+        else:
+            agg_with_totals = tab3_commit
+
+        agg_with_totals['Type'] = 'Committed Amounts(EUR)'
+
+        # Define columns to display in the table (starting from index 1)
+        display_columns = agg_with_totals.columns[1:-1].tolist()  # Exclude "Signature Month" and "Status"
+        
+        #***************** Second table ****************************
+        tab3_commit_n   = (
+        committed.pivot_table(
+            index=committed["Commitment AO visa"].dt.month_name(),
+            columns="Topic",
+            values="Eu contribution",
+            aggfunc="count",
+            fill_value=0,
+        )
+        .reindex(scope_months)           # Jan-… only those in scope
+        .reset_index(names="Commitment Month")
+       )
+
+        tab3_commit_n["TOTAL"] = tab3_commit_n.iloc[:, 1:].sum(axis=1)
+
+        # Define a mapping of months to quarters
+        month_to_quarter = {
+            "January": 1, "February": 1, "March": 1,
+            "April": 2, "May": 2, "June": 2,
+            "July": 3, "August": 3, "September": 3,
+            "October": 4, "November": 4, "December": 4
+        }
+
+        # Add a quarter column to tab3_signed
+        tab3_commit_n["Quarter"] = tab3_commit_n["Commitment Month"].map(month_to_quarter)
+
+        # Determine the current quarter based on cutoff date (May 12, 2025 -> Quarter 2)
+        current_quarter = (cutoff.month - 1) // 3 + 1  # Quarter 2 for May
+
+        # Prepare final DataFrame with conditional quarterly aggregation
+        if not tab3_commit_n.empty:
+            final_rows = []
+            
+            # Check if the data contains exactly three months
+            unique_months = tab3_commit_n["Commitment Month"].nunique()
+            max_quarter = tab3_commit_n["Quarter"].max()
+
+            if unique_months == 3 and max_quarter == 1:
+                # Special case: exactly three months, all in Quarter 1, show individually
+                final_rows.append(tab3_commit_n.drop(columns=["Quarter"]))
+            else:
+                # General case: aggregate previous quarters, show current quarter months individually
+                for quarter in sorted(tab3_commit_n["Quarter"].unique()):
+                    quarter_data = tab3_commit_n[tab3_commit_n["Quarter"] == quarter].copy()
+                    
+                    if quarter < current_quarter:
+                        # Aggregate previous quarters into a single row
+                        quarter_sum = quarter_data.iloc[:, 1:-1].sum(numeric_only=True)
+                        quarter_row = pd.DataFrame({
+                            "Commitment Month": [f"Quarter {quarter}"],
+                            **{col: [quarter_sum[col]] for col in quarter_data.columns[1:-2]},  # Topics
+                            "TOTAL": [quarter_sum["TOTAL"]]
+                        })
+                        final_rows.append(quarter_row)
+                    else:
+                        # Keep individual months for the current quarter
+                        quarter_data = quarter_data.drop(columns=["Quarter"])
+                        final_rows.append(quarter_data)
+
+            # Compute Grand Total
+            col_totals = pd.DataFrame(tab3_commit_n.iloc[:, 1:-1].sum(), columns=["Grand Total"]).T
+            col_totals.insert(0, "Commitment Month", "Grand Total")
+            for col in tab3_commit_n.columns[1:-2]:  # Add totals for each topic column
+                col_totals[col] = tab3_commit_n[col].sum()
+
+            # Combine all rows
+            agg_with_totals_n = pd.concat(final_rows + [col_totals], ignore_index=True)
+        else:
+            agg_with_totals_n = tab3_commit_n
+
+        agg_with_totals_n['Type'] = 'Number of Commitments'
+
+        # Append agg_with_totals_n to agg_with_totals to create the final combined table
+        final_agg_table = pd.concat([agg_with_totals, agg_with_totals_n], ignore_index=True)
+
+
+        # Define colors
+        BLUE        = "#004A99"
+        LIGHT_BLUE = "#d6e6f4"
+        GRID_CLR    = "#004A99"
+        DARK_BLUE   = "#01244B"
+        DARK_GREY =   '#242425'
+        # Define columns to display in the table (starting from index 1)
+        display_columns = final_agg_table.columns[1:-1].tolist()  # Exclude "Signature Month" and "Status"
+        # Create the great table
+        if not final_agg_table.empty:
+            tbl = (
+                GT(
+                    final_agg_table,
+                    rowname_col="Commitment Month",
+                    groupname_col="Type"
+                )
+                .tab_header(
+                    title="HE Commitment Activity"
+                )
+
+                # Format "amounts" group as currency (EUR with 2 decimal places)
+                .fmt_number(
+                    columns=display_columns,
+                    rows=final_agg_table.index[final_agg_table["Type"] == 'Committed Amounts(EUR)'].tolist(),
+                    accounting=True,
+                    decimals=2,
+                    use_seps=True
+                )
+                # Format "numbers" group as integers
+                .fmt_number(
+                    columns=display_columns,
+                    rows=final_agg_table.index[final_agg_table["Type"] == 'Number of Commitments'].tolist(),
+                    decimals=0,
+                    use_seps=True
+                )
+                .tab_style(
+                    style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
+                    locations=loc.header()
+                )
+                .tab_stubhead(label="Commitment Month")
+                .tab_style(
+                    style=[
+                        style.text(color=DARK_BLUE, weight="bold", font='Arial', size='medium'),
+                        style.fill(color=LIGHT_BLUE),
+                        style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
+                        style.css("max-width:200px; line-height:1.2"),
+                    ],
+                    locations=loc.row_groups()
+                )
+
+                .opt_table_font(font="Arial")
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align="center", size='small'),
+                        style.css("max-width:200px; line-height:1.2")
+                    ],
+                    locations=loc.column_labels()
+                )
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align="center",  size='small'),
+                        style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
+                    ],
+                    locations=loc.stubhead()
+                )
+                .tab_style(
+                    style=[style.borders(weight="1px", color=DARK_BLUE),
+                        style.text( size='small')],
+                    locations=loc.stub()
+                )
+                .tab_style(
+                    style=[style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                        style.text( align="center",  size='small')],
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(color=DARK_BLUE, weight="2px"),
+                    locations=[loc.column_labels(), loc.stubhead()]
+                )
+                .tab_style(
+                    style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
+                    locations=loc.body(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
+                )
+                .tab_style(
+                    style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
+                    locations=loc.stub(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
+                )
+                .tab_options(
+                    table_body_border_bottom_color=DARK_BLUE,
+                    table_body_border_bottom_width="2px",
+                    table_border_right_color=DARK_BLUE,
+                    table_border_right_width="2px",
+                    table_border_left_color=DARK_BLUE,
+                    table_border_left_width="2px",
+                    table_border_top_color=DARK_BLUE,
+                    table_border_top_width="2px",
+                    column_labels_border_top_color=DARK_BLUE,
+                    column_labels_border_top_width="2px"
+                )
+                .tab_source_note("Source: Compass")
+                .tab_source_note("Reports : Call Overview Report - Budget Follow-Up Report - Ethics Requirements and Issues " )
+                .tab_style(
+                            style=[ style.text(size="small")],
+                            locations=loc.footer()
+                        )
+                
+            )
+        else:
+            tbl = None
+            logging.warning("Final DataFrame is empty. Skipping table creation.")
+
+        # Store the table (similar to the example)
+        try:
+            insert_variable(
+                report=report,
+                module="GrantsModule",
+                var="table_3_commitments_data",
+                value=final_agg_table.to_dict(orient="records"),
+                db_path=db_path,
+                anchor="table_3b_commitments",
+                gt_table=tbl
+            )
+            logging.debug(f"Stored table_3b_commitments_data ({len(final_agg_table)} rows)")
+        except Exception as e:
+            logging.error(f"Error storing table: {str(e)}")
+
+        return {"data": final_agg_table, "table": tbl}
+
+    except Exception as e:
+        logging.error(f"Unexpected error in build_commitments_table: {str(e)}")
         return {"data": pd.DataFrame(), "table": None}
