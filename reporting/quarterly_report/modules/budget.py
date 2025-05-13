@@ -4,8 +4,8 @@ from reporting.quarterly_report.report_utils.tables import (
     build_commitment_detail_table_1,
     build_commitment_detail_table_2,
     build_payment_summary_tables,
-    fetch_latest_table_data
 )
+from ingestion.db_utils import  fetch_latest_table_data
 import pandas as pd
 import sqlite3
 import logging

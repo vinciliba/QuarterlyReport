@@ -16,34 +16,34 @@ DARK_BLUE   = "#01244B"
 DARK_GREY =   '#242425'
 
 
-def fetch_latest_table_data(conn: sqlite3.Connection, table_alias: str, cutoff: pd.Timestamp) -> pd.DataFrame:
-    cutoff_str = cutoff.isoformat()
-    logging.debug(f"Fetching latest data for table_alias: {table_alias}, cutoff: {cutoff_str}")
+# def fetch_latest_table_data(conn: sqlite3.Connection, table_alias: str, cutoff: pd.Timestamp) -> pd.DataFrame:
+#     cutoff_str = cutoff.isoformat()
+#     logging.debug(f"Fetching latest data for table_alias: {table_alias}, cutoff: {cutoff_str}")
     
-    query = """
-        SELECT uploaded_at, id
-        FROM upload_log
-        WHERE table_alias = ?
-        ORDER BY ABS(strftime('%s', uploaded_at) - strftime('%s', ?))
-        LIMIT 1
-    """
-    result = conn.execute(query, (table_alias, cutoff_str)).fetchone()
-    logging.debug(f"Upload log query result for {table_alias}: {result}")
+#     query = """
+#         SELECT uploaded_at, id
+#         FROM upload_log
+#         WHERE table_alias = ?
+#         ORDER BY ABS(strftime('%s', uploaded_at) - strftime('%s', ?))
+#         LIMIT 1
+#     """
+#     result = conn.execute(query, (table_alias, cutoff_str)).fetchone()
+#     logging.debug(f"Upload log query result for {table_alias}: {result}")
 
-    if not result:
-        logging.warning(f"No uploads found for table alias '{table_alias}' near cutoff {cutoff_str}")
-        return pd.DataFrame()  # Return empty DataFrame instead of raising ValueError
+#     if not result:
+#         logging.warning(f"No uploads found for table alias '{table_alias}' near cutoff {cutoff_str}")
+#         return pd.DataFrame()  # Return empty DataFrame instead of raising ValueError
 
-    closest_uploaded_at, upload_id = result
-    logging.debug(f"Selected upload_id: {upload_id}, uploaded_at: {closest_uploaded_at}")
+#     closest_uploaded_at, upload_id = result
+#     logging.debug(f"Selected upload_id: {upload_id}, uploaded_at: {closest_uploaded_at}")
     
-    df = pd.read_sql_query(
-        f"SELECT * FROM {table_alias} WHERE upload_id = ?",
-        conn,
-        params=(upload_id,)
-    )
-    logging.debug(f"Fetched {len(df)} rows from {table_alias}")
-    return df
+#     df = pd.read_sql_query(
+#         f"SELECT * FROM {table_alias} WHERE upload_id = ?",
+#         conn,
+#         params=(upload_id,)
+#     )
+#     logging.debug(f"Fetched {len(df)} rows from {table_alias}")
+#     return df
 
 
 # ------------------------------------------------------------------

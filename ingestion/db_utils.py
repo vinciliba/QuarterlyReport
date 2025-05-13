@@ -7,7 +7,8 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any,  Dict, Type
+import importlib.util
 # ─────────────────────────────────────────
 # Init DB with all required tables
 # ─────────────────────────────────────────
@@ -409,6 +410,73 @@ def alias_exists(alias: str, db_path: str = "database/reporting.db") -> bool:
 # ─────────────────────────────────────────
 # Report structure helpers  (ADD this)
 # ─────────────────────────────────────────
+
+def ensure_report_modules_table(db_path: str) -> None:
+    """Ensure the report_modules table exists in the database."""
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS report_modules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_name TEXT NOT NULL,
+                module_name TEXT NOT NULL,
+                run_order INTEGER NOT NULL,
+                enabled BOOLEAN NOT NULL,
+                UNIQUE(report_name, module_name)
+            )
+        """)
+        conn.commit()
+
+logger = logging.getLogger(__name__)
+
+def crawl_for_modules_registry(reporting_root: str = "reporting") -> Dict[str, Dict[str, Type[Any]]]:
+    """
+    Crawl the reporting folder for modules_registry.py files and load their MODULES dictionaries.
+
+    Args:
+        reporting_root (str): Root directory to start the search (default: "reporting").
+
+    Returns:
+        Dict[str, Dict[str, Type[Any]]]: Mapping of report package paths to their MODULES dictionaries.
+    """
+    modules_mapping = {}
+    reporting_path = Path(reporting_root)
+
+    if not reporting_path.exists():
+        logger.error(f"Reporting directory not found: {reporting_root}")
+        return modules_mapping
+
+    # Walk through the reporting directory
+    for root, dirs, files in os.walk(reporting_path):
+        if "modules_registry.py" in files:
+            registry_path = Path(root) / "modules_registry.py"
+            logger.debug(f"Found modules_registry.py at: {registry_path}")
+            try:
+                # Convert the file path to a module path
+                relative_path = os.path.relpath(registry_path, reporting_path.parent)
+                module_name = relative_path.replace(os.sep, ".").replace(".py", "")
+                logger.debug(f"Attempting to load module: {module_name}")
+                
+                spec = importlib.util.spec_from_file_location(module_name, registry_path)
+                if spec is None:
+                    logger.error(f"Could not create spec for {registry_path}")
+                    continue
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
+                logger.debug(f"Successfully loaded module: {module_name}")
+
+                # Extract the MODULES dictionary
+                if hasattr(module, "MODULES"):
+                    modules_mapping[module_name] = module.MODULES
+                    logger.debug(f"Loaded MODULES from {module_name}: {list(module.MODULES.keys())}")
+                else:
+                    logger.warning(f"No MODULES dictionary found in {registry_path}")
+            except Exception as e:
+                logger.error(f"Error loading {registry_path}: {str(e)}", exc_info=True)
+                continue
+
+    logger.debug(f"Final modules registries: {list(modules_mapping.keys())}")
+    return modules_mapping
+
 def define_expected_table(
     report_name: str,
     table_alias: str,
@@ -847,3 +915,33 @@ def get_existing_rule_for_report(report, filename, db_path="database/reporting.d
             (filename,)
         ).fetchone()
         return row if row else (None, None)
+
+
+def fetch_latest_table_data(conn: sqlite3.Connection, table_alias: str, cutoff: pd.Timestamp) -> pd.DataFrame:
+    cutoff_str = cutoff.isoformat()
+    logging.debug(f"Fetching latest data for table_alias: {table_alias}, cutoff: {cutoff_str}")
+    
+    query = """
+        SELECT uploaded_at, id
+        FROM upload_log
+        WHERE table_alias = ?
+        ORDER BY ABS(strftime('%s', uploaded_at) - strftime('%s', ?))
+        LIMIT 1
+    """
+    result = conn.execute(query, (table_alias, cutoff_str)).fetchone()
+    logging.debug(f"Upload log query result for {table_alias}: {result}")
+
+    if not result:
+        logging.warning(f"No uploads found for table alias '{table_alias}' near cutoff {cutoff_str}")
+        return pd.DataFrame()  # Return empty DataFrame instead of raising ValueError
+
+    closest_uploaded_at, upload_id = result
+    logging.debug(f"Selected upload_id: {upload_id}, uploaded_at: {closest_uploaded_at}")
+    
+    df = pd.read_sql_query(
+        f"SELECT * FROM {table_alias} WHERE upload_id = ?",
+        conn,
+        params=(upload_id,)
+    )
+    logging.debug(f"Fetched {len(df)} rows from {table_alias}")
+    return df

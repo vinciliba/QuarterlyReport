@@ -20,6 +20,7 @@ import mammoth, io, docx
 import pyperclip
 from pathlib import Path
 
+
 DB_PATH = 'database/reporting.db'
 
 
@@ -135,15 +136,16 @@ selected_section = sections[selected_section_key]
 # Add a debug print to confirm script execution and selected section
 print(f"DEBUG: Script rerun. Selected section: {selected_section_key} ({selected_section})")
 st.write(f"", unsafe_allow_html=True) # HTML comment for browser source check
+
 # ──────────────────────────────────────────────────
 # WORKFLOW – Launch & Validation (Refactored)
 # ──────────────────────────────────────────────────
-# In ui/streamlit_app.py (replace the existing "workflow" section)
 if selected_section == "workflow":
     from ingestion.report_check import check_report_readiness
     import importlib
     from pathlib import Path
     from docx import Document
+    from ingestion.db_utils import list_report_modules
 
     st.title("📊 Report Launch & Validation")
 
@@ -175,56 +177,40 @@ if selected_section == "workflow":
 
     st.success("🎉 All required tables uploaded and within the valid window!")
     
-    # === streamlit_app.py (inject after validation step) ===
     # Step 3.1: Compute date-based report parameters
     st.markdown("### 📅 Derived Reporting Dates")
     if st.button("📆 Generate Derived Dates"):
         from ingestion.db_utils import compute_cutoff_related_dates, upsert_report_param
-
         derived = compute_cutoff_related_dates(cutoff_date)
         for k, v in derived.items():
             upsert_report_param(chosen_report, k, v, DB_PATH)
-
-        # 2) store ONLY the quarter_period in report_variables
         insert_variable(
-            report = chosen_report,
-            module = "DateParams",            # any module label you like
-            var    = "quarter_period",        # variable name
-            value  = derived["quarter_period"],
-            db_path= DB_PATH,
-            anchor = "quarter_period"         # anchor name = var name
+            report=chosen_report,
+            module="DateParams",
+            var="quarter_period",
+            value=derived["quarter_period"],
+            db_path=DB_PATH,
+            anchor="quarter_period"
         )
         st.success("✅ Derived date-based parameters saved to report_params.")
 
-    # Step 3.2 Amendment Report Date hardcoding 
-
+    # Step 3.2: Amendment Report Date hardcoding 
     st.subheader("📅 Select Amendments Report Date")
     amd_report_date = st.date_input("Choose date:", value=datetime.today())
-
     if st.button("💾 Save Amendments Date"):
-        upsert_report_param(
-            report_name=chosen_report,
-            key="amendments_report_date",
-            value=amd_report_date.isoformat(),
-            db_path=DB_PATH
-        )
-    st.success("✅ Amendments date saved.")
-
+        upsert_report_param(chosen_report, "amendments_report_date", amd_report_date.isoformat(), DB_PATH)
+        st.success("✅ Amendments date saved.")
 
     # Step 4: Show available DOCX template
     template_dir = Path("reporting/templates/docx")
-    template_file = next(
-        (f for f in template_dir.glob("*.docx") if chosen_report.replace(" ", "_") in f.name),
-        None
-    )
-
+    template_file = next((f for f in template_dir.glob("*.docx") if chosen_report.replace(" ", "_") in f.name), None)
     if template_file:
         st.markdown(f"🖋️ **Template in use:** `{template_file.name}`")
     else:
         st.warning(f"No template found for `{chosen_report}` in `/templates/docx/`")
         st.stop()
 
-    # Step 5: Load report module + registry
+    # Step 5: Load report module + registry and fetch saved modules
     report_to_module = {
         "Quarterly_Report": "reporting.quarterly_report",
         "Invoice_Summary": "reporting.invoice_summary",
@@ -247,15 +233,25 @@ if selected_section == "workflow":
         st.warning("No modules found for this report.")
         st.stop()
 
+    # Fetch modules from the report_modules table
+    saved_modules_df = list_report_modules(chosen_report, DB_PATH)
+    saved_module_names = saved_modules_df['module_name'].tolist() if not saved_modules_df.empty else []
+
     # Step 6: Choose subset of modules
     st.markdown("### 🧩 Select modules to run")
-    remaining_modules = [k for k in MODULES.keys() if k not in st.session_state.completed_modules]
-    enabled_module_names = st.multiselect(
-        "Choose modules",
-        list(MODULES.keys()),
-        default=remaining_modules
-    )
-    selected_modules = {k: MODULES[k] for k in enabled_module_names}
+    if not saved_module_names:
+        st.warning("Please add modules for the report running in the 'Manage Report-Module Mappings' section.")
+        run_button_visible = False
+    else:
+        remaining_modules = [k for k in saved_module_names if k not in st.session_state.completed_modules]
+        enabled_module_names = st.multiselect(
+            "Choose modules",
+            saved_module_names,
+            default=remaining_modules,
+            key=f"multiselect_{chosen_report}"
+        )
+        selected_modules = {k: MODULES.get(k) for k in enabled_module_names}
+        run_button_visible = True
 
     # Step 7: Show progress of completed modules
     st.markdown("### 📈 Progress")
@@ -276,7 +272,7 @@ if selected_section == "workflow":
         st.toast("Progress reset.", icon="🔄")
 
     # Step 9: Run report with selected modules
-    if st.button("🚀 Run Report"):
+    if run_button_visible and st.button("🚀 Run Report"):
         if not selected_modules:
             st.warning("Please select at least one module to run.")
         else:
@@ -287,14 +283,12 @@ if selected_section == "workflow":
                 with st.spinner("Running selected modules…"):
                     if not hasattr(mod, "run_report"):
                         raise RuntimeError(f"Module `{mod_path}` has no `run_report()`")
-
                     ctx, run_results = mod.run_report(
                         cutoff_date=cutoff_date,
                         tolerance=tolerance_days,
                         db_path=DB_PATH,
                         selected_modules=selected_modules
                     )
-
             except Exception as e:
                 status.empty()
                 st.error(f"💥 Error running report: {e}")
@@ -313,21 +307,16 @@ if selected_section == "workflow":
                         if msg:
                             st.code(msg)
                         all_ok = False
-
                 if all_ok:
                     st.toast("Report finished", icon="✅")
                     st.success(f"Report **{chosen_report}** completed successfully.")
-
-                    # Call the report-specific render_and_export function
                     if hasattr(mod, "render_and_export"):
                         final_report_path = mod.render_and_export(chosen_report, cutoff_date, ctx)
                         st.success(f"Final report saved as `{final_report_path}` in `app_files/`")
                     else:
                         st.warning(f"No render_and_export function found for `{chosen_report}`.")
-
                 else:
                     st.warning("Some modules failed. See details above.")
-
                 log_cutoff(
                     chosen_report,
                     f"Validation_{cutoff_date}",
@@ -1513,23 +1502,31 @@ elif selected_section == "report_structure":
             "calls_list": [
                 'ERC-2023-POC (01/23)','ERC-2023-POC (04/23)','ERC-2023-POC (09/23)',
                 'ERC-2023-STG','ERC-2023-COG','ERC-2023-SyG','ERC-2023-ADG',
-                'ERC-2024-POC (03/24)','ERC-2024-STG','ERC-2024-COG','ERC-2024-SyG'
+                'ERC-2024-POC (03/24)','ERC-2024-STG','ERC-2024-COG','ERC-2024-SyG','ERC-2024-ADG','ERC-2024-POC (09/24)'
             ],
             "TTI_Targets" : {
                 'ERC-2023-POC (01/23)' : 106, 'ERC-2023-POC (04/23)' : 98,'ERC-2023-POC (09/23)':97,
                 'ERC-2023-STG': 304,'ERC-2023-COG' : 309,'ERC-2023-SyG' : 371,'ERC-2023-ADG' : 332,
-                'ERC-2024-POC (03/24)' : 106,'ERC-2024-STG' : 300,'ERC-2024-COG' : 309,'ERC-2024-SyG' : 371
+                'ERC-2024-POC (03/24)' : 106,'ERC-2024-STG' : 300,'ERC-2024-COG' : 309,'ERC-2024-SyG' : 371, 'ERC-2024-ADG':332,
+                'ERC-2024-POC (09/24)':106
+
             },
             "TTS_Targets" : {
                 'ERC-2023-POC (01/23)' : 120, 'ERC-2023-POC (04/23)' : 120,'ERC-2023-POC (09/23)':120,
                 'ERC-2023-STG': 120,'ERC-2023-COG' : 120,'ERC-2023-SyG' : 140,'ERC-2023-ADG' : 120,
-                'ERC-2024-POC (03/24)' : 120,'ERC-2024-STG' : 120,'ERC-2024-COG' : 120,'ERC-2024-SyG' :140
+                'ERC-2024-POC (03/24)' : 120,'ERC-2024-STG' : 120,'ERC-2024-COG' : 120,'ERC-2024-SyG' :140,'ERC-2024-ADG':120,
+                'ERC-2024-POC (09/24)':120
             },
             "TTG_Targets" : {
                 'ERC-2023-POC (01/23)' : 226, 'ERC-2023-POC (04/23)' : 218,'ERC-2023-POC (09/23)':217,
                 'ERC-2023-STG': 424,'ERC-2023-COG' : 429,'ERC-2023-SyG' : 511,'ERC-2023-ADG' : 452,
-                'ERC-2024-POC (03/24)' :226,'ERC-2024-STG' : 420,'ERC-2024-COG' : 429,'ERC-2024-SyG' :511
-            }
+                'ERC-2024-POC (03/24)' :226,'ERC-2024-STG' : 420,'ERC-2024-COG' : 429,'ERC-2024-SyG' :511, 'ERC-2024-ADG':452,
+                'ERC-2024-POC (09/24)':226
+            },
+            "EXCLUDE_TOPICS" : ["ERC-2023-SJI-1", "ERC-2023-SJI","ERC-2024-PERA","HORIZON-ERC-2022-VICECHAIRS-IBA","HORIZON-ERC-2023-VICECHAIRS-IBA",
+            "HORIZON-ERC-2025-NCPS-IBA"
+           ]
+
       }
     }
     params = load_report_params(chosen_report, DB_PATH) or DEFAULTS_BY_REPORT.get(chosen_report, {})
@@ -1743,76 +1740,161 @@ elif selected_section == "report_structure":
     from ingestion.db_utils import (
         list_report_modules,
         upsert_report_module,
-        delete_report_module
+        delete_report_module,
+        ensure_report_modules_table
     )
-
-    # Dynamically load the MODULES registry that lives inside
-    # reporting/<report-package>/__init__.py   (or modules.py, see notes)
+    import sqlite3
+    import logging
+    import streamlit as st
+    import pandas as pd
     import importlib
 
-    try:
-        report_pkg_lookup = {
-            "Quarterly_Report": "reporting.quarterly_report", 
-            # Add more mappings as needed
-        }
-        
+    # Set up logging
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger(__name__)
 
-        report_pkg_name = report_pkg_lookup.get(chosen_report)
-        print("Importing report module from:", report_pkg_name)
-        if not report_pkg_name:
-            st.error(f"⚠️ No module path defined for report “{chosen_report}”.")
-            st.stop()
-        MODULES = importlib.import_module(report_pkg_name).MODULES
-    except (ModuleNotFoundError, AttributeError):
-        st.error(f"⚠️ No MODULES registry found for report “{chosen_report}”.")
+    # Ensure the report_modules table exists
+    logger.debug(f"Ensuring report_modules table exists in {DB_PATH}")
+    ensure_report_modules_table(DB_PATH)
+
+    # Verify the table exists
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='report_modules';")
+            table_exists = cursor.fetchone()
+            if table_exists:
+                logger.debug("report_modules table exists.")
+            else:
+                logger.error("report_modules table does not exist after ensure_report_modules_table.")
+                st.error("⚠️ Database error: report_modules table could not be created.")
+                st.stop()
+    except sqlite3.Error as e:
+        logger.error(f"Database error while verifying table existence: {str(e)}")
+        st.error(f"⚠️ Database error: {str(e)}")
         st.stop()
 
-    st.markdown("## ⚙️ Modules for this report")
+    # Define report-to-module mapping
+    report_to_module = {
+        "Quarterly_Report": "reporting.quarterly_report",
+        # Add more reports here as needed, e.g.,
+        # "Annual_Report": "reporting.annual_report",
+        # "Invoice_Summary": "reporting.invoice_summary",
+    }
 
-    # ── current mapping ────────────────────────────────────────────────
-    mods_df = list_report_modules(chosen_report, DB_PATH)
-    if mods_df.empty:
-        st.info("No modules assigned yet.")
-    else:
-        st.dataframe(mods_df, hide_index=True, use_container_width=True)
-
-    # ── add / edit mapping ─────────────────────────────────────────────
-    with st.expander("➕ Add / modify module mapping", expanded=False):
-        mod_name  = st.selectbox("Module class", list(MODULES.keys()))
-        run_order = st.number_input("Run order (1 = first)", min_value=1, value=1, step=1)
-        enabled   = st.checkbox("Enabled", value=True)
-
-        if st.button("💾 Save / update mapping"):
-            upsert_report_module(
-                report_name = chosen_report,
-                module_name = mod_name,
-                run_order   = run_order,
-                enabled     = enabled,
-                db_path     = DB_PATH
-            )
-            st.success("Mapping saved.")
-            st.rerun()
-
-    # ── delete mapping ────────────────────────────────────────────────
-    if not mods_df.empty:
-        del_id = st.selectbox("Select row-ID to delete", mods_df.id.tolist())
-        if st.button("🗑️ Delete selected mapping"):
-            delete_report_module(del_id, DB_PATH)
-            st.success("Mapping deleted.")
-            st.rerun()
-
-
-    # ---------- 6. SAVE EVERYTHING ----------------------------------------------
-    if st.button("💾 Save parameters to DB", key="save_to_db"):
+    # Load modules for each report
+    available_modules = {}
+    for report_name, mod_path in report_to_module.items():
         try:
-            final_params = json.loads(st.session_state[txt_key])
-            for k, v in final_params.items():
-                upsert_report_param(chosen_report, k, v, DB_PATH)
-            st.success("Parameters saved to database.")
-        except json.JSONDecodeError as e:
-            st.error(f"JSON error: {e}")
+            mod = importlib.import_module(mod_path)
+            MODULES = getattr(mod, "MODULES", {})
+            if not MODULES:
+                logger.error(f"No MODULES found in {mod_path} for {report_name}.")
+                st.error(f"⚠️ No modules found for report '{report_name}'. Please check the module registry.")
+                st.stop()
+            available_modules[report_name] = MODULES
+            logger.debug(f"Loaded MODULES for {report_name}: {list(MODULES.keys())}")
+        except ImportError as e:
+            logger.error(f"Error loading module {mod_path} for {report_name}: {e}")
+            st.error(f"⚠️ Failed to load modules for report '{report_name}': {e}")
+            st.stop()
+        except Exception as e:
+            logger.error(f"Unexpected error loading module {mod_path} for {report_name}: {e}")
+            st.error(f"⚠️ Unexpected error loading modules for report '{report_name}': {e}")
+            st.stop()
 
+    # Function to fetch all mappings from report_modules table
+    def fetch_all_report_modules(db_path):
+        try:
+            with sqlite3.connect(db_path) as conn:
+                query = "SELECT * FROM report_modules ORDER BY report_name, run_order"
+                df = pd.read_sql_query(query, conn)
+                return df
+        except sqlite3.Error as e:
+            logger.error(f"Error fetching report modules: {str(e)}")
+            st.error(f"⚠️ Database error: {str(e)}")
+            return pd.DataFrame()
 
+    st.markdown("## ⚙️ Manage Report-Module Mappings")
+
+    # ── Display Current Mappings ────────────────────────────────────────────────
+    st.markdown("### Current Mappings")
+    all_mappings_df = fetch_all_report_modules(DB_PATH)
+    if all_mappings_df.empty:
+        st.info("No report-module mappings exist yet.")
+    else:
+        st.dataframe(all_mappings_df, hide_index=True, use_container_width=True)
+
+    # ── Add New Mapping ─────────────────────────────────────────────
+    with st.expander("➕ Add New Mapping", expanded=True):
+        st.markdown("### Add a New Report-Module Mapping")
+        selected_report = st.selectbox("Select Report", options=list(report_to_module.keys()))
+        if selected_report in available_modules and available_modules[selected_report]:
+            module_options = list(available_modules[selected_report].keys())
+            selected_module = st.selectbox("Select Module", options=module_options)
+            run_order = st.number_input("Run Order (1 = first)", min_value=1, value=1, step=1)
+            # Add unique key for the checkbox
+            enabled = st.checkbox("Enabled", value=True, key=f"add_enabled_{selected_report}_{selected_module}")
+
+            if st.button("💾 Add Mapping"):
+                try:
+                    upsert_report_module(
+                        report_name=selected_report,
+                        module_name=selected_module,
+                        run_order=run_order,
+                        enabled=enabled,
+                        db_path=DB_PATH
+                    )
+                    st.success(f"Mapping for {selected_module} added to {selected_report}.")
+                    st.rerun()
+                except Exception as e:
+                    logger.error(f"Error adding mapping: {str(e)}")
+                    st.error(f"⚠️ Failed to add mapping: {str(e)}")
+        else:
+            st.warning(f"No modules available for report '{selected_report}'.")
+
+    # ── Edit Existing Mapping ─────────────────────────────────────────────
+    if not all_mappings_df.empty:
+        with st.expander("✏️ Edit Existing Mapping", expanded=False):
+            st.markdown("### Edit an Existing Mapping")
+            mapping_to_edit = st.selectbox("Select Mapping to Edit", options=all_mappings_df.index, format_func=lambda x: f"{all_mappings_df.loc[x, 'report_name']} - {all_mappings_df.loc[x, 'module_name']}")
+            selected_mapping = all_mappings_df.loc[mapping_to_edit]
+            
+            edit_report_name = selected_mapping['report_name']
+            edit_module_name = st.selectbox("Module", options=list(available_modules[edit_report_name].keys()), index=list(available_modules[edit_report_name].keys()).index(selected_mapping['module_name']))
+            edit_run_order = st.number_input("Run Order", min_value=1, value=int(selected_mapping['run_order']), step=1)
+            # Add unique key for the checkbox
+            edit_enabled = st.checkbox("Enabled", value=bool(selected_mapping['enabled']), key=f"edit_enabled_{selected_mapping['id']}")
+
+            if st.button("💾 Update Mapping"):
+                try:
+                    upsert_report_module(
+                        report_name=edit_report_name,
+                        module_name=edit_module_name,
+                        run_order=edit_run_order,
+                        enabled=edit_enabled,
+                        db_path=DB_PATH
+                    )
+                    st.success(f"Mapping for {edit_module_name} in {edit_report_name} updated.")
+                    st.rerun()
+                except Exception as e:
+                    logger.error(f"Error updating mapping: {str(e)}")
+                    st.error(f"⚠️ Failed to update mapping: {str(e)}")
+
+    # ── Delete Mapping ────────────────────────────────────────────────
+    if not all_mappings_df.empty:
+        with st.expander("🗑️ Delete Mapping", expanded=False):
+            st.markdown("### Delete a Mapping")
+            mapping_to_delete = st.selectbox("Select Mapping to Delete", options=all_mappings_df.index, format_func=lambda x: f"{all_mappings_df.loc[x, 'report_name']} - {all_mappings_df.loc[x, 'module_name']}")
+            if st.button("🗑️ Delete Selected Mapping"):
+                try:
+                    delete_id = all_mappings_df.loc[mapping_to_delete, 'id']
+                    delete_report_module(delete_id, DB_PATH)
+                    st.success("Mapping deleted.")
+                    st.rerun()
+                except Exception as e:
+                    logger.error(f"Error deleting mapping: {str(e)}")
+                    st.error(f"⚠️ Failed to delete mapping: {str(e)}")
 # ---------------------------------------------------
 # Template Management
 # ---------------------------------------------------

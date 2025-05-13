@@ -1,1 +1,30 @@
 qenv/
+
+# Ignore all .xlsx files
+*.xlsx
+
+# Ignore all database files
+*.db
+
+# Ignore specific database file if needed
+/reporting.db
+
+# Ignore other common file types or directories (optional, add as needed)
+# Example: Ignore Python compiled files
+__pycache__/
+*.pyc
+
+# Example: Ignore virtual environments
+venv/
+env/
+
+# Example: Ignore logs
+*.log
+
+# Example: Ignore IDE-specific files
+*.idea/
+*.vscode/
+
+# Example: Ignore OS-generated files
+.DS_Store
+Thumbs.db
