@@ -9,6 +9,9 @@ import logging
 from pathlib import Path
 from typing import Any,  Dict, Type
 import importlib.util
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────
 # Init DB with all required tables
 # ─────────────────────────────────────────
@@ -426,7 +429,7 @@ def ensure_report_modules_table(db_path: str) -> None:
         """)
         conn.commit()
 
-logger = logging.getLogger(__name__)
+
 
 def crawl_for_modules_registry(reporting_root: str = "reporting") -> Dict[str, Dict[str, Type[Any]]]:
     """
@@ -681,7 +684,7 @@ def delete_report_module(row_id: int, db_path="database/reporting.db"):
         conn.commit()
 
 #-------------  Create Report Variables  ------------------
-logging.basicConfig(level=logging.DEBUG)
+
 
 
 def insert_variable(
@@ -921,27 +924,32 @@ def fetch_latest_table_data(conn: sqlite3.Connection, table_alias: str, cutoff: 
     cutoff_str = cutoff.isoformat()
     logging.debug(f"Fetching latest data for table_alias: {table_alias}, cutoff: {cutoff_str}")
     
+    # Fetch all upload logs ordered by closeness to cutoff
     query = """
         SELECT uploaded_at, id
         FROM upload_log
         WHERE table_alias = ?
         ORDER BY ABS(strftime('%s', uploaded_at) - strftime('%s', ?))
-        LIMIT 1
     """
-    result = conn.execute(query, (table_alias, cutoff_str)).fetchone()
-    logging.debug(f"Upload log query result for {table_alias}: {result}")
+    results = conn.execute(query, (table_alias, cutoff_str)).fetchall()
+    logging.debug(f"Upload log query results for {table_alias}: {results}")
 
-    if not result:
+    if not results:
         logging.warning(f"No uploads found for table alias '{table_alias}' near cutoff {cutoff_str}")
-        return pd.DataFrame()  # Return empty DataFrame instead of raising ValueError
+        return pd.DataFrame()
 
-    closest_uploaded_at, upload_id = result
-    logging.debug(f"Selected upload_id: {upload_id}, uploaded_at: {closest_uploaded_at}")
-    
-    df = pd.read_sql_query(
-        f"SELECT * FROM {table_alias} WHERE upload_id = ?",
-        conn,
-        params=(upload_id,)
-    )
-    logging.debug(f"Fetched {len(df)} rows from {table_alias}")
-    return df
+    # Iterate through upload_ids until we find one with data
+    for uploaded_at, upload_id in results:
+        logging.debug(f"Checking upload_id: {upload_id}, uploaded_at: {uploaded_at}")
+        df = pd.read_sql_query(
+            f"SELECT * FROM {table_alias} WHERE upload_id = ?",
+            conn,
+            params=(upload_id,)
+        )
+        if not df.empty:
+            logging.debug(f"Fetched {len(df)} rows from {table_alias} with upload_id {upload_id}")
+            return df
+        logging.debug(f"No data found for upload_id {upload_id} in {table_alias}")
+
+    logging.warning(f"No data found for any upload_id for table alias '{table_alias}'")
+    return pd.DataFrame()

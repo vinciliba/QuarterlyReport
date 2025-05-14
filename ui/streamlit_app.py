@@ -1525,8 +1525,13 @@ elif selected_section == "report_structure":
             },
             "EXCLUDE_TOPICS" : ["ERC-2023-SJI-1", "ERC-2023-SJI","ERC-2024-PERA","HORIZON-ERC-2022-VICECHAIRS-IBA","HORIZON-ERC-2023-VICECHAIRS-IBA",
             "HORIZON-ERC-2025-NCPS-IBA"
-           ]
-
+           ],
+           "TABLE_COLORS" :{ "BLUE" : "#004A99" , "LIGHT_BLUE" : "#d6e6f4" , "GRID_CLR" : "#004A99" , "DARK_BLUE" :"#01244B",  "DARK_GREY" : '#242425',
+           "heading_background_color": "#004A99","row_group_background_color": "#d6e6f4", "border_color": "#01244B", "stub_background_color": "#d6e6f4",
+           "body_background_color": "#ffffff", "subtotal_background_color": "#E6E6FA", "text_color": "#01244B"
+           }
+               
+           
       }
     }
     params = load_report_params(chosen_report, DB_PATH) or DEFAULTS_BY_REPORT.get(chosen_report, {})
@@ -1602,11 +1607,21 @@ elif selected_section == "report_structure":
     # -------------------------------------------------------------------
     st.markdown("### 🔄 Quick add / update")
 
+    # def commit_and_rerun(params_dict: dict, toast_msg: str):
+    #     """
+    #     Write json draft → session-state, toast, force rerun
+    #     (we cannot touch param_editor while it’s mounted)
+    #     """
+    #     st.session_state["_params_draft"] = json.dumps(params_dict, indent=2)
+    #     st.toast(toast_msg, icon="✅")
+    #     st.rerun()
     def commit_and_rerun(params_dict: dict, toast_msg: str):
         """
-        Write json draft → session-state, toast, force rerun
-        (we cannot touch param_editor while it’s mounted)
+        Save each parameter to DB, update session, show toast, rerun app
         """
+        for k, v in params_dict.items():
+            upsert_report_param(chosen_report, k, v)
+
         st.session_state["_params_draft"] = json.dumps(params_dict, indent=2)
         st.toast(toast_msg, icon="✅")
         st.rerun()
