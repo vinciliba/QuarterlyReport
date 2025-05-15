@@ -1529,9 +1529,12 @@ elif selected_section == "report_structure":
            "TABLE_COLORS" :{ "BLUE" : "#004A99" , "LIGHT_BLUE" : "#d6e6f4" , "GRID_CLR" : "#004A99" , "DARK_BLUE" :"#01244B",  "DARK_GREY" : '#242425',
            "heading_background_color": "#004A99","row_group_background_color": "#d6e6f4", "border_color": "#01244B", "stub_background_color": "#d6e6f4",
            "body_background_color": "#ffffff", "subtotal_background_color": "#E6E6FA", "text_color": "#01244B"
-           }
-               
-           
+           },
+           "HEU_Calls" : ['ERC-2021-ADG','ERC-2021-COG','ERC-2021-STG','ERC-2022-ADG','ERC-2022-COG' , 'ERC-2022-POC1', 'ERC-2022-POC2 (02/22)', 'ERC-2022-POC2 (05/22)','ERC-2022-POC2 (09/22)',
+                        'ERC-2022-STG','ERC-2022-SYG', 'ERC-2023-ADG','ERC-2023-COG','ERC-2023-POC (01/23)','ERC-2023-POC (04/23)','ERC-2023-POC (09/23)','ERC-2023-STG','ERC-2023-SyG',
+                        'ERC-2024-POC (03/24)','ERC-2024-POC (09/24)','ERC-2024-STG','ERC-2024-SyG','ERC-2024-ADG'
+
+           ]     
       }
     }
     params = load_report_params(chosen_report, DB_PATH) or DEFAULTS_BY_REPORT.get(chosen_report, {})
