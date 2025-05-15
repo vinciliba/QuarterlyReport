@@ -1534,7 +1534,10 @@ elif selected_section == "report_structure":
                         'ERC-2022-STG','ERC-2022-SYG', 'ERC-2023-ADG','ERC-2023-COG','ERC-2023-POC (01/23)','ERC-2023-POC (04/23)','ERC-2023-POC (09/23)','ERC-2023-STG','ERC-2023-SyG',
                         'ERC-2024-POC (03/24)','ERC-2024-POC (09/24)','ERC-2024-STG','ERC-2024-SyG','ERC-2024-ADG'
 
-           ]     
+           ],
+           "Budget_Impl" : {
+               'row1_vacancy' : '1.09%' , 'row2_commit' :'100% (out of € 2.24 bln)', 'row3_L2/L1': '100 % (out of € 2.0  bln)', 'row4_paym': '100 % (out of € 2.174 bln)', 'row5_EARN': '94.21 % (out of € 0.984 bln)'
+           }
       }
     }
     params = load_report_params(chosen_report, DB_PATH) or DEFAULTS_BY_REPORT.get(chosen_report, {})
