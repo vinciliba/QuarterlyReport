@@ -9,12 +9,6 @@ from typing import Optional, Dict, Union
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
     
-# BLUE        = "#004A99"
-# LIGHT_BLUE = "#d6e6f4"
-# GRID_CLR    = "#004A99"
-# DARK_BLUE   = "#01244B"
-# DARK_GREY =   '#242425'
-
 # ------------------------------------------------------------------
 # 1. BUDGET MODULE
 # ------------------------------------------------------------------
@@ -1006,622 +1000,184 @@ def build_docx_context(report_name: str, db_path: str , table_colors: dict = Non
                 context[anchor] = row["value"]   # plain string / number
     return context
 
-# # ------------------------------------------------------------------
-# # 2. GRANTING MODULE
-# # ------------------------------------------------------------------
 
-# def build_signatures_table(
-#     df: pd.DataFrame,
-#     cutoff: datetime,
-#     scope_months: list,
-#     exclude_topics: list,
-#     report: str,
-#     db_path: str,
-#     table_colors: dict = None
-# ) -> Dict[str, Union[pd.DataFrame, GT]]:
-#     """
-#     Build a table summarizing grant signatures and under-preparation projects by topic.
 
-#     Args:
-#         df (pd.DataFrame): Input DataFrame with grant data.
-#         cutoff (datetime): Cutoff date to determine the current quarter and filter data.
-#         scope_months (list): List of months to include in the report.
-#         exclude_topics (list): List of topics to exclude from the analysis.
-#         report (str): Name of the report for storing the table.
-#         db_path (str): Path to the SQLite database for storing the table.
-
-#     Returns:
-#         dict
-#             keys = "data" (DataFrame), "table" (GreatTable object)
-#     """
-#     # Define expected columns for validation
-#     expected_columns = ["GA Signature - Commission", "Topic", "SIGNED", "STATUS "]
-
-#     # Validate input DataFrame
-#     if not isinstance(df, pd.DataFrame):
-#         logging.error("Input 'df' is not a pandas DataFrame.")
-#         return {"data": pd.DataFrame(), "table": None}
-
-#     if df.empty:
-#         logging.warning("Input DataFrame is empty. Returning empty DataFrame and None table.")
-#         return {"data": pd.DataFrame(), "table": None}
-
-#     # Check for missing columns
-#     missing_columns = [col for col in expected_columns if col not in df.columns]
-#     if missing_columns:
-#         logging.error(f"Missing required columns: {missing_columns}")
-#         return {"data": pd.DataFrame(), "table": None}
-
-#     # Log input DataFrame info
-#     logging.debug(f"Input DataFrame shape: {df.shape}")
-#     logging.debug(f"Input DataFrame columns: {df.columns.tolist()}")
-
-#     try:
-#         # Filter in-scope data for signed grants
-#         in_scope = (
-#             df["GA Signature - Commission"].dt.year.eq(cutoff.year) &
-#             df["GA Signature - Commission"].dt.month_name().isin(scope_months)
-#         )
-
-#         signed = df.loc[in_scope].copy()
-#         signed = signed[~signed["Topic"].isin(exclude_topics)]
-
-#         # Create pivot table for signed data
-#         tab3_signed = (
-#             signed.pivot_table(
-#                 index=signed["GA Signature - Commission"].dt.month_name(),
-#                 columns="Topic",
-#                 values="SIGNED",
-#                 aggfunc="sum",
-#                 fill_value=0,
-#             )
-#             .reindex(scope_months)
-#             .reset_index(names="Signature Month")
-#         )
-
-#         # Add TOTAL column for signed data
-#         tab3_signed["TOTAL"] = tab3_signed.iloc[:, 1:].sum(axis=1)
-
-#         # Define a mapping of months to quarters
-#         month_to_quarter = {
-#             "January": 1, "February": 1, "March": 1,
-#             "April": 2, "May": 2, "June": 2,
-#             "July": 3, "August": 3, "September": 3,
-#             "October": 4, "November": 4, "December": 4
-#         }
-
-#         # Add a quarter column to tab3_signed
-#         tab3_signed["Quarter"] = tab3_signed["Signature Month"].map(month_to_quarter)
-
-#         # Determine the current quarter based on cutoff date
-#         current_quarter = (cutoff.month - 1) // 3 + 1
-
-#         # Prepare final DataFrame for signed data with conditional quarterly aggregation
-#         if not tab3_signed.empty:
-#             final_rows = []
-            
-#             # Check if the data contains exactly three months
-#             unique_months = tab3_signed["Signature Month"].nunique()
-#             max_quarter = tab3_signed["Quarter"].max()
-
-#             if unique_months == 3 and max_quarter == 1:
-#                 # Special case: exactly three months, all in Quarter 1, show individually
-#                 final_rows.append(tab3_signed.drop(columns=["Quarter"]))
-#             else:
-#                 # General case: aggregate previous quarters, show current quarter months individually
-#                 for quarter in sorted(tab3_signed["Quarter"].unique()):
-#                     quarter_data = tab3_signed[tab3_signed["Quarter"] == quarter].copy()
-                    
-#                     if quarter < current_quarter:
-#                         # Aggregate previous quarters into a single row
-#                         quarter_sum = quarter_data.iloc[:, 1:-1].sum(numeric_only=True)
-#                         quarter_row = pd.DataFrame({
-#                             "Signature Month": [f"Quarter {quarter}"],
-#                             **{col: [quarter_sum[col]] for col in quarter_data.columns[1:-2]},
-#                             "TOTAL": [quarter_sum["TOTAL"]]
-#                         })
-#                         final_rows.append(quarter_row)
-#                     else:
-#                         # Keep individual months for the current quarter
-#                         quarter_data = quarter_data.drop(columns=["Quarter"])
-#                         final_rows.append(quarter_data)
-
-#             # Compute Grand Total for signed data
-#             col_totals = pd.DataFrame(tab3_signed.iloc[:, 1:-1].sum(), columns=["Grand Total"]).T
-#             col_totals.insert(0, "Signature Month", "Grand Total")
-#             for col in tab3_signed.columns[1:-2]:
-#                 col_totals[col] = tab3_signed[col].sum()
-
-#             # Combine signed data rows
-#             agg_with_totals = pd.concat(final_rows + [col_totals], ignore_index=True)
-#         else:
-#             agg_with_totals = tab3_signed
-
-#         agg_with_totals['Status'] = 'Signed'
-#         logging.debug(f"Signed data processed. Shape: {agg_with_totals.shape}")
-
-#         # Under-preparation in-scope
-#         under_prep = df[df['STATUS '].eq("UNDER_PREPARATION")]
-#         under_prep = under_prep[~under_prep["Topic"].isin(exclude_topics)]
-
-#         # --- UNDER-PREPARATION • one “total” row --------------------------------
-#         tab3_prep = (
-#             under_prep
-#             .assign(UNDER_PREP=1)
-#             .pivot_table(
-#                 columns="Topic",
-#                 values="UNDER_PREP",
-#                 aggfunc="sum",
-#                 fill_value=0,
-#             )
-#         )
-
-#         # Label the row
-#         tab3_prep.index = ["Total Under Prep"]
-#         tab3_prep = tab3_prep.reset_index(names="Signature Month")
-
-#         # Add TOTAL column for under preparation data
-#         tab3_prep["TOTAL"] = tab3_prep.iloc[:, 1:].sum(axis=1)
-
-#         tab3_prep['Status'] = 'Under Preparation'
-#         logging.debug(f"Under Preparation data processed. Shape: {tab3_prep.shape}")
-
-#         # Merge agg_with_totals with tab3_prep
-#         final_df = pd.concat([agg_with_totals, tab3_prep], ignore_index=True)
-#         logging.debug(f"Final DataFrame shape: {final_df.shape}")
-
-#         # Define columns to display in the table (starting from index 1)
-#         display_columns = final_df.columns[1:-1].tolist()  # Exclude "Signature Month" and "Status"
-
-#         # Define colors
-#         DARK_BLUE = "#00008B"
-#         LIGHT_BLUE = "#ADD8E6"
-#         BLUE = "#0000FF"
-
-#         # Create the great table
-#         if not final_df.empty:
-#             tbl = (
-#                 GT(
-#                     final_df,
-#                     rowname_col="Signature Month",
-#                     groupname_col="Status"
-#                 )
-#                 .tab_header(
-#                     title="Signatures and Under Preparation by Topic"
-#                 )
-#                 .tab_style(
-#                     style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
-#                     locations=loc.header()
-#                 )
-#                 .tab_stubhead(label="Signature Month")
-#                 .tab_style(
-#                     style=[
-#                         style.text(color=DARK_BLUE, weight="bold", font='Arial'),
-#                         style.fill(color=LIGHT_BLUE),
-#                         style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
-#                         style.css("max-width:200px; line-height:1.2"),
-#                     ],
-#                     locations=loc.row_groups()
-#                 )
-#                 .fmt_number(
-#                     columns=display_columns,
-#                     decimals=0,
-#                     use_seps=True
-#                 )
-#                 .cols_label(
-#                     **{col: html(col.replace("_", " ").replace("SyG", "SyG")) for col in display_columns}
-#                 )
-#                 .opt_table_font(font='Arial')
-#                 .tab_style(
-#                     style=[
-#                         style.fill(color=BLUE),
-#                         style.text(color="white", weight="bold", align="center"),
-#                         style.css("max-width:200px; line-height:1.2")
-#                     ],
-#                     locations=loc.column_labels(columns=display_columns)
-#                 )
-#                 .tab_style(
-#                     style=[
-#                         style.fill(color=BLUE),
-#                         style.text(color="white", weight="bold", align="center"),
-#                         style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
-#                     ],
-#                     locations=loc.stubhead()
-#                 )
-#                 .tab_style(
-#                     style=style.borders(weight="1px", color=DARK_BLUE),
-#                     locations=loc.stub()
-#                 )
-#                 .tab_style(
-#                     style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-#                     locations=loc.body(columns=display_columns)
-#                 )
-#                 .tab_style(
-#                     style=style.borders(color=DARK_BLUE, weight="2px"),
-#                     locations=[loc.column_labels(columns=display_columns), loc.stubhead()]
-#                 )
-#                 .tab_style(
-#                     style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
-#                     locations=loc.body(
-#                         rows=final_df.index[final_df["Signature Month"] == "Grand Total"].tolist(),
-#                         columns=display_columns
-#                     )
-#                 )
-#                 .tab_style(
-#                     style=[style.fill(color="#D3D3D3"), style.text(weight="bold")],
-#                     locations=loc.stub(rows=final_df.index[final_df["Signature Month"] == "Grand Total"].tolist())
-#                 )
-#                 .tab_options(
-#                     table_body_border_bottom_color=DARK_BLUE,
-#                     table_body_border_bottom_width="2px",
-#                     table_border_right_color=DARK_BLUE,
-#                     table_border_right_width="2px",
-#                     table_border_left_color=DARK_BLUE,
-#                     table_border_left_width="2px",
-#                     table_border_top_color=DARK_BLUE,
-#                     table_border_top_width="2px",
-#                     column_labels_border_top_color=DARK_BLUE,
-#                     column_labels_border_top_width="2px"
-#                 )
-#                 .tab_source_note("Source: Quarterly Report Data")
-#             )
-#         else:
-#             tbl = None
-#             logging.warning("Final DataFrame is empty. Skipping table creation.")
-
-#         # Store the table (similar to the example)
-#         try:
-#             insert_variable(
-#                 report=report,
-#                 module="GrantsModule",
-#                 var="table_3a_signatures_data",
-#                 value=final_df.to_dict(orient="records"),
-#                 db_path=db_path,
-#                 anchor="table_3_signatures",
-#                 gt_table=tbl
-#             )
-#             logging.debug(f"Stored table_3a_signatures_data ({len(final_df)} rows)")
-#         except Exception as e:
-#             logging.error(f"Error storing table: {str(e)}")
-
-#         return {"data": final_df, "table": tbl}
-
-#     except Exception as e:
-#         logging.error(f"Unexpected error in build_signatures_table: {str(e)}")
-#         return {"data": pd.DataFrame(), "table": None}
-
-
-# def build_commitments_table(
-#     df: pd.DataFrame,
-#     cutoff: datetime,
-#     scope_months: list,
-#     exclude_topics: list,
-#     report: str,
-#     db_path: str,
-#     table_colors: dict = None
-# ) -> Dict[str, Union[pd.DataFrame, GT]]:
-#     """
-#     Build a table summarizing grant signatures and under-preparation projects by topic.
-
-#     Args:
-#         df (pd.DataFrame): Input DataFrame with grant data.
-#         cutoff (datetime): Cutoff date to determine the current quarter and filter data.
-#         scope_months (list): List of months to include in the report.
-#         exclude_topics (list): List of topics to exclude from the analysis.
-#         report (str): Name of the report for storing the table.
-#         db_path (str): Path to the SQLite database for storing the table.
-
-#     Returns:
-#         dict
-#             keys = "data" (DataFrame), "table" (GreatTable object)
-#     """
-#     # Define expected columns for validation
-#     expected_columns = ["GA Signature - Commission", "Topic", "SIGNED", "STATUS "]
-
-#     # Validate input DataFrame
-#     if not isinstance(df, pd.DataFrame):
-#         logging.error("Input 'df' is not a pandas DataFrame.")
-#         return {"data": pd.DataFrame(), "table": None}
-
-#     if df.empty:
-#         logging.warning("Input DataFrame is empty. Returning empty DataFrame and None table.")
-#         return {"data": pd.DataFrame(), "table": None}
-
-#     # Check for missing columns
-#     missing_columns = [col for col in expected_columns if col not in df.columns]
-#     if missing_columns:
-#         logging.error(f"Missing required columns: {missing_columns}")
-#         return {"data": pd.DataFrame(), "table": None}
-
-#     # Log input DataFrame info
-#     logging.debug(f"Input DataFrame shape: {df.shape}")
-#     logging.debug(f"Input DataFrame columns: {df.columns.tolist()}")
-
-#     try:
-
-#         in_scope = (
-#                     df["Commitment AO visa"].dt.year.eq(cutoff.year)  &
-#                     df["Commitment AO visa"].dt.month_name().isin(scope_months)
-#                 )
-
-#         committed = df.loc[in_scope].copy()
-#         committed = committed[~committed["Topic"].isin(exclude_topics)]
-
-#         tab3_commit   = (
-#                 committed.pivot_table(
-#                     index=committed["Commitment AO visa"].dt.month_name(),
-#                     columns="Topic",
-#                     values="Eu contribution",
-#                     aggfunc="sum",
-#                     fill_value=0,
-#                 )
-#                 .reindex(scope_months)           # Jan-… only those in scope
-#                 .reset_index(names="Commitment Month")
-#             )
-
-#         tab3_commit["TOTAL"] = tab3_commit.iloc[:, 1:].sum(axis=1)
-
-#         # Define a mapping of months to quarters
-#         month_to_quarter = {
-#             "January": 1, "February": 1, "March": 1,
-#             "April": 2, "May": 2, "June": 2,
-#             "July": 3, "August": 3, "September": 3,
-#             "October": 4, "November": 4, "December": 4
-#         }
-
-#         # Add a quarter column to tab3_signed
-#         tab3_commit["Quarter"] = tab3_commit["Commitment Month"].map(month_to_quarter)
-
-#         # Determine the current quarter based on cutoff date (May 12, 2025 -> Quarter 2)
-#         current_quarter = (cutoff.month - 1) // 3 + 1  # Quarter 2 for May
-
-#         # Prepare final DataFrame with conditional quarterly aggregation
-#         if not tab3_commit.empty:
-#             final_rows = []
-            
-#             # Check if the data contains exactly three months
-#             unique_months = tab3_commit["Commitment Month"].nunique()
-#             max_quarter = tab3_commit["Quarter"].max()
-
-#             if unique_months == 3 and max_quarter == 1:
-#                 # Special case: exactly three months, all in Quarter 1, show individually
-#                 final_rows.append(tab3_commit.drop(columns=["Quarter"]))
-#             else:
-#                 # General case: aggregate previous quarters, show current quarter months individually
-#                 for quarter in sorted(tab3_commit["Quarter"].unique()):
-#                     quarter_data = tab3_commit[tab3_commit["Quarter"] == quarter].copy()
-                    
-#                     if quarter < current_quarter:
-#                         # Aggregate previous quarters into a single row
-#                         quarter_sum = quarter_data.iloc[:, 1:-1].sum(numeric_only=True)
-#                         quarter_row = pd.DataFrame({
-#                             "Commitment Month": [f"Quarter {quarter}"],
-#                             **{col: [quarter_sum[col]] for col in quarter_data.columns[1:-2]},  # Topics
-#                             "TOTAL": [quarter_sum["TOTAL"]]
-#                         })
-#                         final_rows.append(quarter_row)
-#                     else:
-#                         # Keep individual months for the current quarter
-#                         quarter_data = quarter_data.drop(columns=["Quarter"])
-#                         final_rows.append(quarter_data)
-
-#             # Compute Grand Total
-#             col_totals = pd.DataFrame(tab3_commit.iloc[:, 1:-1].sum(), columns=["Grand Total"]).T
-#             col_totals.insert(0, "Commitment Month", "Grand Total")
-#             for col in tab3_commit.columns[1:-2]:  # Add totals for each topic column
-#                 col_totals[col] = tab3_commit[col].sum()
-
-#             # Combine all rows
-#             agg_with_totals = pd.concat(final_rows + [col_totals], ignore_index=True)
-#         else:
-#             agg_with_totals = tab3_commit
-
-#         agg_with_totals['Type'] = 'Committed Amounts(EUR)'
-
-#         # Define columns to display in the table (starting from index 1)
-#         display_columns = agg_with_totals.columns[1:-1].tolist()  # Exclude "Signature Month" and "Status"
-        
-#         #***************** Second table ****************************
-#         tab3_commit_n   = (
-#         committed.pivot_table(
-#             index=committed["Commitment AO visa"].dt.month_name(),
-#             columns="Topic",
-#             values="Eu contribution",
-#             aggfunc="count",
-#             fill_value=0,
-#         )
-#         .reindex(scope_months)           # Jan-… only those in scope
-#         .reset_index(names="Commitment Month")
-#        )
-
-#         tab3_commit_n["TOTAL"] = tab3_commit_n.iloc[:, 1:].sum(axis=1)
-
-#         # Define a mapping of months to quarters
-#         month_to_quarter = {
-#             "January": 1, "February": 1, "March": 1,
-#             "April": 2, "May": 2, "June": 2,
-#             "July": 3, "August": 3, "September": 3,
-#             "October": 4, "November": 4, "December": 4
-#         }
-
-#         # Add a quarter column to tab3_signed
-#         tab3_commit_n["Quarter"] = tab3_commit_n["Commitment Month"].map(month_to_quarter)
-
-#         # Determine the current quarter based on cutoff date (May 12, 2025 -> Quarter 2)
-#         current_quarter = (cutoff.month - 1) // 3 + 1  # Quarter 2 for May
-
-#         # Prepare final DataFrame with conditional quarterly aggregation
-#         if not tab3_commit_n.empty:
-#             final_rows = []
-            
-#             # Check if the data contains exactly three months
-#             unique_months = tab3_commit_n["Commitment Month"].nunique()
-#             max_quarter = tab3_commit_n["Quarter"].max()
-
-#             if unique_months == 3 and max_quarter == 1:
-#                 # Special case: exactly three months, all in Quarter 1, show individually
-#                 final_rows.append(tab3_commit_n.drop(columns=["Quarter"]))
-#             else:
-#                 # General case: aggregate previous quarters, show current quarter months individually
-#                 for quarter in sorted(tab3_commit_n["Quarter"].unique()):
-#                     quarter_data = tab3_commit_n[tab3_commit_n["Quarter"] == quarter].copy()
-                    
-#                     if quarter < current_quarter:
-#                         # Aggregate previous quarters into a single row
-#                         quarter_sum = quarter_data.iloc[:, 1:-1].sum(numeric_only=True)
-#                         quarter_row = pd.DataFrame({
-#                             "Commitment Month": [f"Quarter {quarter}"],
-#                             **{col: [quarter_sum[col]] for col in quarter_data.columns[1:-2]},  # Topics
-#                             "TOTAL": [quarter_sum["TOTAL"]]
-#                         })
-#                         final_rows.append(quarter_row)
-#                     else:
-#                         # Keep individual months for the current quarter
-#                         quarter_data = quarter_data.drop(columns=["Quarter"])
-#                         final_rows.append(quarter_data)
-
-#             # Compute Grand Total
-#             col_totals = pd.DataFrame(tab3_commit_n.iloc[:, 1:-1].sum(), columns=["Grand Total"]).T
-#             col_totals.insert(0, "Commitment Month", "Grand Total")
-#             for col in tab3_commit_n.columns[1:-2]:  # Add totals for each topic column
-#                 col_totals[col] = tab3_commit_n[col].sum()
-
-#             # Combine all rows
-#             agg_with_totals_n = pd.concat(final_rows + [col_totals], ignore_index=True)
-#         else:
-#             agg_with_totals_n = tab3_commit_n
-
-#         agg_with_totals_n['Type'] = 'Number of Commitments'
-
-#         # Append agg_with_totals_n to agg_with_totals to create the final combined table
-#         final_agg_table = pd.concat([agg_with_totals, agg_with_totals_n], ignore_index=True)
-
-#         # Define columns to display in the table (starting from index 1)
-#         display_columns = final_agg_table.columns[1:-1].tolist()  # Exclude "Signature Month" and "Status"
-#         # Create the great table
-#         if not final_agg_table.empty:
-#             tbl = (
-#                 GT(
-#                     final_agg_table,
-#                     rowname_col="Commitment Month",
-#                     groupname_col="Type"
-#                 )
-#                 .tab_header(
-#                     title="HE Commitment Activity"
-#                 )
-
-#                 # Format "amounts" group as currency (EUR with 2 decimal places)
-#                 .fmt_number(
-#                     columns=display_columns,
-#                     rows=final_agg_table.index[final_agg_table["Type"] == 'Committed Amounts(EUR)'].tolist(),
-#                     accounting=True,
-#                     decimals=2,
-#                     use_seps=True
-#                 )
-#                 # Format "numbers" group as integers
-#                 .fmt_number(
-#                     columns=display_columns,
-#                     rows=final_agg_table.index[final_agg_table["Type"] == 'Number of Commitments'].tolist(),
-#                     decimals=0,
-#                     use_seps=True
-#                 )
-#                 .tab_style(
-#                     style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
-#                     locations=loc.header()
-#                 )
-#                 .tab_stubhead(label="Commitment Month")
-#                 .tab_style(
-#                     style=[
-#                         style.text(color=DARK_BLUE, weight="bold", font='Arial', size='medium'),
-#                         style.fill(color=LIGHT_BLUE),
-#                         style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
-#                         style.css("max-width:200px; line-height:1.2"),
-#                     ],
-#                     locations=loc.row_groups()
-#                 )
-
-#                 .opt_table_font(font="Arial")
-#                 .tab_style(
-#                     style=[
-#                         style.fill(color=BLUE),
-#                         style.text(color="white", weight="bold", align="center", size='small'),
-#                         style.css("max-width:200px; line-height:1.2")
-#                     ],
-#                     locations=loc.column_labels()
-#                 )
-#                 .tab_style(
-#                     style=[
-#                         style.fill(color=BLUE),
-#                         style.text(color="white", weight="bold", align="center",  size='small'),
-#                         style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
-#                     ],
-#                     locations=loc.stubhead()
-#                 )
-#                 .tab_style(
-#                     style=[style.borders(weight="1px", color=DARK_BLUE),
-#                         style.text( size='small')],
-#                     locations=loc.stub()
-#                 )
-#                 .tab_style(
-#                     style=[style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-#                         style.text( align="center",  size='small')],
-#                     locations=loc.body()
-#                 )
-#                 .tab_style(
-#                     style=style.borders(color=DARK_BLUE, weight="2px"),
-#                     locations=[loc.column_labels(), loc.stubhead()]
-#                 )
-#                 .tab_style(
-#                     style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
-#                     locations=loc.body(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
-#                 )
-#                 .tab_style(
-#                     style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
-#                     locations=loc.stub(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
-#                 )
-#                 .tab_options(
-#                     table_body_border_bottom_color=DARK_BLUE,
-#                     table_body_border_bottom_width="2px",
-#                     table_border_right_color=DARK_BLUE,
-#                     table_border_right_width="2px",
-#                     table_border_left_color=DARK_BLUE,
-#                     table_border_left_width="2px",
-#                     table_border_top_color=DARK_BLUE,
-#                     table_border_top_width="2px",
-#                     column_labels_border_top_color=DARK_BLUE,
-#                     column_labels_border_top_width="2px"
-#                 )
-#                 .tab_source_note("Source: Compass")
-#                 .tab_source_note("Reports : Call Overview Report - Budget Follow-Up Report - Ethics Requirements and Issues " )
-#                 .tab_style(
-#                             style=[ style.text(size="small")],
-#                             locations=loc.footer()
-#                         )
-                
-#             )
-#         else:
-#             tbl = None
-#             logging.warning("Final DataFrame is empty. Skipping table creation.")
-
-#         # Store the table (similar to the example)
-#         try:
-#             insert_variable(
-#                 report=report,
-#                 module="GrantsModule",
-#                 var="table_3_commitments_data",
-#                 value=final_agg_table.to_dict(orient="records"),
-#                 db_path=db_path,
-#                 anchor="table_3b_commitments",
-#                 gt_table=tbl
-#             )
-#             logging.debug(f"Stored table_3b_commitments_data ({len(final_agg_table)} rows)")
-#         except Exception as e:
-#             logging.error(f"Error storing table: {str(e)}")
-
-#         return {"data": final_agg_table, "table": tbl}
-
-#     except Exception as e:
-#         logging.error(f"Unexpected error in build_commitments_table: {str(e)}")
-#         return {"data": pd.DataFrame(), "table": None}
-
-
+def build_budget_summary_table(conn, db_path, report, cutoff, table_colors):
+    import pandas as pd
+    from datetime import datetime
+    from ingestion.db_utils import load_report_params, fetch_vars_for_report, fetch_latest_table_data, insert_variable
+    from great_tables import GT, style, loc
+    import logging
+
+    try:
+        previous_year = cutoff.year - 1
+        last_month_previous_year = datetime(previous_year, 12, 1)
+        formatted_date = last_month_previous_year.strftime("%b %Y")
+
+        report_params = load_report_params(report_name=report, db_path=db_path)
+        report_quarter = report_params.get("overviewDate")
+        target_history = report_params.get("Budget_Impl")
+
+        BLUE = table_colors.get("BLUE", "#004A99")
+        LIGHT_BLUE = table_colors.get("LIGHT_BLUE", "#d6e6f4")
+        DARK_BLUE = table_colors.get("DARK_BLUE", "#01244B")
+
+        outline_b = '2px'
+
+        # Commitment Summary
+        report_variables = fetch_vars_for_report(report, db_path)
+        df_comm = pd.DataFrame(report_variables.get("table_1a"))
+        l1_comm = pd.DataFrame(report_variables.get("table_1c"))
+
+        tot = df_comm.iloc[-1]
+        ratio_pct = f"{tot['ratio_consumed_of_L1_and_L2_against_Commitment_Appropriations']*100:.2f}%"
+        avail_bln = f"{tot['Available_Commitment_Appropriations']/1e9:.2f}"
+
+        overview = f"{ratio_pct} (out of € {avail_bln} bln)"
+        target_history_comm = target_history['row2_commit']
+
+        summary_comm = pd.DataFrame({
+            'Indicator': "Budget implementation",
+            "Indicator_Description": [
+                "Consumption of commitment appropriations out of the total available credits (C1/E0-HEU)"
+            ],
+            f'{report_quarter}': [overview],
+            f"{formatted_date}": [target_history_comm],
+            'Target': '100%'
+        })
+
+        # L1 Summary
+        df_l1 = l1_comm.loc[l1_comm["Fund Source"] == "VOBU/EFTA/IAR2/2"]
+        total_l1 = df_l1['L1_Commitment_1'].iloc[-1]
+        total_l2 = -1 * df_l1['L2_Commitment_2'].iloc[-1]
+        pct_L2_L1 = (total_l2 / total_l1) * 100
+
+        output_str = f"{pct_L2_L1:.0f} % (out of € {total_l1/1e9:.1f} bln)"
+        target_history_L1 = target_history['row3_L2/L1']
+
+        summary_L1 = pd.DataFrame({
+            'Indicator': "Budget implementation",
+            "Indicator_Description": [
+                "Consumption of Carried Forward Commitment Voted Credits (% L2 on L1) of previous year calls"
+            ],
+            f'{report_quarter}': [output_str],
+            f"{formatted_date}": [target_history_L1],
+            'Target': '100%'
+        })
+
+        # Payment Summary
+        df_p_h2020 = pd.DataFrame(report_variables.get("table_2a_H2020"))
+        df_p_he = pd.DataFrame(report_variables.get("table_2a_HE"))
+
+        total_p_cons = df_p_h2020.iloc[-1]['Paid_Amount'] + df_p_he.iloc[-1]['Paid_Amount']
+        total_p_appr = df_p_h2020.iloc[-1]['Available_Payment_Appropriations'] + df_p_he.iloc[-1]['Available_Payment_Appropriations']
+        ratio_pct = f"{total_p_cons/total_p_appr*100:.2f}%"
+
+        output_str = f"{ratio_pct} (out of € {total_p_appr/1e9:.1f} bln)"
+        payments_target = target_history['row4_paym']
+
+        summary_payments = pd.DataFrame({
+            'Indicator': "Budget implementation",
+            "Indicator_Description": [
+                "Consumption of payment appropriations out of the total available credits (operational)(VOBU/EFTA - H2020 + HEU)"
+            ],
+            f'{report_quarter}': [output_str],
+            f"{formatted_date}": [payments_target],
+            'Target': '100%'
+        })
+
+        # EARN Summary
+        df_comm_earn = fetch_latest_table_data(conn, "c0_commitments_summa", cutoff).loc[
+            lambda df: df["Fund Source"] == "EARN/N"]
+        total_earn_appr = df_comm_earn['FR Accepted Amount'].sum()
+        total_earn_committed = -1 * df_comm_earn['FR Consumption by PO Amount'].sum()
+        ratio_comm_pct = f"{total_earn_committed/total_earn_appr*100:.2f}%"
+
+        output_str = f"{ratio_comm_pct} (out of € {total_earn_appr/1e9:.1f} bln)"
+        earn_consum_target = target_history['row5_EARN']
+
+        summary_earn = pd.DataFrame({
+            'Indicator': "Budget implementation",
+            "Indicator_Description": [
+                "Commitment appropriations concerning a third country contribution (EARN - H2020 + HEU)"
+            ],
+            f'{report_quarter}': [output_str],
+            f"{formatted_date}": [earn_consum_target],
+            'Target': '-'
+        })
+
+        #SUMMARY VACANCY RATE ####
+        vacancy_Rate = report_params.get("Vacancy_Rate")
+
+        try:
+            prev_value = vacancy_Rate['previous_year']
+            cur_val = vacancy_Rate['current_year']
+        except KeyError as e:
+            logging.error(f"Missing expected key in Vacancy_Rate: {e}")
+            raise
+
+
+        vacancy_Rate = report_params.get("Vacancy_Rate", {})
+        prev_value = vacancy_Rate.get("previous_year", "N/A")
+        cur_val = vacancy_Rate.get("current_year", "N/A")
+
+        summary_vacancy = pd.DataFrame(
+            {
+                'Indicator': ["Resources"],
+                'Indicator_Description': ["Vacancy rate for permanent posts"],
+                f"{report_quarter}": [f"{cur_val}"],
+                f"{formatted_date}": [f"{prev_value}"],
+                'Target': ["2%"]
+            }
+        )
+
+        # Combine all
+        combined_summary = pd.concat([
+            summary_vacancy, summary_comm, summary_L1, summary_payments, summary_earn
+        ], ignore_index=True)
+
+        tbl_summary = (
+            GT(
+                combined_summary,
+                groupname_col="Indicator",
+                rowname_col="Indicator_Description"
+            )
+            .tab_stubhead("Indicator")
+            .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE)
+            .opt_table_font(font="Arial")
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(weight="bold", align='center', size='medium'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.column_labels()
+            )
+            .tab_style(style.text(size='small'), loc.stub())
+            .tab_style(style.text(size='small'), loc.body())
+            .tab_options(
+                container_width="100%",
+                column_labels_background_color=BLUE,
+                row_group_background_color=LIGHT_BLUE,
+                table_body_hlines_style="solid",
+                table_body_vlines_style="solid",
+                table_body_border_bottom_color=DARK_BLUE,
+                table_body_border_bottom_width="2px"
+            )
+        )
+
+        insert_variable(
+            report=report,
+            module="BudgetModule",
+            var="table_summary_budget",
+            value=combined_summary.to_dict(orient="records"),
+            db_path=db_path,
+            anchor="overview_budget_table",
+            gt_table=tbl_summary,
+        )
+
+        return tbl_summary
+
+    except Exception as e:
+        logging.error(f"Error in build_budget_summary_table: {str(e)}")
+        raise

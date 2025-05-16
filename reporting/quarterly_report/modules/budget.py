@@ -10,6 +10,7 @@ from reporting.quarterly_report.report_utils.tables import (
     build_commitment_detail_table_1,
     build_commitment_detail_table_2,
     build_payment_summary_tables,
+    build_budget_summary_table
 )
 from ingestion.db_utils import fetch_latest_table_data, load_report_params
 import pdb
@@ -120,6 +121,20 @@ class BudgetModule(BaseModule):
         except Exception as e:
             logging.error(f"Error building payment tables: {str(e)}\n{traceback.format_exc()}")
             raise DebugError(f"Failed to build payment tables: {str(e)}")
+
+        try:
+            tbl_budget_summary = build_budget_summary_table(
+                conn=conn,
+                db_path=db_path,
+                report=report,
+                cutoff=cutoff,
+                table_colors=table_colors
+            )
+            ctx.out["tables"]["budget_summary"] = tbl_budget_summary
+            logging.debug("Budget summary table created and stored in ctx.out")
+        except Exception as e:
+            logging.error(f"Error building budget summary table: {str(e)}\n{traceback.format_exc()}")
+            raise DebugError(f"Failed to build budget summary table: {str(e)}")
 
         # Log success and return context
         logging.debug("Stored tables successfully in ctx.out")

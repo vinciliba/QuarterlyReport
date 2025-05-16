@@ -1530,7 +1530,8 @@ elif selected_section == "report_structure":
            ],
            "Budget_Impl" : {
                'row1_vacancy' : '1.09%' , 'row2_commit' :'100% (out of € 2.24 bln)', 'row3_L2/L1': '100 % (out of € 2.0  bln)', 'row4_paym': '100 % (out of € 2.174 bln)', 'row5_EARN': '94.21 % (out of € 0.984 bln)'
-           }
+           },
+           "Vacancy_Rate" : {'current_year' : '2%', "previous_year" : "1.09%"} 
       }
     }
     params = load_report_params(chosen_report, DB_PATH) or DEFAULTS_BY_REPORT.get(chosen_report, {})
