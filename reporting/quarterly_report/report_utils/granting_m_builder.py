@@ -310,7 +310,6 @@ def process_granting_data(
     df_grants = df_grants[df_grants["Call"].isin(calls_list)]
 
     if df_grants.empty:
-        log.warning("df_grants is empty after filtering by calls_list and EXCLUDE_TOPICS. Returning empty results.")
         empty_df = pd.DataFrame()
         return {
             "df_grants": empty_df,
