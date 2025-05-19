@@ -1,6 +1,56 @@
+
 from __future__ import annotations
+
+import logging, sqlite3, datetime
+from pathlib import Path
+import pandas as pd
+from ingestion.db_utils import (
+    fetch_latest_table_data,
+)
 from reporting.quarterly_report.utils import RenderContext, BaseModule
+from ingestion.db_utils import load_report_params
+from reporting.quarterly_report.report_utils.amendments_tc_builder.py import process_amendment_data
+# Constants
+CALL_OVERVIEW_ALIAS = "call_overview"
+
 
 class AmendmentModule(BaseModule):
     name        = "Amendment"          # shows up in UI
     description = "Amendment execution tables & charts"
+
+
+    def run(self, ctx: RenderContext) -> RenderContext:
+        log = logging.getLogger(self.name)
+        conn = ctx.db.conn
+        cutoff = pd.to_datetime(ctx.cutoff)
+        db_path = Path(conn.execute("PRAGMA database_list").fetchone()[2])
+        report = ctx.report_name
+
+        # Load report parameters
+        report_params = load_report_params(report_name=report, db_path=db_path)
+
+        # Toggle for saving to DB or exporting
+        SAVE_TO_DB = False  # Switch to True when ready
+        EXPORT_DIR = Path("exports")
+
+        # Process the data
+        results = process_amendment_data(
+            conn=conn,
+            cutoff=cutoff,
+            report=report,
+            db_path=db_path,
+            report_params=report_params,
+            save_to_db=SAVE_TO_DB,
+            export_dir=EXPORT_DIR
+        )
+        # # Unpack results from process_granting_data
+        df_grants = results["df_grants"]
+  
+      
+       
+        # Save to DB if requested (already handled in process_granting_data and build functions, but log here)
+        if SAVE_TO_DB:
+            log.info("✔︎ Data saved to database")
+
+        log.info("AmendmentsModule finished – %s rows processed.", len(df_grants))
+        return ctx
