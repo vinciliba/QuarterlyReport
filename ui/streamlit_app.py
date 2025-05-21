@@ -392,18 +392,17 @@ if selected_section == "export_report":
             # First, render image using ORIGINAL helper signature (gt_image, anchor_name)
             gt_image, anchor_name = fetch_gt_image(chosen_report, var_name, DB_PATH)
             if gt_image:
+                st.write(f"🔍 Image length: {len(gt_image)} bytes")
                 try:
                     image = Image.open(BytesIO(gt_image))
-                    caption_key = (anchor_name or var_name).replace("table", "template")
-                    st.image(image, caption=f"Table Image for {caption_key} ({var_name})", use_container_width=True)
+                    st.image(image, caption=f"Table Image for {anchor_name or var_name}", use_container_width=True)
                 except Exception as exc:
                     st.warning(f"Failed to display image for {var_name}: {exc}")
             else:
                 st.warning(f"No image found for {var_name}")
 
-            # Always render the raw value afterwards
             st.markdown(f"**Anchor name:** `{anchor_name or '–'}`")
-            st.markdown(f"**Raw value for `{var_name}`**:")
+            st.markdown(f"**Raw value for `{var_name}`:**")
             _pretty_print_value(_fetch_raw_value(chosen_report, var_name))
     else:
         st.info("No tables selected for visualization.")

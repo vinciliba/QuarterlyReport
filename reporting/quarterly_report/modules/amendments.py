@@ -9,9 +9,10 @@ from ingestion.db_utils import (
 )
 from reporting.quarterly_report.utils import RenderContext, BaseModule
 from ingestion.db_utils import load_report_params
-from reporting.quarterly_report.report_utils.amendments_tc_builder.py import process_amendment_data
+from reporting.quarterly_report.report_utils.amendments_tc_builder import generate_amendments_report
+
 # Constants
-CALL_OVERVIEW_ALIAS = "call_overview"
+AMENDMENTS_ALIAS = "amendments"
 
 
 class AmendmentModule(BaseModule):
@@ -30,13 +31,14 @@ class AmendmentModule(BaseModule):
         report_params = load_report_params(report_name=report, db_path=db_path)
 
         # Toggle for saving to DB or exporting
-        SAVE_TO_DB = False  # Switch to True when ready
+        SAVE_TO_DB = True  # Switch to True when ready
         EXPORT_DIR = Path("exports")
 
         # Process the data
-        results = process_amendment_data(
+        results = generate_amendments_report(
             conn=conn,
             cutoff=cutoff,
+            alias=AMENDMENTS_ALIAS ,
             report=report,
             db_path=db_path,
             report_params=report_params,
@@ -44,7 +46,7 @@ class AmendmentModule(BaseModule):
             export_dir=EXPORT_DIR
         )
         # # Unpack results from process_granting_data
-        df_grants = results["df_grants"]
+        # df_grants = results["df_amendments"]
   
       
        
@@ -52,5 +54,5 @@ class AmendmentModule(BaseModule):
         if SAVE_TO_DB:
             log.info("✔︎ Data saved to database")
 
-        log.info("AmendmentsModule finished – %s rows processed.", len(df_grants))
+        # log.info("AmendmentsModule finished – %s rows processed.", len(df_grants))
         return ctx

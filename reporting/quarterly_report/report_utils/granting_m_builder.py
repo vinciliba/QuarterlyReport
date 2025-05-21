@@ -250,7 +250,7 @@ def process_granting_data(
     report: str,
     db_path: Path,
     report_params: Dict,
-    save_to_db: bool = False,
+    save_to_db: bool = True,
     export_dir: Path = Path("exports")
 ) -> Dict[str, Any]:
     """
