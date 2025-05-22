@@ -684,7 +684,54 @@ def delete_report_module(row_id: int, db_path="database/reporting.db"):
         conn.commit()
 
 #-------------  Create Report Variables  ------------------
+from pathlib import Path
+import altair as alt
+import altair_saver
+import logging
+import great_tables
+import os
+import sqlite3
+import json
+from typing import Any
 
+
+def altair_chart_to_path(chart: alt.TopLevelMixin, var_name: str, folder: str = "charts_out") -> str:
+    """
+    Save an Altair chart as PNG to disk and return its file path.
+
+    Args:
+        chart: Altair chart object (Chart or LayerChart) to render.
+        var_name: Name for the output PNG file.
+        folder: Directory to save the PNG (default: 'charts_out').
+
+    Returns:
+        File path of the saved PNG as a string.
+
+    Raises:
+        ValueError: If chart is not an Altair chart object.
+        RuntimeError: If chart rendering fails.
+    """
+  
+
+    if not isinstance(chart, alt.TopLevelMixin):
+        raise ValueError(f"Expected alt.TopLevelMixin (Chart or LayerChart), got {type(chart)}")
+
+    # folder_path = Path(folder)
+    # folder_path.mkdir(exist_ok=True)
+    # out_path = folder_path / f"{var_name}.png"
+
+    save_dir = "charts_out"
+    os.makedirs(save_dir, exist_ok=True)
+    out_path = os.path.join(save_dir, f"{var_name}_tta_chart.png")
+
+    try:
+        altair_saver.save(chart, out_path, method="selenium", webdriver="chrome")
+        logging.debug(f"Saved Altair chart to {out_path}")
+        return str(out_path)  # Store absolute path for consistency
+    except Exception as e:
+        logging.error(f"Failed to render Altair chart {var_name}: {str(e)}", exc_info=True)
+        raise RuntimeError(f"Failed to render Altair chart {var_name}: {str(e)}")
+    
 
 
 def insert_variable(
@@ -694,34 +741,65 @@ def insert_variable(
     value: Any,
     db_path: str,
     anchor: str | None = None,
-    gt_table=None,
+    gt_table: great_tables.GT | None = None,
+    altair_chart: alt.TopLevelMixin | None = None,
 ) -> None:
+    
+   
     """
-    Overwrite the row (report_name, var_name) with a new value (and picture).
+    Overwrite the row (report_name, var_name) with a new value (and picture path).
 
-    Exactly ONE row per variable is kept.
+    Exactly ONE row per variable is kept. Either gt_table or altair_chart can be provided, not both.
+    Stores the file path to the rendered PNG in gt_image instead of the image bytes.
+
+    Args:
+        report: Report name.
+        module: Module name.
+        var: Variable name.
+        value: Value to serialize (e.g., DataFrame, dict).
+        db_path: Path to SQLite database.
+        anchor: Anchor name (defaults to var).
+        gt_table: great_tables.GT object to render as PNG.
+        altair_chart: Altair chart object (Chart or LayerChart) to render as PNG.
+
+    Raises:
+        ValueError: If both gt_table and altair_chart are provided or invalid types.
+        sqlite3.Error: If database operations fail.
     """
+    if gt_table is not None and altair_chart is not None:
+        raise ValueError("Cannot provide both gt_table and altair_chart")
+    if gt_table is not None and not isinstance(gt_table, great_tables.GT):
+        raise ValueError(f"Expected great_tables.GT, got {type(gt_table)}")
+    if altair_chart is not None and not isinstance(altair_chart, alt.TopLevelMixin):
+        raise ValueError(f"Expected alt.TopLevelMixin (Chart or LayerChart), got {type(altair_chart)}")
+
     con = sqlite3.connect(db_path)
     cur = con.cursor()
     try:
-        # 1) remove any previous copy of this variable
+        # 1) Remove any previous copy of this variable
         cur.execute(
             "DELETE FROM report_variables WHERE report_name = ? AND var_name = ?",
             (report, var),
         )
 
-        # 2) serialise the Python value
+        # 2) Serialize the Python value
         val_json = json.dumps(value, default=str)
 
-        # 3) optional: render great‑tables object to PNG → bytes
+        # 3) Optional: Render great-tables or Altair chart to PNG and store the path
         gt_image = None
         if gt_table is not None:
-            tmp = Path(f"__gt_{var}.png")
-            gt_table.save(tmp)                 # playwright renders PNG
-            gt_image = tmp.read_bytes()
-            tmp.unlink(missing_ok=True)
+            logging.debug(f"Rendering gt_table for {var}")
+            tmp = Path(f"charts_out/{var}_gt.png")
+            tmp.parent.mkdir(exist_ok=True)
+            gt_table.save(tmp)  # Playwright renders PNG
+            gt_image = str(tmp.resolve())
+            logging.debug(f"Saved great_tables to {gt_image}")
+        elif altair_chart is not None:
+            logging.debug(f"Rendering altair_chart for {var}")
+            gt_image = altair_chart_to_path(altair_chart, var)
+            logging.debug(f"Saved Altair chart path: {gt_image}")
 
-        # 4) insert the fresh row
+        # 4) Insert the fresh row
         cur.execute(
             """
             INSERT INTO report_variables
@@ -738,7 +816,7 @@ def insert_variable(
 
     except Exception as exc:
         con.rollback()
-        logging.error("insert_variable failed for %s/%s: %s", report, var, exc)
+        logging.error("insert_variable failed for %s/%s: %s", report, var, exc, exc_info=True)
         raise
     finally:
         con.close()

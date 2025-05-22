@@ -1,7 +1,7 @@
 import os
 import sys
 import sqlite3, json, textwrap, pathlib, base64
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader, select_autoescape, DebugUndefined
 import streamlit as st
 from streamlit.components.v1 import html    
 import pandas as pd
@@ -158,7 +158,6 @@ def _pretty_print_value(value: str | None) -> None:
         st.json(parsed, expanded=False)
     else:
         st.code(str(parsed))
-
 
 # ──────────────────────────────────────────────────
 # WORKFLOW – Launch & Validation (Refactored)
@@ -389,13 +388,21 @@ if selected_section == "export_report":
     if selected_tables:
         st.markdown("### 📊 GreatTables Images & Raw Values")
         for var_name in selected_tables:
-            # First, render image using ORIGINAL helper signature (gt_image, anchor_name)
+            # Fetch gt_image (bytes or path) and anchor_name
             gt_image, anchor_name = fetch_gt_image(chosen_report, var_name, DB_PATH)
             if gt_image:
-                st.write(f"🔍 Image length: {len(gt_image)} bytes")
+                st.write(f"🔍 Image length: {len(str(gt_image))} bytes")  # Length of path or bytes as string
                 try:
-                    image = Image.open(BytesIO(gt_image))
-                    st.image(image, caption=f"Table Image for {anchor_name or var_name}", use_container_width=True)
+                    if isinstance(gt_image, str):  # If gt_image is a file path (for charts)
+                        image_path = Path(gt_image)
+                        if image_path.exists():
+                            image = Image.open(image_path)
+                            st.image(image, caption=f"Image for {anchor_name}", use_container_width=True)
+                        else:
+                            st.warning(f"Image file not found at {gt_image} for {var_name}")
+                    else:  # If gt_image is bytes (for great_tables)
+                        image = Image.open(io.BytesIO(gt_image))
+                        st.image(image, caption=f"Image for {anchor_name}", use_container_width=True)
                 except Exception as exc:
                     st.warning(f"Failed to display image for {var_name}: {exc}")
             else:
@@ -404,8 +411,7 @@ if selected_section == "export_report":
             st.markdown(f"**Anchor name:** `{anchor_name or '–'}`")
             st.markdown(f"**Raw value for `{var_name}`:**")
             _pretty_print_value(_fetch_raw_value(chosen_report, var_name))
-    else:
-        st.info("No tables selected for visualization.")
+
 
     # ---------------- Template render block -------------
     st.markdown("### 📄 Select Template or Use Existing Partial")
@@ -425,14 +431,24 @@ if selected_section == "export_report":
         for _idx, row in df.iterrows():
             anchor = row["anchor_name"]
             if row["gt_image"]:
-                ctx[anchor] = InlineImage(tpl, BytesIO(row["gt_image"]), width=docx.shared.Inches(5))
+                if isinstance(row["gt_image"], str):  # If gt_image is a file path (for charts)
+                    image_path = Path(row["gt_image"])
+                    if image_path.exists():
+                        with open(image_path, "rb") as f:
+                            image_bytes = f.read()
+                        ctx[anchor] = InlineImage(tpl, io.BytesIO(image_bytes), width=docx.shared.Inches(5))
+                    else:
+                        st.warning(f"Image file not found at {row['gt_image']} for {anchor}")
+                        ctx[anchor] = None  # Skip in template to avoid breaking
+                else:  # If gt_image is bytes (for great_tables)
+                    ctx[anchor] = InlineImage(tpl, io.BytesIO(row["gt_image"]), width=docx.shared.Inches(5))
             else:
                 try:
                     ctx[anchor] = json.loads(row["value"])
                 except (TypeError, ValueError):
                     ctx[anchor] = row["value"]
         return ctx
-
+    
     if st.button("📄 Render Final Report"):
         tpl = DocxTemplate(str(tmpl_path))
         context = _build_context(chosen_report, tpl)
@@ -448,7 +464,7 @@ if selected_section == "export_report":
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "Final_Report.docx"
         tpl.save(out_path)
-        st.success(f"Report saved → {out_path.relative_to(Path.cwd())}")
+        st.success(f"Report saved → {out_path.absolute()}")  # Use absolute path instead of relative_to
         with open(out_path, "rb") as fh:
             st.download_button("📥 Download Final Report", fh.read(), file_name="Final_Report.docx")
 

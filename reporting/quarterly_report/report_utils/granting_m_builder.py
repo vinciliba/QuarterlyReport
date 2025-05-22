@@ -408,96 +408,214 @@ def process_granting_data(
     # Build GreatTables object
     try:
         tbl_ttg = (
-            GT(
-                df_TTG,
-                rowname_col="index"
-        )
-        .tab_header(
-                title=html(
-                    f"<strong style='color: {BLUE};'>TIME TO GRANT</strong>  "
-                    f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>(Main list & Reserve list)</span>"
-                )
-        )
-        .tab_stubhead(
-                label=html(f"<span style='color: white ; font-size: large; align-text: center; margin-left: 5px; margin-bottom: 80px;' >Call</span>")
-                )
-        # GENERAL FORMATTING
-        # Table Outline
-        .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
-        # Arial font
-        .opt_table_font(font="Arial")
-        # Header and stub styling
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align='center'),
-                style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
-            ],
-            locations=loc.column_labels()
-        )
-        # # Table borders
-        .tab_options(
-            table_body_border_bottom_color=DARK_BLUE,
-            table_body_border_bottom_width="1px",
-            table_border_right_color=DARK_BLUE,
-            table_border_right_width="1px",
-            table_border_left_color=DARK_BLUE,
-            table_border_left_width="1px",
-            table_border_top_color=DARK_BLUE,
-            table_border_top_width="1px",
-            column_labels_border_top_color=DARK_BLUE,
-            column_labels_border_top_width="1px",
-            column_labels_background_color=BLUE
-        )
-        # BODY
-        .fmt_percent(
-            rows=["Completion Rate"],  # or use `where` with a condition
-            decimals=1
-        )
-        .fmt_number(
-            rows=["Average TTG"],
-            decimals=1,
-            accounting=False
-        )
-        # Source notes
-        .tab_source_note("Source: Compass")
-        .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
-        )
+            GT(df_TTG, rowname_col="index")
+            .tab_header(
+                    title=html(
+                        f"<strong style='color: {BLUE};'>TIME TO GRANT</strong>  "
+                        f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>(Main list & Reserve list)</span>"
+                    )
+            )
+            .tab_stubhead(
+                    label=html(f"<span style='color: white ; font-size: large; align-text: center; margin-left: 5px; margin-bottom: 80px;' >Call</span>")
+                    )
+            # GENERAL FORMATTING
+            # Table Outline
+            .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            # Arial font
+            .opt_table_font(font="Arial")
+            # Header and stub styling
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.column_labels()
+            )
+            # # Table borders
+            .tab_options(
+                table_body_border_bottom_color=DARK_BLUE,
+                table_body_border_bottom_width="1px",
+                table_border_right_color=DARK_BLUE,
+                table_border_right_width="1px",
+                table_border_left_color=DARK_BLUE,
+                table_border_left_width="1px",
+                table_border_top_color=DARK_BLUE,
+                table_border_top_width="1px",
+                column_labels_border_top_color=DARK_BLUE,
+                column_labels_border_top_width="1px",
+                column_labels_background_color=BLUE
+            )
+            # BODY
+            .fmt_percent(
+                rows=["Completion Rate"],  # or use `where` with a condition
+                decimals=1
+            )
+            .fmt_number(
+                rows=["Average TTG"],
+                decimals=1,
+                accounting=False
+            )
+            # Source notes
+            .tab_source_note("Source: Compass")
+            .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
+            )
     except Exception as e:
             logging.error(f"Error building GreatTables object: {str(e)}")
-             
+                
             
     try:
         tbl_tts = (
-        GT(
-            df_TTS,
-            rowname_col="index"
-        )
-        .tab_header(
-                title=html(
-                    f"<strong style='color: {BLUE};'>TIME TO SIGN</strong>  "
-                    f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>(Main list & Reserve list)</span>"
-                )
+            GT(
+                df_TTS,
+                rowname_col="index"
             )
-        .tab_stubhead(
-                label=html(f"<span style='color: white ; font-size: large; align-text: center; margin-left: 5px; margin-bottom: 80px;' >Call</span>")
+            .tab_header(
+                    title=html(
+                        f"<strong style='color: {BLUE};'>TIME TO SIGN</strong>  "
+                        f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>(Main list & Reserve list)</span>"
+                    )
                 )
-        # GENERAL FORMATTING
-        # Table Outline
-        .opt_table_outline(style = "solid", width = outline_b , color =  DARK_BLUE) 
-        # Arial font
-        .opt_table_font(font="Arial")
-        # Header and stub styling
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align='center'),
-                style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
-            ],
-            locations=loc.column_labels()
-        )
-        # # Table borders
-        .tab_options(
+            .tab_stubhead(
+                    label=html(f"<span style='color: white ; font-size: large; align-text: center; margin-left: 5px; margin-bottom: 80px;' >Call</span>")
+                    )
+            # GENERAL FORMATTING
+            # Table Outline
+            .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            # Arial font
+            .opt_table_font(font="Arial")
+            # Header and stub styling
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.column_labels()
+            )
+            # # Table borders
+            .tab_options(
+                    table_body_border_bottom_color=DARK_BLUE,
+                    table_body_border_bottom_width="1px",
+                    table_border_right_color=DARK_BLUE,
+                    table_border_right_width="1px",
+                    table_border_left_color=DARK_BLUE,
+                    table_border_left_width="1px",
+                    table_border_top_color=DARK_BLUE,
+                    table_border_top_width="1px",
+                    column_labels_border_top_color=DARK_BLUE,
+                    column_labels_border_top_width="1px",
+                    column_labels_background_color = BLUE
+                )
+            # BODY
+            .fmt_percent(
+                rows=["Completion Rate"],  # or use `where` with a condition
+                decimals=1
+            )
+            .fmt_number(
+                rows=["Average TTS"],
+                decimals=1,
+                accounting=False
+            )
+            # Source notes
+            .tab_source_note("Source: Compass")
+            .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
+            )
+    except Exception as e:
+                logging.error(f"Error building GreatTables object: {str(e)}")
+                # Return the aggregated DataFrame without styling if table creation fails
+           
+    # Build GreatTables object
+    try:
+        tbl_q_ttg = (
+            GT(q_ttg, rowname_col="index")
+            .tab_header(
+                    title=html(
+                        f"<strong style='color: {BLUE};'>TIME TO GRANT - Quantiles </strong>  "
+                        #  f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>With Quantiles</span>"
+                        f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>(Main list & Reserve list)</span>"
+                    )
+                )
+            .tab_stubhead(
+                    label=html(f"<span style='color: white ; font-size: large; align-text: center; margin-left: 5px; margin-bottom: 80px;' >Call</span>")
+                    )
+            # GENERAL FORMATTING
+            # Table Outline
+            .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            # Arial font
+            .opt_table_font(font="Arial")
+            # Header and stub styling
+            .tab_style(
+                style=[
+                    # style.borders(weight="1px", color=DARK_BLUE),
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.column_labels()
+            )
+            # # Table borders
+            .tab_options(
+                table_body_border_bottom_color=DARK_BLUE,
+                table_body_border_bottom_width="1px",
+                table_border_right_color=DARK_BLUE,
+                table_border_right_width="1px",
+                table_border_left_color=DARK_BLUE,
+                table_border_left_width="1px",
+                table_border_top_color=DARK_BLUE,
+                table_border_top_width="1px",
+                column_labels_border_top_color=DARK_BLUE,
+                column_labels_border_top_width="1px",
+                column_labels_background_color=BLUE
+            )
+            # BODY
+            .fmt_percent(
+                rows=["Completion Rate"],  # or use `where` with a condition
+                decimals=1
+            )
+            # Source notes
+            .tab_source_note("Source: Compass")
+            .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
+            )
+    except Exception as e:
+                logging.error(f"Error building GreatTables object: {str(e)}")
+                # Return the aggregated DataFrame without styling if table creation fails
+           
+
+    # Build GreatTables object
+    try:
+        tbl_q_tts = (
+            GT(
+            q_tts,
+                rowname_col="index"
+            )
+            .tab_header(
+                    title=html(
+                        f"<strong style='color: {BLUE};'>TIME TO SIGN - Quantiles </strong>  "
+                        #  f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>With Quantiles</span>"
+                        f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>(Main list & Reserve list)</span>"
+                    )
+            )
+            .tab_stubhead(
+                    label=html(f"<span style='color: white ; font-size: large; align-text: center; margin-left: 5px; margin-bottom: 80px;' >Call</span>")
+            )
+            # GENERAL FORMATTING
+            # Table Outline
+            .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            # Arial font
+            .opt_table_font(font="Arial")
+
+            # Header and stub styling
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.column_labels()
+            )
+            # # Table borders
+            .tab_options(
                 table_body_border_bottom_color=DARK_BLUE,
                 table_body_border_bottom_width="1px",
                 table_border_right_color=DARK_BLUE,
@@ -510,139 +628,15 @@ def process_granting_data(
                 column_labels_border_top_width="1px",
                 column_labels_background_color = BLUE
             )
-        # BODY
-        .fmt_percent(
-            rows=["Completion Rate"],  # or use `where` with a condition
-            decimals=1
-        )
-        .fmt_number(
-            rows=["Average TTS"],
-            decimals=1,
-            accounting=False
-        )
-        # Source notes
-        .tab_source_note("Source: Compass")
-        .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
-        )
-    except Exception as e:
-                logging.error(f"Error building GreatTables object: {str(e)}")
-                # Return the aggregated DataFrame without styling if table creation fails
-           
-    # Build GreatTables object
-    try:
-        tbl_q_ttg = (
-        GT(
-        q_ttg,
-            rowname_col="index"
-        )
-        .tab_header(
-                title=html(
-                    f"<strong style='color: {BLUE};'>TIME TO GRANT - Quantiles </strong>  "
-                    #  f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>With Quantiles</span>"
-                    f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>(Main list & Reserve list)</span>"
-                )
+            # BODY
+            .fmt_percent(
+                rows=["Completion Rate"],  # or use `where` with a condition
+                decimals=1
             )
-        .tab_stubhead(
-                label=html(f"<span style='color: white ; font-size: large; align-text: center; margin-left: 5px; margin-bottom: 80px;' >Call</span>")
-                )
-        # GENERAL FORMATTING
-        # Table Outline
-        .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
-        # Arial font
-        .opt_table_font(font="Arial")
-        # Header and stub styling
-        .tab_style(
-            style=[
-                # style.borders(weight="1px", color=DARK_BLUE),
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align='center'),
-                style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
-            ],
-            locations=loc.column_labels()
-        )
-        # # Table borders
-        .tab_options(
-            table_body_border_bottom_color=DARK_BLUE,
-            table_body_border_bottom_width="1px",
-            table_border_right_color=DARK_BLUE,
-            table_border_right_width="1px",
-            table_border_left_color=DARK_BLUE,
-            table_border_left_width="1px",
-            table_border_top_color=DARK_BLUE,
-            table_border_top_width="1px",
-            column_labels_border_top_color=DARK_BLUE,
-            column_labels_border_top_width="1px",
-            column_labels_background_color = BLUE
-        )
-        # BODY
-        .fmt_percent(
-            rows=["Completion Rate"],  # or use `where` with a condition
-            decimals=1
-        )
-        # Source notes
-        .tab_source_note("Source: Compass")
-        .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
-        )
-    except Exception as e:
-                logging.error(f"Error building GreatTables object: {str(e)}")
-                # Return the aggregated DataFrame without styling if table creation fails
-           
-
-    # Build GreatTables object
-    try:
-        tbl_q_tts = (
-        GT(
-        q_tts,
-            rowname_col="index"
-        )
-        .tab_header(
-                title=html(
-                    f"<strong style='color: {BLUE};'>TIME TO SIGN - Quantiles </strong>  "
-                    #  f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>With Quantiles</span>"
-                    f"<span style='color: {BLUE}; font-style: italic; font-size: smaller;'>(Main list & Reserve list)</span>"
-                )
-        )
-        .tab_stubhead(
-                label=html(f"<span style='color: white ; font-size: large; align-text: center; margin-left: 5px; margin-bottom: 80px;' >Call</span>")
-        )
-        # GENERAL FORMATTING
-        # Table Outline
-        .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
-        # Arial font
-        .opt_table_font(font="Arial")
-
-        # Header and stub styling
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align='center'),
-                style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
-            ],
-            locations=loc.column_labels()
-        )
-        # # Table borders
-        .tab_options(
-            table_body_border_bottom_color=DARK_BLUE,
-            table_body_border_bottom_width="1px",
-            table_border_right_color=DARK_BLUE,
-            table_border_right_width="1px",
-            table_border_left_color=DARK_BLUE,
-            table_border_left_width="1px",
-            table_border_top_color=DARK_BLUE,
-            table_border_top_width="1px",
-            column_labels_border_top_color=DARK_BLUE,
-            column_labels_border_top_width="1px",
-            column_labels_background_color = BLUE
-        )
-        # BODY
-        .fmt_percent(
-            rows=["Completion Rate"],  # or use `where` with a condition
-            decimals=1
-        )
-        # Source notes
-        .tab_source_note("Source: Compass")
-        .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
-        )
+            # Source notes
+            .tab_source_note("Source: Compass")
+            .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
+            )
     except Exception as e:
                 logging.error(f"Error building GreatTables object: {str(e)}")
                 # Return the aggregated DataFrame without styling if table creation fails
@@ -650,72 +644,72 @@ def process_granting_data(
     # Build GreatTables object
     try:
         tbl_grants_tts_overview = (
-        GT(
-        final_df_tts_overview,
-            rowname_col="Call"
-        )
-        .tab_header(
-            title=html(
-            f"<strong style=' font-size: medium; text-align: left; display: block;'>Time-to-Sign HEU</strong>"
+            GT(
+            final_df_tts_overview,
+                rowname_col="Call"
+            )
+            .tab_header(
+                title=html(
+                f"<strong style=' font-size: medium; text-align: left; display: block;'>Time-to-Sign HEU</strong>"
+                    )
+            )
+            .tab_stubhead(
+                label=html(
+                    f"<span style=' font-size: smaller; text-align: left; display: block; white-space: normal; max-width: 400px;'>"
+                    "Time to Sign: From the information letter<br>sent to the signature of the Grant Agreement"
+                    "</span>"
                 )
+            )
+            # GENERAL FORMATTING
+            # Table Outline
+            .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
+            # Arial font
+            .opt_table_font(font="Arial")
+            # Header and stub styling
+            .tab_style(
+                style=[
+                    # style.borders(weight="1px", color=DARK_BLUE),
+                    style.fill(color=LIGHT_BLUE),
+                    style.text( weight="bold", align='center', size = 'medium'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.column_labels()
+            )
+            .cols_label(
+            Completion_Rate=html(
+                "Completion Rate <span style='font-size: smaller;'> (8)</span> <br> --------------------------</br> "
+                "<span style='font-size: smaller;'>(Main + Reserve lists)</span>"
+                )   
+            )
+            .tab_style(
+            style.text(size = 'medium'),
+            loc.body()
         )
-        .tab_stubhead(
-            label=html(
-                f"<span style=' font-size: smaller; text-align: left; display: block; white-space: normal; max-width: 400px;'>"
-                "Time to Sign: From the information letter<br>sent to the signature of the Grant Agreement"
-                "</span>"
+            # # Table borders
+            .tab_options(
+                    table_body_border_bottom_color=DARK_BLUE,
+                    table_body_border_bottom_width="1px",
+                    table_border_right_color=DARK_BLUE,
+                    table_border_right_width="1px",
+                    table_border_left_color=DARK_BLUE,
+                    table_border_left_width="1px",
+                    table_border_top_color=DARK_BLUE,
+                    table_border_top_width="1px",
+                    column_labels_border_top_color=DARK_BLUE,
+                    column_labels_border_top_width="1px",
+                    column_labels_background_color = LIGHT_BLUE
+                )
+            # BODY
+            .fmt_percent(
+                columns=["Completion_Rate"],  # or use `where` with a condition
+                decimals=1
+            )
+            .fmt_number(
+                columns=["TTS"],
+                decimals=1,
+                accounting=False
             )
         )
-        # GENERAL FORMATTING
-        # Table Outline
-        .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
-        # Arial font
-        .opt_table_font(font="Arial")
-        # Header and stub styling
-        .tab_style(
-            style=[
-                # style.borders(weight="1px", color=DARK_BLUE),
-                style.fill(color=LIGHT_BLUE),
-                style.text( weight="bold", align='center', size = 'medium'),
-                style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
-            ],
-            locations=loc.column_labels()
-        )
-        .cols_label(
-        Completion_Rate=html(
-            "Completion Rate <span style='font-size: smaller;'> (8)</span> <br> --------------------------</br> "
-            "<span style='font-size: smaller;'>(Main + Reserve lists)</span>"
-            )   
-        )
-        .tab_style(
-        style.text(size = 'medium'),
-        loc.body()
-       )
-        # # Table borders
-        .tab_options(
-                table_body_border_bottom_color=DARK_BLUE,
-                table_body_border_bottom_width="1px",
-                table_border_right_color=DARK_BLUE,
-                table_border_right_width="1px",
-                table_border_left_color=DARK_BLUE,
-                table_border_left_width="1px",
-                table_border_top_color=DARK_BLUE,
-                table_border_top_width="1px",
-                column_labels_border_top_color=DARK_BLUE,
-                column_labels_border_top_width="1px",
-                column_labels_background_color = LIGHT_BLUE
-            )
-        # BODY
-        .fmt_percent(
-            columns=["Completion_Rate"],  # or use `where` with a condition
-            decimals=1
-        )
-        .fmt_number(
-            columns=["TTS"],
-            decimals=1,
-            accounting=False
-        )
-     )
     except Exception as e:
         logging.error(f"Error building GreatTables object: {str(e)}")
     # Store TIME TO GRANT table and data
@@ -1060,7 +1054,7 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
             )
             )
              # Table Outline
-            .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
             # Arial font
             .opt_table_font(font="Arial")
             # Format numeric columns as integers (except percentage column)
@@ -1168,7 +1162,7 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
         )
         log.debug("Stored 3c table and data")
     except Exception as e:
-           logging.error(f"Error storing table for table_3c: {str(e)}")
+        logging.error(f"Error storing table for table_3c: {str(e)}")
     log.debug("Complete processing build_po_exceeding_FDI_tb_3c ")
     return df_with_totals  # Corrected return value from agg_with_subtotals to df_with_totals
 
@@ -1372,7 +1366,7 @@ def build_signatures_table(
                     locations=loc.header()
                 )
                  # Table Outline
-                .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+                .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
                 # Arial font
                 .opt_table_font(font="Arial")
 
@@ -1697,7 +1691,7 @@ def build_commitments_table(
                     title="HE Commitment Activity"
                 )
                  # Table Outline
-                .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+                .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
                 # Arial font
                 .opt_table_font(font="Arial")
                 # Format "amounts" group as currency (EUR with 2 decimal places)
