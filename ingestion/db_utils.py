@@ -9,6 +9,12 @@ import logging
 from pathlib import Path
 from typing import Any,  Dict, Type
 import importlib.util
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
+
+
+service = Service(ChromeDriverManager().install())
+
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -791,8 +797,8 @@ def insert_variable(
             logging.debug(f"Rendering gt_table for {var}")
             tmp = Path(f"charts_out/{var}_gt.png")
             tmp.parent.mkdir(exist_ok=True)
-            gt_table.save(tmp)  # Playwright renders PNG
-            gt_image = str(tmp.resolve())
+            gt_table.save(tmp, web_driver='chrome', window_size=(8000, 8000))  # Playwright renders PNG
+            gt_image = str(tmp)
             logging.debug(f"Saved great_tables to {gt_image}")
         elif altair_chart is not None:
             logging.debug(f"Rendering altair_chart for {var}")

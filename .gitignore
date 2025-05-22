@@ -9,6 +9,12 @@ qenv/
 # Ignore specific database file if needed
 /reporting.db
 
+# Ignore the charts_out folder
+charts_out/
+
+# Ignore all PNG files
+*.png
+
 # Ignore other common file types or directories (optional, add as needed)
 # Example: Ignore Python compiled files
 __pycache__/

@@ -26,7 +26,7 @@ EXCLUDE_TOPICS = [
     "HORIZON-ERC-2022-VICECHAIRS-IBA",
     "HORIZON-ERC-2023-VICECHAIRS-IBA",
 ]
-MONTHS_ORDER = list(pd.date_range("2000-01-01", periods=12, freq="M").strftime("%B"))
+MONTHS_ORDER = list(pd.date_range("2000-01-01", periods=12, freq="ME").strftime("%B"))
 
 
 def months_in_scope(cutoff: pd.Timestamp) -> list[str]:

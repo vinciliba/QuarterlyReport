@@ -281,6 +281,9 @@ def amendment_cases(
             .str.replace(r'_x000D_', '', regex=True)
             .str.lstrip('+-')
         )
+        df['DESCRIPTION'] = df['DESCRIPTION'].replace("", np.nan)
+        df.dropna(subset=['DESCRIPTION'], inplace=True)
+
         # Filter
         df = df[
             (df['FRAMEWORK'] == programme) &
@@ -508,24 +511,30 @@ def generate_amendments_report(
         df_amd['END\nDATE'] = pd.to_datetime(df_amd['END\nDATE'], errors='coerce')
         df_amd['EndYear'] = df_amd['END\nDATE'].dt.year
         df_amd['EndMonth'] = df_amd['END\nDATE'].dt.month
-      
+        
+        df_amd.to_excel('amd.xlsx')
         epoch_year = determine_epoch_year(cutoff)
         months_scope = list(range(1, cutoff.month if cutoff.month != 1 else 13))
+        logging.info(f'months in scope {months_scope}')
       
         results = {}
         for programme in ['H2020', 'HORIZON']:
             received_statuses = ['SIGNED_CR', 'ASSESSED_CR', 'OPENED_EXT_CR', 'OPENED_INT_CR', 'RECEIVED_CR', 'WITHDRAWN_CR', 'REJECTED_CR']
 
             amd_received = generate_amendment_pivot(df_amd, programme, received_statuses, 'Counter', 'sum', 'Received', months_scope, epoch_year, 'StartMonth', 'StartYear')
-            amd_rejected = generate_amendment_pivot(df_amd, programme, ['REJECTED_CR', 'WITHDRAWN_CR'], 'Counter', 'sum', 'Rejected', months_scope, epoch_year)
-            amd_signed = generate_amendment_pivot(df_amd, programme, ['SIGNED_CR'], 'Counter', 'sum', 'Signed', months_scope, epoch_year)
-        
+            amd_rejected = generate_amendment_pivot(df_amd, programme, ['REJECTED_CR', 'WITHDRAWN_CR'], 'Counter', 'sum', 'Rejected', months_scope, epoch_year,'EndMonth', 'EndYear')
+            amd_signed = generate_amendment_pivot(df_amd, programme, ['SIGNED_CR'], 'Counter', 'sum', 'Signed', months_scope, epoch_year,'EndMonth', 'EndYear')
+            
+            amd_received.to_excel(f'{programme}_amd_received.xlsx')
             amd_overview = pd.concat([
                 amd_received.assign(TYPE_ROW_NAME='Amendments Received'),
                 amd_signed.assign(TYPE_ROW_NAME='Amendments Signed'),
                 amd_rejected.assign(TYPE_ROW_NAME='Amendments Rejected or Withdrawn')
             ])
-     
+
+            amd_overview .fillna(0, inplace=True)
+            
+            # amd_overview.to_excel(f'{programme}_amd_overview.xlsx')
             total_rows_indices = amd_overview.reset_index().query('Month == "Total"').index.tolist()
  
             overview_table = (
@@ -734,6 +743,7 @@ def generate_amendments_report(
             logger.debug(f"Created tta_table for {programme}")
 
             cases_df = amendment_cases(df_amd, programme, months_scope, epoch_year)
+            # cases_df.to_excel(f'{programme}_cases.xlsx')
    
             cases_table = (
                 GT(cases_df)
