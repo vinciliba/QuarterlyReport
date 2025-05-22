@@ -683,6 +683,7 @@ def process_granting_data(
             )
             .tab_style(
             style.text(size = 'medium'),
+            
             loc.body()
         )
             # # Table borders

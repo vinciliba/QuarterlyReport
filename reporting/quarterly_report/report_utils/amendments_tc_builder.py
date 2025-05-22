@@ -12,7 +12,7 @@ from ingestion.db_utils import (
     load_report_params,
 )
 from reporting.quarterly_report.utils import RenderContext
-from great_tables import GT, loc, style
+from great_tables import GT, loc, style, html
 import altair as alt
 from typing import List, Tuple , Union, Dict, Any
 import sqlite3
@@ -476,6 +476,51 @@ def table_signed_function(
     except Exception as e:
         raise e
 
+def tta_summary_metrics(df: pd.DataFrame, months_scope: list[int], epoch_year: int) -> pd.DataFrame:
+    # Define the programmes to compute metrics for
+    programmes = ['H2020', 'HORIZON']
+    results = []
+
+    for programme in programmes:
+        # Filter the DataFrame based on the criteria
+        df_filtered = df[
+            (df['FRAMEWORK'] == programme) &
+            (df['EndYear'] == epoch_year) &
+            (df['STATUS'] == 'SIGNED_CR') &
+            (~df['TTA'].isna()) &
+            (df['EndMonth'].isin(months_scope))
+        ].copy()
+
+        # Determine the label for the first column
+        tta_label = 'Average number of days H2020' if programme == 'H2020' else 'Average number of days HEU'
+
+        # If no data after filtering, append a row with NaN values
+        if df_filtered.empty:
+            results.append({
+                'Time-to-Amend H2020 - HEU': tta_label,
+                'average number of days': float('nan'),
+                '% within the contractual time limit': float('nan')
+            })
+            continue
+
+        # Calculate the average TTA
+        avg_tta = df_filtered['TTA'].mean()
+
+        # Calculate the percentage of amendments with TTA <= 45 days
+        total_amendments = len(df_filtered)
+        amendments_within_45 = len(df_filtered[df_filtered['TTA'] <= 45])
+        percent_within_45 = (amendments_within_45 / total_amendments) if total_amendments > 0 else 0.0
+
+        # Append the result
+        results.append({
+            'Time-to-Amend H2020 - HEU': tta_label,
+            'average_number_of_days': avg_tta,
+            'rate': percent_within_45
+        })
+
+    # Create the final DataFrame
+    return pd.DataFrame(results)
+
 #####  !!!!!  Main report generation !!!!!  ########
 def generate_amendments_report(
     conn: sqlite3.Connection,
@@ -512,11 +557,132 @@ def generate_amendments_report(
         df_amd['EndYear'] = df_amd['END\nDATE'].dt.year
         df_amd['EndMonth'] = df_amd['END\nDATE'].dt.month
         
-        df_amd.to_excel('amd.xlsx')
+        # df_amd.to_excel('amd.xlsx')
         epoch_year = determine_epoch_year(cutoff)
         months_scope = list(range(1, cutoff.month if cutoff.month != 1 else 13))
-        logging.info(f'months in scope {months_scope}')
-      
+        # logging.info(f'months in scope {months_scope}')
+
+        df_tta_summary_metrics = tta_summary_metrics (df_amd, months_scope, epoch_year)
+
+        tbl_tta_summary_metrics= (
+            GT(
+                df_tta_summary_metrics,
+            )
+        
+            .opt_table_font(font="Arial")
+            .opt_table_outline(style = "solid", width = '2px', color =  DARK_BLUE) 
+
+            # Row group styling
+            .tab_style(
+                style=[
+                    style.text(color=DARK_BLUE, weight="bold", font='Arial', size='small'),
+                    style.fill(color=LIGHT_BLUE),
+                    style.css(f"border: 1px solid {DARK_BLUE}; line-height:1.2; padding:5px;")
+                ],
+                locations=loc.row_groups()
+            )
+
+            # Column labels styling
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align="center", size='small'),
+                    style.css("min-width:50px; padding:5px; line-height:1.2")
+                
+                ],
+                locations=loc.column_labels()
+            )
+
+            # Stubhead styling
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align="center", size='small'),
+                    style.css("min-width:150px; padding:20px; line-height:1.2")
+                ],
+                locations=loc.stubhead()
+            )
+
+            # Body cell styling
+            .tab_style(
+                style=[
+                    style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                    style.text(align="center", size='small', font='Arial'),
+                    style.css("padding:5px")
+                ],
+                locations=loc.body()
+            )
+
+            # Stub cell styling
+            .tab_style(
+                style=[
+                    style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                    style.text(size='small', font='Arial'),
+                    style.css("padding:5px")
+                ],
+                locations=loc.stub()
+            )
+            # BODY
+            .fmt_percent(
+                columns=[ 'rate' ],  # or use `where` with a condition
+                decimals=1
+            )
+            .fmt_number(
+                columns=['average_number_of_days'],
+                decimals=1,
+                accounting=False
+            )
+            .cols_label(
+                average_number_of_days=html(
+                    "<span>average number</span><br>"
+                    "<span style='text-align:center; display:block;'> of days</span>"
+                )
+            )
+        .cols_label(
+            rate=html(
+                "<span>% within the </span><br>"
+                "<span>contractual</span><br>"
+                "<span>time limit</span>"
+            )
+        )
+
+            # Consistent and strong external border
+            .tab_options(
+                table_body_border_bottom_color=DARK_BLUE,
+                table_body_border_bottom_width="1px",
+                table_border_right_color=DARK_BLUE,
+                table_border_right_width="1px",
+                table_border_left_color=DARK_BLUE,
+                table_border_left_width="1px",
+                table_border_top_color=DARK_BLUE,
+                table_border_top_width="1px",
+                column_labels_border_top_color=DARK_BLUE,
+                column_labels_border_top_width="1px"
+            )
+
+            # Footer styling
+            .tab_source_note("Source: Compass")
+            .tab_source_note("Report: Amendments Report")
+            .tab_style(
+                style=[
+                    style.text(size="small", font='Arial'),
+                    style.css("padding:5px; line-height:1.2")
+                ],
+                locations=loc.footer()
+            )
+        )
+
+        try:
+            logger.debug(f"Saving tbl_tta_summary_metrics to database")
+            insert_variable(
+                report=report, module="AmendmentModule", var='tbl_tta_summary_metrics',
+                value=df_tta_summary_metrics.to_dict(),
+                db_path=db_path, anchor='overview_tta_summary', gt_table=tbl_tta_summary_metrics
+            )
+            logger.debug(f"Saved tbl_tta_summary_metrics  to database")
+        except Exception as e:
+            logger.error(f"Failed to save tbl_tta_summary_metrics : {str(e)}")
+
         results = {}
         for programme in ['H2020', 'HORIZON']:
             received_statuses = ['SIGNED_CR', 'ASSESSED_CR', 'OPENED_EXT_CR', 'OPENED_INT_CR', 'RECEIVED_CR', 'WITHDRAWN_CR', 'REJECTED_CR']
@@ -647,99 +813,99 @@ def generate_amendments_report(
                 .opt_table_font(font="Arial")
                 .opt_table_outline(style="solid", width="2px", color=DARK_BLUE)
                  # Header style
-            .tab_style(
-                style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial', size = 'medium'),
-                locations=loc.header()
-            )
-            
-            .tab_stubhead(label="Amd Description")
-
-            # Row group styling
-            .tab_style(
-                style=[
-                    style.text(color=DARK_BLUE, weight="bold", font='Arial', size='small'),
-                    style.fill(color=LIGHT_BLUE),
-                    style.css(f"border: 1px solid {DARK_BLUE}; line-height:1.2; padding:5px;")
-                ],
-                locations=loc.row_groups()
-            )
-
-            # Column labels styling
-            .tab_style(
-                style=[
-                    style.fill(color=BLUE),
-                    style.text(color="white", weight="bold", align="center", size='small'),
-                    style.css("min-width:50px; padding:5px; line-height:1.2")
+                .tab_style(
+                    style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial', size = 'medium'),
+                    locations=loc.header()
+                )
                 
-                ],
-                locations=loc.column_labels()
-            )
+                .tab_stubhead(label="Amd Description")
 
-            # Stubhead styling
-            .tab_style(
-                style=[
-                    style.fill(color=BLUE),
-                    style.text(color="white", weight="bold", align="center", size='small'),
-                    style.css("padding:5px; line-height:1.2")
-                ],
-                locations=loc.stubhead()
-            )
+                # Row group styling
+                .tab_style(
+                    style=[
+                        style.text(color=DARK_BLUE, weight="bold", font='Arial', size='small'),
+                        style.fill(color=LIGHT_BLUE),
+                        style.css(f"border: 1px solid {DARK_BLUE}; line-height:1.2; padding:5px;")
+                    ],
+                    locations=loc.row_groups()
+                )
 
-            # Body cell styling
-            .tab_style(
-                style=[
-                    style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                    style.text(align="center", size='small', font='Arial'),
-                    style.css("padding:5px")
-                ],
-                locations=loc.body()
-            )
+                # Column labels styling
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align="center", size='small'),
+                        style.css("min-width:50px; padding:5px; line-height:1.2")
+                    
+                    ],
+                    locations=loc.column_labels()
+                )
 
-            # Stub cell styling
-            .tab_style(
-                style=[
-                    style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                    style.text(size='small', font='Arial'),
-                    style.css("padding:5px")
-                ],
-                locations=loc.stub()
-            )
+                # Stubhead styling
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align="center", size='small'),
+                        style.css("padding:5px; line-height:1.2")
+                    ],
+                    locations=loc.stubhead()
+                )
 
-            # Consistent and strong external border
-            .tab_options(
-                table_body_border_bottom_color=DARK_BLUE,
-                table_body_border_bottom_width="1px",
-                table_border_right_color=DARK_BLUE,
-                table_border_right_width="1px",
-                table_border_left_color=DARK_BLUE,
-                table_border_left_width="1px",
-                table_border_top_color=DARK_BLUE,
-                table_border_top_width="1px",
-                column_labels_border_top_color=DARK_BLUE,
-                column_labels_border_top_width="1px"
-            )
-            # Format all "Total" rows consistently in stub and body
+                # Body cell styling
+                .tab_style(
+                    style=[
+                        style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                        style.text(align="center", size='small', font='Arial'),
+                        style.css("padding:5px")
+                    ],
+                    locations=loc.body()
+                )
 
-            .tab_style(
+                # Stub cell styling
+                .tab_style(
+                    style=[
+                        style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                        style.text(size='small', font='Arial'),
+                        style.css("padding:5px")
+                    ],
+                    locations=loc.stub()
+                )
+
+                # Consistent and strong external border
+                .tab_options(
+                    table_body_border_bottom_color=DARK_BLUE,
+                    table_body_border_bottom_width="1px",
+                    table_border_right_color=DARK_BLUE,
+                    table_border_right_width="1px",
+                    table_border_left_color=DARK_BLUE,
+                    table_border_left_width="1px",
+                    table_border_top_color=DARK_BLUE,
+                    table_border_top_width="1px",
+                    column_labels_border_top_color=DARK_BLUE,
+                    column_labels_border_top_width="1px"
+                )
+                # Format all "Total" rows consistently in stub and body
+
+                .tab_style(
+                        style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+                        locations=loc.body(rows=pivot_tta.index[pivot_tta["Month"] == "Total"].tolist())
+                    )
+                .tab_style(
                     style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
-                    locations=loc.body(rows=pivot_tta.index[pivot_tta["Month"] == "Total"].tolist())
+                    locations=loc.stub(rows=pivot_tta.index[pivot_tta["Month"] == "Total"].tolist())
                 )
-            .tab_style(
-                style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
-                locations=loc.stub(rows=pivot_tta.index[pivot_tta["Month"] == "Total"].tolist())
-            )
 
-            # Footer styling
-            .tab_source_note("Source: Compass")
-            .tab_source_note("Report: Amendments Report")
-            .tab_style(
-                style=[
-                    style.text(size="small", font='Arial'),
-                    style.css("padding:5px; line-height:1.2")
-                ],
-                locations=loc.footer()
+                # Footer styling
+                .tab_source_note("Source: Compass")
+                .tab_source_note("Report: Amendments Report")
+                .tab_style(
+                    style=[
+                        style.text(size="small", font='Arial'),
+                        style.css("padding:5px; line-height:1.2")
+                    ],
+                    locations=loc.footer()
+                    )
                 )
-            )
             logger.debug(f"Created tta_table for {programme}")
 
             cases_df = amendment_cases(df_amd, programme, months_scope, epoch_year)
@@ -751,100 +917,100 @@ def generate_amendments_report(
                 .opt_table_font(font="Arial")
                 .opt_table_outline(style="solid", width="2px", color=DARK_BLUE)
                # Header style
-            .tab_style(
-                style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
-                locations=loc.header()
-            )
-            
-            .tab_stubhead(label="Amd Description")
-
-            # Row group styling
-            .tab_style(
-                style=[
-                    style.text(color=DARK_BLUE, weight="bold", font='Arial', size='small'),
-                    style.fill(color=LIGHT_BLUE),
-                    style.css(f"border: 1px solid {DARK_BLUE}; line-height:1.2; padding:5px;")
-                ],
-                locations=loc.row_groups()
-            )
-
-            # Column labels styling
-            .tab_style(
-                style=[
-                    style.fill(color=BLUE),
-                    style.text(color="white", weight="bold", align="center", size='small'),
-                    style.css("min-width:50px; padding:5px; line-height:1.2")
-                
-                ],
-                locations=loc.column_labels()
-            )
-
-            # Stubhead styling
-            .tab_style(
-                style=[
-                    style.fill(color=BLUE),
-                    style.text(color="white", weight="bold", align="center", size='small'),
-                    style.css("padding:5px; line-height:1.2")
-                ],
-                locations=loc.stubhead()
-            )
-
-            # Body cell styling
-            .tab_style(
-                style=[
-                    style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                    style.text(align="center", size='small', font='Arial'),
-                    style.css("padding:5px")
-                ],
-                locations=loc.body()
-            )
-
-            # Stub cell styling
-            .tab_style(
-                style=[
-                    style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                    style.text(size='small', font='Arial'),
-                    style.css("padding:5px")
-                ],
-                locations=loc.stub()
-            )
-
-            # Consistent and strong external border
-            .tab_options(
-                table_body_border_bottom_color=DARK_BLUE,
-                table_body_border_bottom_width="1px",
-                table_border_right_color=DARK_BLUE,
-                table_border_right_width="1px",
-                table_border_left_color=DARK_BLUE,
-                table_border_left_width="1px",
-                table_border_top_color=DARK_BLUE,
-                table_border_top_width="1px",
-                column_labels_border_top_color=DARK_BLUE,
-                column_labels_border_top_width="1px"
-            )
-
-            # Format all "Total" rows consistently in stub and body
-
-            .tab_style(
-                    style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
-                    locations=loc.body(rows=cases_df.index[cases_df["DESCRIPTION"] == "Total"].tolist())
+                .tab_style(
+                    style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
+                    locations=loc.header()
                 )
-            .tab_style(
-                style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
-                locations=loc.stub(rows=cases_df.index[cases_df["DESCRIPTION"] == "Total"].tolist())
-            )
+                
+                .tab_stubhead(label="Amd Description")
 
-            # Footer styling
-            .tab_source_note("Source: Compass")
-            .tab_source_note("Report: Amendments Report")
-            .tab_style(
-                style=[
-                    style.text(size="small", font='Arial'),
-                    style.css("padding:5px; line-height:1.2")
-                ],
-                locations=loc.footer()
-              )
-            )
+                # Row group styling
+                .tab_style(
+                    style=[
+                        style.text(color=DARK_BLUE, weight="bold", font='Arial', size='small'),
+                        style.fill(color=LIGHT_BLUE),
+                        style.css(f"border: 1px solid {DARK_BLUE}; line-height:1.2; padding:5px;")
+                    ],
+                    locations=loc.row_groups()
+                )
+
+                # Column labels styling
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align="center", size='small'),
+                        style.css("min-width:50px; padding:5px; line-height:1.2")
+                    
+                    ],
+                    locations=loc.column_labels()
+                )
+
+                # Stubhead styling
+                .tab_style(
+                    style=[
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align="center", size='small'),
+                        style.css("padding:5px; line-height:1.2")
+                    ],
+                    locations=loc.stubhead()
+                )
+
+                # Body cell styling
+                .tab_style(
+                    style=[
+                        style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                        style.text(align="center", size='small', font='Arial'),
+                        style.css("padding:5px")
+                    ],
+                    locations=loc.body()
+                )
+
+                # Stub cell styling
+                .tab_style(
+                    style=[
+                        style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                        style.text(size='small', font='Arial'),
+                        style.css("padding:5px")
+                    ],
+                    locations=loc.stub()
+                )
+
+                # Consistent and strong external border
+                .tab_options(
+                    table_body_border_bottom_color=DARK_BLUE,
+                    table_body_border_bottom_width="1px",
+                    table_border_right_color=DARK_BLUE,
+                    table_border_right_width="1px",
+                    table_border_left_color=DARK_BLUE,
+                    table_border_left_width="1px",
+                    table_border_top_color=DARK_BLUE,
+                    table_border_top_width="1px",
+                    column_labels_border_top_color=DARK_BLUE,
+                    column_labels_border_top_width="1px"
+                )
+
+                # Format all "Total" rows consistently in stub and body
+
+                .tab_style(
+                        style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+                        locations=loc.body(rows=cases_df.index[cases_df["DESCRIPTION"] == "Total"].tolist())
+                    )
+                .tab_style(
+                    style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+                    locations=loc.stub(rows=cases_df.index[cases_df["DESCRIPTION"] == "Total"].tolist())
+                )
+
+                # Footer styling
+                .tab_source_note("Source: Compass")
+                .tab_source_note("Report: Amendments Report")
+                .tab_style(
+                    style=[
+                        style.text(size="small", font='Arial'),
+                        style.css("padding:5px; line-height:1.2")
+                    ],
+                    locations=loc.footer()
+                )
+                )
             
             rolling_tta_df = rolling_tta(df_amd, programme, months_scope, epoch_year)
     
