@@ -596,8 +596,8 @@ def generate_amendments_report(
             # Stubhead styling
             .tab_style(
                 style=[
-                    style.fill(color=BLUE),
-                    style.text(color="white", weight="bold", align="center", size='small'),
+                    style.fill(color='white'),
+                    style.text(color="black", weight="bold", align="center", size='small'),
                     style.css("min-width:150px; padding:20px; line-height:1.2")
                 ],
                 locations=loc.stubhead()
