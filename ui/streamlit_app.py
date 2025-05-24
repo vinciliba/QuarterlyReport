@@ -19,7 +19,7 @@ import io, docx
 import pyperclip
 from pathlib import Path
 from io import BytesIO
-
+from great_tables import GT, style, loc
 
 DB_PATH = 'database/reporting.db'
 
@@ -123,6 +123,7 @@ sections = {
     "🔎 View History": "history",
     "🛠️ Admin" :  "report_structure",
     "🖋️ Template Editor": "template_editor",
+    "📊 Audit Data Input": "audit_data_input"  # New section
     
 }
 
@@ -159,6 +160,152 @@ def _pretty_print_value(value: str | None) -> None:
     else:
         st.code(str(parsed))
 
+
+# Simplified styling function for the new tables
+def apply_audit_table_styling(gt: GT, table_type: str, params: dict = None) -> GT:
+    """
+    Apply styling to audit-related tables (External Audits and Error Rates).
+
+    Args:
+        gt: The great_tables object to style.
+        table_type: Type of table ('external_audits' or 'error_rates').
+        params: Dictionary of styling parameters, including colors (optional).
+
+    Returns:
+        Styled great_tables object.
+    """
+    # Default colors
+    default_colors = {
+        "BLUE": "#004A99",
+        "LIGHT_BLUE": "#d6e6f4",
+        "DARK_BLUE": "#01244B",
+        "SUBTOTAL_BACKGROUND": "#E6E6FA"
+    }
+    colors = params if params else default_colors
+    BLUE = colors.get("BLUE", default_colors["BLUE"])
+    LIGHT_BLUE = colors.get("LIGHT_BLUE", default_colors["LIGHT_BLUE"])
+    DARK_BLUE = colors.get("DARK_BLUE", default_colors["DARK_BLUE"])
+    SUBTOTAL_BACKGROUND = colors.get("SUBTOTAL_BACKGROUND", default_colors["SUBTOTAL_BACKGROUND"])
+
+    OUTLINE_B = '2px'
+
+    # Define columns
+    if table_type == "external_audits":
+        first_col = ["Status"]
+        other_cols = ["CAS", "Subtotal for joint with Court of auditors* and coverage", "Court of auditors only", "Total"]
+    elif table_type == "error_rates":
+        first_col = ["Name"]
+        other_cols = ["Error Rates (all cumulative)", "Comments", "To be reported"]
+    else:
+        raise ValueError(f"Unknown table type: {table_type}")
+
+    gt = (
+        gt
+        .opt_table_font(font="Arial")
+        .opt_table_outline(style="solid", width=OUTLINE_B, color=DARK_BLUE)
+
+        # Column labels styling
+        .tab_style(
+            style=[
+                style.fill(color=BLUE),
+                style.text(color="white", weight="bold", align="left", size='small'),
+                style.css("min-width:50px; padding:5px; line-height:1.2")
+            ],
+            locations=loc.column_labels(columns=first_col)
+        )
+        .tab_style(
+            style=[
+                style.fill(color=BLUE),
+                style.text(color="white", weight="bold", align="right", size='small'),
+                style.css("min-width:50px; padding:5px; line-height:1.2")
+            ],
+            locations=loc.column_labels(columns=other_cols)
+        )
+
+        # Stubhead styling
+        .tab_style(
+            style=[
+                style.fill(color=BLUE),
+                style.text(color="white", weight="bold", align="center", size='small'),
+                style.css("min-width:150px; padding:20px; line-height:1.2")
+            ],
+            locations=loc.stubhead()
+        )
+
+        # Body cell styling
+        .tab_style(
+            style=[
+                style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                style.text(align="left", size='small', font='Arial'),
+                style.css("padding:5px")
+            ],
+            locations=loc.body(columns=first_col)
+        )
+        .tab_style(
+            style=[
+                style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                style.text(align="right", size='small', font='Arial'),
+                style.css("padding:5px")
+            ],
+            locations=loc.body(columns=other_cols)
+        )
+
+        # Stub cell styling
+        .tab_style(
+            style=[
+                style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                style.text(size='small', font='Arial'),
+                style.css("padding:5px")
+            ],
+            locations=loc.stub()
+        )
+
+        # Table options
+        .tab_options(
+            table_body_border_bottom_color=DARK_BLUE,
+            table_body_border_bottom_width="1px",
+            table_border_right_color=DARK_BLUE,
+            table_border_right_width="1px",
+            table_border_left_color=DARK_BLUE,
+            table_border_left_width="1px",
+            table_border_top_color=DARK_BLUE,
+            table_border_top_width="1px",
+            column_labels_border_top_color=DARK_BLUE,
+            column_labels_border_top_width="1px"
+        )
+
+        # Footer styling
+        .tab_source_note("Source: ERCEA ALOs")
+        .tab_style(
+            style=[
+                style.text(size="small", font='Arial'),
+                style.css("padding:5px; line-height:1.2")
+            ],
+            locations=loc.footer()
+        )
+    )
+
+    # Specific styling for each table type
+    if table_type == "external_audits":
+        gt = gt.tab_style(
+            style=[
+                style.fill(color=SUBTOTAL_BACKGROUND),
+                style.text(weight="bold")
+            ],
+            locations=[
+                loc.stub(rows=["TOTAL CUMULATIVELY CLOSED", "TOTAL AUDITED (open & closed) ***"]),
+                loc.body(rows=["TOTAL CUMULATIVELY CLOSED", "TOTAL AUDITED (open & closed) ***"])
+            ]
+        )
+    elif table_type == "error_rates":
+        gt = gt.tab_style(
+            style=[
+                style.css("white-space: normal; word-wrap: break-word; min-width: 200px; max-width: 300px;")
+            ],
+            locations=loc.body(columns=["Comments"])
+        )
+
+    return gt
 # ──────────────────────────────────────────────────
 # WORKFLOW – Launch & Validation (Refactored)
 # ──────────────────────────────────────────────────
@@ -1329,26 +1476,34 @@ elif selected_section == "report_structure":
     # --------------------------------------------------
     # 1) Choose or create a report
     # --------------------------------------------------
-    reports_df = get_all_reports(DB_PATH)
-    report_names = ["-- Create new --"] + reports_df["report_name"].tolist() \
-                   if not reports_df.empty else ["-- Create new --"]
+    # Fetch reports and handle report selection/creation
+    reports = get_all_reports(DB_PATH)
 
-    chosen_report = st.selectbox("Select Report", report_names, key="admin_report_select")
+    # Determine the type of data returned by get_all_reports
+    if reports and isinstance(reports[0], dict):
+        # If get_all_reports returns a list of dictionaries
+        report_names = ["-- Create new --"] + [report["report_name"] for report in reports]
+    else:
+        # If get_all_reports returns a list of strings (or is empty)
+        report_names = ["-- Create new --"] + (reports if reports else [])
 
+    # Selectbox for choosing a report
+    chosen_report = st.selectbox("Select Report", report_names, key="audit_data_report_select")
+
+    # Handle new report creation
     if chosen_report == "-- Create new --":
-        new_report_name = st.text_input("New report name")
-        if st.button("➕ Create Report (Admin)"):
+        new_report_name = st.text_input("New Report Name")
+        if st.button("➕ Create Report"):
             if new_report_name.strip():
                 try:
                     create_new_report(new_report_name.strip(), DB_PATH)
                     st.success(f"Report '{new_report_name}' created.")
-                    st.rerun()
+                    st.rerun()  # Rerun to refresh the report list
                 except ValueError as e:
-                    st.error(e)
+                    st.error(f"Failed to create report: {e}")
             else:
-                st.warning("Enter a name.")
+                st.warning("Please enter a report name.")
         st.stop()
-
     # --------------------------------------------------
     # 2) Current structure
     # --------------------------------------------------
@@ -2075,3 +2230,229 @@ elif selected_section == "template_editor":
             st.rerun()
         except Exception as e:
             st.error(f"Delete failed: {e}")
+
+# New Section: Audit Data Input
+# New Section: Audit Data Input
+elif selected_section == "audit_data_input":
+    st.header("📊 Audit Data Input")
+    st.write("Enter the data for External Audits and Error Rates tables below.")
+
+    # Fetch reports and handle report selection/creation
+    reports_df = get_all_reports(DB_PATH)
+
+    # Extract report names from the DataFrame
+    report_names = ["-- Create new --"] + reports_df["report_name"].tolist() if not reports_df.empty else ["-- Create new --"]
+
+    # Selectbox for choosing a report
+    chosen_report = st.selectbox("Select Report", report_names, key="audit_data_report_select")
+
+    # Handle new report creation
+    if chosen_report == "-- Create new --":
+        new_report_name = st.text_input("New Report Name")
+        if st.button("➕ Create Report"):
+            if new_report_name.strip():
+                try:
+                    create_new_report(new_report_name.strip(), DB_PATH)
+                    st.success(f"Report '{new_report_name}' created.")
+                    st.rerun()  # Rerun to refresh the report list
+                except ValueError as e:
+                    st.error(f"Failed to create report: {e}")
+            else:
+                st.warning("Please enter a report name.")
+        st.stop()
+
+    # If a report is selected, proceed with the forms
+    # Form for External Audits Table (Table 11a)
+    st.subheader("External Audits (Table 11a)")
+    with st.form(key="external_audits_form"):
+        st.write("Enter the data for the External Audits table.")
+
+        # 2024 ERCEA Targets
+        st.markdown("**2024 ERCEA TARGETS (Audited Participations foreseen acc. to H2020 audit strategy)**")
+        target_cas = st.number_input("CAS", value=150, min_value=0, step=1, key="target_cas")
+        target_subtotal = st.number_input("Subtotal for joint with Court of auditors* and coverage", value=150, min_value=0, step=1, key="target_subtotal")
+        target_court = st.number_input("Court of auditors only", value=150, min_value=0, step=1, key="target_court")
+        target_total = st.number_input("Total", value=150, min_value=0, step=1, key="target_total")
+
+        # ERCEA Targets Cumulative
+        st.markdown("**ERCEA TARGETS CUMULATIVE**")
+        cumulative_planned = st.number_input("Planned", value=1020, min_value=0, step=1, key="cumulative_planned")
+        cumulative_planned_900 = st.number_input("(900) ***", value=900, min_value=0, step=1, key="cumulative_planned_900")
+        cumulative_subtotal = st.number_input("Subtotal for joint with Court of auditors* and coverage (Cumulative)", value=1020, min_value=0, step=1, key="cumulative_subtotal")
+        cumulative_subtotal_900 = st.number_input("(900) *** (Subtotal)", value=900, min_value=0, step=1, key="cumulative_subtotal_900")
+        cumulative_total = st.number_input("Total (Cumulative)", value=1020, min_value=0, step=1, key="cumulative_total")
+        cumulative_total_900 = st.number_input("(900) *** (Total)", value=900, min_value=0, step=1, key="cumulative_total_900")
+
+        # Planned
+        st.markdown("**Planned**")
+        planned_cas = st.number_input("CAS (Planned)", value=150, min_value=0, step=1, key="planned_cas")
+        planned_subtotal = st.number_input("Subtotal for joint with Court of auditors* and coverage (Planned)", value=0, min_value=0, step=1, key="planned_subtotal")
+        planned_total = st.number_input("Total (Planned)", value=150, min_value=0, step=1, key="planned_total")
+
+        # On-going Launched in 2024
+        st.markdown("**On-going [Launched in 2024]**")
+        ongoing_2024_cas = st.number_input("CAS (On-going 2024)", value=70, min_value=0, step=1, key="ongoing_2024_cas")
+        ongoing_2024_subtotal = st.number_input("Subtotal (On-going 2024)", value=0, min_value=0, step=1, key="ongoing_2024_subtotal")
+        ongoing_2024_court = st.number_input("Court of auditors only (On-going 2024)", value=5, min_value=0, step=1, key="ongoing_2024_court")
+        ongoing_2024_total = st.number_input("Total (On-going 2024)", value=75, min_value=0, step=1, key="ongoing_2024_total")
+
+        # On-going Launched in Previous Years
+        st.markdown("**On-going [Launched in previous years]**")
+        ongoing_prev_cas = st.number_input("CAS (On-going Previous)", value=73, min_value=0, step=1, key="ongoing_prev_cas")
+        ongoing_prev_subtotal = st.number_input("Subtotal (On-going Previous)", value=0, min_value=0, step=1, key="ongoing_prev_subtotal")
+        ongoing_prev_total = st.number_input("Total (On-going Previous)", value=73, min_value=0, step=1, key="ongoing_prev_total")
+
+        # Total On-going as of 31 December 2024
+        st.markdown("**TOTAL On-going as of 31 December 2024**")
+        total_ongoing_2024_cas = st.number_input("CAS (Total On-going 2024)", value=143, min_value=0, step=1, key="total_ongoing_2024_cas")
+        total_ongoing_2024_subtotal = st.number_input("Subtotal (Total On-going 2024)", value=0, min_value=0, step=1, key="total_ongoing_2024_subtotal")
+        total_ongoing_2024_court = st.number_input("Court of auditors only (Total On-going 2024)", value=5, min_value=0, step=1, key="total_ongoing_2024_court")
+        total_ongoing_2024_total = st.number_input("Total (Total On-going 2024)", value=148, min_value=0, step=1, key="total_ongoing_2024_total")
+
+        # Closed in Previous Years
+        st.markdown("**Closed in previous years**")
+        closed_prev_cas = st.number_input("CAS (Closed Previous)", value=823, min_value=0, step=1, key="closed_prev_cas")
+        closed_prev_subtotal = st.number_input("Subtotal (Closed Previous)", value=13, min_value=0, step=1, key="closed_prev_subtotal")
+        closed_prev_court = st.number_input("Court of auditors only (Closed Previous)", value=61, min_value=0, step=1, key="closed_prev_court")
+        closed_prev_total = st.number_input("Total (Closed Previous)", value=887, min_value=0, step=1, key="closed_prev_total")
+
+        # Audited Participations Launched in 2024
+        st.markdown("**audited participations launched in 2024 (Letter of Conclusion sent)**")
+        audited_2024_cas = st.number_input("CAS (Audited 2024)", value=8, min_value=0, step=1, key="audited_2024_cas")
+        audited_2024_subtotal = st.number_input("Subtotal (Audited 2024)", value=11, min_value=0, step=1, key="audited_2024_subtotal")
+        audited_2024_court = st.number_input("Court of auditors only (Audited 2024)", value=15, min_value=0, step=1, key="audited_2024_court")
+        audited_2024_total = st.number_input("Total (Audited 2024)", value=26, min_value=0, step=1, key="audited_2024_total")
+
+        # Closed in 2024 from Previous Years
+        st.markdown("**Closed in 2024 from audited participations launched in previous years**")
+        closed_2024_prev_cas = st.number_input("CAS (Closed 2024 Previous)", value=132, min_value=0, step=1, key="closed_2024_prev_cas")
+        closed_2024_prev_subtotal = st.number_input("Subtotal (Closed 2024 Previous)", value=0, min_value=0, step=1, key="closed_2024_prev_subtotal")
+        closed_2024_prev_court = st.number_input("Court of auditors only (Closed 2024 Previous)", value=1, min_value=0, step=1, key="closed_2024_prev_court")
+        closed_2024_prev_total = st.number_input("Total (Closed 2024 Previous)", value=133, min_value=0, step=1, key="closed_2024_prev_total")
+
+        # Total Closed in 2024
+        st.markdown("**TOTAL Closed in 2024**")
+        total_closed_2024_cas = st.number_input("CAS (Total Closed 2024)", value=140, min_value=0, step=1, key="total_closed_2024_cas")
+        total_closed_2024_subtotal = st.number_input("Subtotal (Total Closed 2024)", value=3, min_value=0, step=1, key="total_closed_2024_subtotal")
+        total_closed_2024_court = st.number_input("Court of auditors only (Total Closed 2024)", value=16, min_value=0, step=1, key="total_closed_2024_court")
+        total_closed_2024_total = st.number_input("Total (Total Closed 2024)", value=159, min_value=0, step=1, key="total_closed_2024_total")
+
+        # Total Cumulatively Closed
+        st.markdown("**TOTAL CUMULATIVELY CLOSED**")
+        total_cumulative_closed_cas = st.number_input("CAS (Total Cumulatively Closed)", value=963, min_value=0, step=1, key="total_cumulative_closed_cas")
+        total_cumulative_closed_subtotal = st.number_input("Subtotal (Total Cumulatively Closed)", value=16, min_value=0, step=1, key="total_cumulative_closed_subtotal")
+        total_cumulative_closed_court = st.number_input("Court of auditors only (Total Cumulatively Closed)", value=77, min_value=0, step=1, key="total_cumulative_closed_court")
+        total_cumulative_closed_total = st.number_input("Total (Total Cumulatively Closed)", value=1056, min_value=0, step=1, key="total_cumulative_closed_total")
+
+        # Total Audited (Open & Closed)
+        st.markdown("**TOTAL AUDITED (open & closed) ***")
+        total_audited_cas = st.number_input("CAS (Total Audited)", value=1106, min_value=0, step=1, key="total_audited_cas")
+        total_audited_subtotal = st.number_input("Subtotal (Total Audited)", value=16, min_value=0, step=1, key="total_audited_subtotal")
+        total_audited_court = st.number_input("Court of auditors only (Total Audited)", value=82, min_value=0, step=1, key="total_audited_court")
+        total_audited_total = st.number_input("Total (Total Audited)", value=1204, min_value=0, step=1, key="total_audited_total")
+
+        submit_external_audits = st.form_submit_button("Submit External Audits Data")
+
+    # Form for Error Rates Table (Table 11b)
+    st.subheader("Error Rates (Table 11b)")
+    with st.form(key="error_rates_form"):
+        st.write("Enter the data for the Error Rates table.")
+
+        # Row 1: CAS CRS 1 to 6
+        st.markdown("**CAS CRS 1 to 6 - Latest figures**")
+        cas_error_rate = st.number_input("Error Rate (%)", value=3.55, min_value=0.0, step=0.01, format="%.3f", key="cas_error_rate")
+        cas_comments = st.text_area("Comments (CAS)", value="Common Representative Error rate computed by the Common Audit Service (CAS) with top ups included. (source: SAR-Wiki)", height=100, key="cas_comments")
+        cas_to_be_reported = st.text_input("To be reported (CAS)", value="Quarterly basis", key="cas_to_be_reported")
+
+        # Row 2: ERCEA Residual Based on CRS 1 to 5
+        st.markdown("**ERCEA Residual Based on CRS 1 to 5 - Latest figures**")
+        ercea_residual_error_rate = st.number_input("Error Rate (%) (ERCEA Residual)", value=0.92, min_value=0.0, step=0.01, format="%.3f", key="ercea_residual_error_rate")
+        ercea_residual_comments = st.text_area("Comments (ERCEA Residual)", value="ERCEA Residual error rate based on the CRS 1, 2, 3 & 4 (source: SAR-Wiki)", height=100, key="ercea_residual_comments")
+        ercea_residual_to_be_reported = st.text_input("To be reported (ERCEA Residual)", value="Quarterly basis", key="ercea_residual_to_be_reported")
+
+        # Row 3: ERCEA Overall Detected Average Error Rate
+        st.markdown("**ERCEA overall detected average error rate - Latest figures**")
+        ercea_overall_error_rate = st.number_input("Error Rate (%) (ERCEA Overall)", value=1.30, min_value=0.0, step=0.01, format="%.3f", key="ercea_overall_error_rate")
+        ercea_overall_comments = st.text_area("Comments (ERCEA Overall)", value="All ERCEA participations audited (source: SAR-Wiki)", height=100, key="ercea_overall_comments")
+        ercea_overall_to_be_reported = st.text_input("To be reported (ERCEA Overall)", value="Quarterly basis", key="ercea_overall_to_be_reported")
+
+        submit_error_rates = st.form_submit_button("Submit Error Rates Data")
+
+    # Process External Audits Form Submission
+    if submit_external_audits:
+        try:
+            # Build DataFrame for External Audits
+            external_audits_data = [
+                {"Status": "2024 ERCEA TARGETS (Audited Participations foreseen acc. to H2020 audit strategy)", "CAS": target_cas, "Subtotal for joint with Court of auditors* and coverage": "N/A", "Court of auditors only": "N/A", "Total": target_total},
+                {"Status": "", "CAS": "", "Subtotal for joint with Court of auditors* and coverage": target_subtotal, "Court of auditors only": target_court, "Total": ""},
+                {"Status": "ERCEA TARGETS CUMULATIVE", "CAS": f"{cumulative_planned} ({cumulative_planned_900}) ***", "Subtotal for joint with Court of auditors* and coverage": "N/A", "Court of auditors only": "N/A", "Total": f"{cumulative_total} ({cumulative_total_900}) ***"},
+                {"Status": "", "CAS": "", "Subtotal for joint with Court of auditors* and coverage": f"{cumulative_subtotal} ({cumulative_subtotal_900}) ***", "Court of auditors only": "", "Total": ""},
+                {"Status": "Planned", "CAS": planned_cas, "Subtotal for joint with Court of auditors* and coverage": planned_subtotal, "Court of auditors only": "", "Total": planned_total},
+                {"Status": "On-going [Launched in 2024]", "CAS": ongoing_2024_cas, "Subtotal for joint with Court of auditors* and coverage": ongoing_2024_subtotal, "Court of auditors only": ongoing_2024_court, "Total": ongoing_2024_total},
+                {"Status": "On-going [Launched in previous years]", "CAS": ongoing_prev_cas, "Subtotal for joint with Court of auditors* and coverage": ongoing_prev_subtotal, "Court of auditors only": "", "Total": ongoing_prev_total},
+                {"Status": "TOTAL On-going as of 31 December 2024", "CAS": total_ongoing_2024_cas, "Subtotal for joint with Court of auditors* and coverage": total_ongoing_2024_subtotal, "Court of auditors only": total_ongoing_2024_court, "Total": total_ongoing_2024_total},
+                {"Status": "Closed in previous years", "CAS": closed_prev_cas, "Subtotal for joint with Court of auditors* and coverage": closed_prev_subtotal, "Court of auditors only": closed_prev_court, "Total": closed_prev_total},
+                {"Status": "audited participations launched in 2024 (Letter of Conclusion sent)", "CAS": audited_2024_cas, "Subtotal for joint with Court of auditors* and coverage": audited_2024_subtotal, "Court of auditors only": audited_2024_court, "Total": audited_2024_total},
+                {"Status": "Closed in 2024 from audited participations launched in previous years", "CAS": closed_2024_prev_cas, "Subtotal for joint with Court of auditors* and coverage": closed_2024_prev_subtotal, "Court of auditors only": closed_2024_prev_court, "Total": closed_2024_prev_total},
+                {"Status": "TOTAL Closed in 2024", "CAS": total_closed_2024_cas, "Subtotal for joint with Court of auditors* and coverage": total_closed_2024_subtotal, "Court of auditors only": total_closed_2024_court, "Total": total_closed_2024_total},
+                {"Status": "TOTAL CUMULATIVELY CLOSED", "CAS": total_cumulative_closed_cas, "Subtotal for joint with Court of auditors* and coverage": total_cumulative_closed_subtotal, "Court of auditors only": total_cumulative_closed_court, "Total": total_cumulative_closed_total},
+                {"Status": "TOTAL AUDITED (open & closed) ***", "CAS": total_audited_cas, "Subtotal for joint with Court of auditors* and coverage": total_audited_subtotal, "Court of auditors only": total_audited_court, "Total": total_audited_total}
+            ]
+            external_audits_df = pd.DataFrame(external_audits_data)
+
+            # Create GT Table
+            external_audits_gt = GT(external_audits_df)
+            external_audits_gt = apply_audit_table_styling(external_audits_gt, table_type="external_audits")
+
+            # Save to Database
+            insert_variable(
+                report=chosen_report,
+                module="AuditDataInput",
+                var="external_audits",
+                value=external_audits_df.to_dict(),
+                db_path=DB_PATH,
+                anchor="external_audits",
+                gt_table=external_audits_gt
+            )
+
+            st.success("External Audits data saved successfully!")
+            st.write("### Preview of External Audits Table")
+            st.dataframe(external_audits_df)
+
+        except Exception as e:
+            st.error(f"Failed to save External Audits data: {str(e)}")
+            traceback.print_exc()
+
+    # Process Error Rates Form Submission
+    if submit_error_rates:
+        try:
+            # Build DataFrame for Error Rates
+            error_rates_data = [
+                {"Name": "CAS CRS 1 to 6 - Latest figures", "Error Rates (all cumulative)": f"{cas_error_rate:.3f}%", "Comments": cas_comments, "To be reported": cas_to_be_reported},
+                {"Name": "ERCEA Residual Based on CRS 1 to 5 - Latest figures", "Error Rates (all cumulative)": f"{ercea_residual_error_rate:.3f}%", "Comments": ercea_residual_comments, "To be reported": ercea_residual_to_be_reported},
+                {"Name": "ERCEA overall detected average error rate - Latest figures", "Error Rates (all cumulative)": f"{ercea_overall_error_rate:.3f}%", "Comments": ercea_overall_comments, "To be reported": ercea_overall_to_be_reported}
+            ]
+            error_rates_df = pd.DataFrame(error_rates_data)
+
+            # Create GT Table
+            error_rates_gt = GT(error_rates_df)
+            error_rates_gt = apply_audit_table_styling(error_rates_gt, table_type="error_rates")
+
+            # Save to Database
+            insert_variable(
+                report=chosen_report,
+                module="AuditDataInput",
+                var="error_rates",
+                value=error_rates_df.to_dict(),
+                db_path=DB_PATH,
+                anchor="error_rates",
+                gt_table=error_rates_gt
+            )
+
+            st.success("Error Rates data saved successfully!")
+            st.write("### Preview of Error Rates Table")
+            st.dataframe(error_rates_df)
+
+        except Exception as e:
+            st.error(f"Failed to save Error Rates data: {str(e)}")
+            traceback.print_exc()
