@@ -570,8 +570,21 @@ def generate_amendments_report(
             )
         
             .opt_table_font(font="Arial")
-            .opt_table_outline(style = "solid", width = '2px', color =  DARK_BLUE) 
-
+            # .opt_table_outline(style = "solid", width = '2px', color =  DARK_BLUE) 
+            .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+            .tab_style(
+                style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                locations=loc.body()
+            )
+            .tab_style(
+                style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                locations=loc.column_labels()
+            )
             # Row group styling
             .tab_style(
                 style=[
@@ -646,20 +659,12 @@ def generate_amendments_report(
             )
         )
 
-            # Consistent and strong external border
-            .tab_options(
-                table_body_border_bottom_color=DARK_BLUE,
-                table_body_border_bottom_width="1px",
-                table_border_right_color=DARK_BLUE,
-                table_border_right_width="1px",
-                table_border_left_color=DARK_BLUE,
-                table_border_left_width="1px",
-                table_border_top_color=DARK_BLUE,
-                table_border_top_width="1px",
-                column_labels_border_top_color=DARK_BLUE,
-                column_labels_border_top_width="1px"
-            )
+        .tab_style(
+            style=[style.fill(color=BLUE), style.text(color=DARK_BLUE, weight="bold", v_align="middle")],
+            locations=loc.body(rows=[-1])
+        )
 
+      
             # Footer styling
             .tab_source_note("Source: Compass")
             .tab_source_note("Report: Amendments Report")
@@ -707,7 +712,20 @@ def generate_amendments_report(
                 GT(amd_overview, rowname_col="Month", groupname_col="TYPE_ROW_NAME")
                 .tab_header(title=programme)
                 .opt_table_font(font="Arial")
-                .opt_table_outline(style="solid", width="2px", color=DARK_BLUE)
+                .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
                  # Header style
                 .tab_style(
                     style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
@@ -768,18 +786,18 @@ def generate_amendments_report(
                 )
 
                 # Consistent and strong external border
-                .tab_options(
-                    table_body_border_bottom_color=DARK_BLUE,
-                    table_body_border_bottom_width="1px",
-                    table_border_right_color=DARK_BLUE,
-                    table_border_right_width="1px",
-                    table_border_left_color=DARK_BLUE,
-                    table_border_left_width="1px",
-                    table_border_top_color=DARK_BLUE,
-                    table_border_top_width="1px",
-                    column_labels_border_top_color=DARK_BLUE,
-                    column_labels_border_top_width="1px"
-                )
+                # .tab_options(
+                #     table_body_border_bottom_color=DARK_BLUE,
+                #     table_body_border_bottom_width="1px",
+                #     table_border_right_color=DARK_BLUE,
+                #     table_border_right_width="1px",
+                #     table_border_left_color=DARK_BLUE,
+                #     table_border_left_width="1px",
+                #     table_border_top_color=DARK_BLUE,
+                #     table_border_top_width="1px",
+                #     column_labels_border_top_color=DARK_BLUE,
+                #     column_labels_border_top_width="1px"
+                # )
 
                 # Format all "Total" rows consistently in stub and body
                 .tab_style(
@@ -811,7 +829,20 @@ def generate_amendments_report(
                 GT(pivot_tta)
                 .tab_header(title=f"Time to Amend - {programme}")
                 .opt_table_font(font="Arial")
-                .opt_table_outline(style="solid", width="2px", color=DARK_BLUE)
+                .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
                  # Header style
                 .tab_style(
                     style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial', size = 'medium'),
@@ -872,18 +903,18 @@ def generate_amendments_report(
                 )
 
                 # Consistent and strong external border
-                .tab_options(
-                    table_body_border_bottom_color=DARK_BLUE,
-                    table_body_border_bottom_width="1px",
-                    table_border_right_color=DARK_BLUE,
-                    table_border_right_width="1px",
-                    table_border_left_color=DARK_BLUE,
-                    table_border_left_width="1px",
-                    table_border_top_color=DARK_BLUE,
-                    table_border_top_width="1px",
-                    column_labels_border_top_color=DARK_BLUE,
-                    column_labels_border_top_width="1px"
-                )
+                # .tab_options(
+                #     table_body_border_bottom_color=DARK_BLUE,
+                #     table_body_border_bottom_width="1px",
+                #     table_border_right_color=DARK_BLUE,
+                #     table_border_right_width="1px",
+                #     table_border_left_color=DARK_BLUE,
+                #     table_border_left_width="1px",
+                #     table_border_top_color=DARK_BLUE,
+                #     table_border_top_width="1px",
+                #     column_labels_border_top_color=DARK_BLUE,
+                #     column_labels_border_top_width="1px"
+                # )
                 # Format all "Total" rows consistently in stub and body
 
                 .tab_style(
@@ -915,7 +946,20 @@ def generate_amendments_report(
                 GT(cases_df)
                 .tab_header(title=programme)
                 .opt_table_font(font="Arial")
-                .opt_table_outline(style="solid", width="2px", color=DARK_BLUE)
+                .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
                # Header style
                 .tab_style(
                     style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
@@ -975,19 +1019,19 @@ def generate_amendments_report(
                     locations=loc.stub()
                 )
 
-                # Consistent and strong external border
-                .tab_options(
-                    table_body_border_bottom_color=DARK_BLUE,
-                    table_body_border_bottom_width="1px",
-                    table_border_right_color=DARK_BLUE,
-                    table_border_right_width="1px",
-                    table_border_left_color=DARK_BLUE,
-                    table_border_left_width="1px",
-                    table_border_top_color=DARK_BLUE,
-                    table_border_top_width="1px",
-                    column_labels_border_top_color=DARK_BLUE,
-                    column_labels_border_top_width="1px"
-                )
+                # # Consistent and strong external border
+                # .tab_options(
+                #     table_body_border_bottom_color=DARK_BLUE,
+                #     table_body_border_bottom_width="1px",
+                #     table_border_right_color=DARK_BLUE,
+                #     table_border_right_width="1px",
+                #     table_border_left_color=DARK_BLUE,
+                #     table_border_left_width="1px",
+                #     table_border_top_color=DARK_BLUE,
+                #     table_border_top_width="1px",
+                #     column_labels_border_top_color=DARK_BLUE,
+                #     column_labels_border_top_width="1px"
+                # )
 
                 # Format all "Total" rows consistently in stub and body
 

@@ -762,7 +762,7 @@ def apply_table_styling(
         # Body cell styling
         .tab_style(
             style=[
-                style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                # style.borders(sides="all", color=DARK_BLUE, weight="1px"),
                 style.text(align="left", size='small', font='Arial'),
                 style.css("padding:5px")
             ],
@@ -770,7 +770,7 @@ def apply_table_styling(
         )
         .tab_style(
             style=[
-                style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                # style.borders(sides="all", color=DARK_BLUE, weight="1px"),
                 style.text(align="right", size='small', font='Arial'),
                 style.css("padding:5px")
             ],
@@ -780,26 +780,22 @@ def apply_table_styling(
         # Stub cell styling
         .tab_style(
             style=[
-                style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                # style.borders(sides="all", color=DARK_BLUE, weight="1px"),
                 style.text(size='small', font='Arial'),
                 style.css("padding:5px")
             ],
             locations=loc.stub()
         )
 
-        # Table options
-        .tab_options(
-            table_body_border_bottom_color=DARK_BLUE,
-            table_body_border_bottom_width="1px",
-            table_border_right_color=DARK_BLUE,
-            table_border_right_width="1px",
-            table_border_left_color=DARK_BLUE,
-            table_border_left_width="1px",
-            table_border_top_color=DARK_BLUE,
-            table_border_top_width="1px",
-            column_labels_border_top_color=DARK_BLUE,
-            column_labels_border_top_width="1px"
+        .tab_style(
+            style=style.borders(sides="all", color="#cccccc", weight="1px"),
+            locations=loc.body()
         )
+        .tab_style(
+            style=style.borders(sides="all", color="#ffffff", weight="2px"),
+            locations=loc.column_labels()
+        )
+
 
         # Footer styling
         .tab_source_note("Source: Compass")
@@ -875,22 +871,17 @@ def apply_table_styling(
             ],
             locations=loc.stub()
         )
-
-    return gt
-    # Apply subtotal background color to specific rows in tti_combined table
-
-
-    if table_type == "tti_combined":
-        gt = gt.tab_style(
-            style=[
-                style.fill(color=SUB_TOTAL_BACKGROUND),
-                style.text(weight="bold")
-            ],
-            locations=[
-                loc.stub(rows=["Closed Projects", "On-going Projects", "Total"]),
-                loc.body(rows=["Closed Projects", "On-going Projects", "Total"])
-            ]
-        )
+    elif table_type == "tti_combined":
+            gt = gt.tab_style(
+                style=[
+                    style.fill(color=SUB_TOTAL_BACKGROUND),
+                    style.text(weight="bold")
+                ],
+                locations=[
+                    loc.stub(rows=["Closed Projects", "On-going Projects", "Total"]),
+                    loc.body(rows=["Closed Projects", "On-going Projects", "Total"])
+                ]
+            )
 
     # Apply subtotal background color to specific rows in tti_combined table
     elif table_type == "negative_adj":
@@ -929,8 +920,9 @@ def apply_table_styling(
                 loc.body(rows=["Total participation implemented"])
             ]
         )
-
     return gt
+    # Apply subtotal background color to specific rows in tti_combined table
+
 
 def generate_auri_report(
     conn: sqlite3.Connection,

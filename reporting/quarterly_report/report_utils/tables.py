@@ -173,6 +173,7 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
                 )
                 .tab_header("HE")
                 .tab_stubhead(label="Budget Address Type")
+                .opt_table_outline(style="solid", width='1px', color="#cccccc")
                 # Formats
                 .fmt_number(columns=[
                     "Available_Commitment_Appropriations",
@@ -194,12 +195,26 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
                 )
                 # Arial font
                 .opt_table_font(font="Arial")
+                .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
                 # Header and stub styling
                 .tab_style(
                     style=[
                         style.text(color=DARK_BLUE, weight="bold"),
                         style.fill(color=LIGHT_BLUE),
-                        style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
+                        # style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
                         style.css("max-width:200px; line-height:1.2"),
                     ],
                     locations=loc.row_groups()
@@ -227,25 +242,25 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
                     locations=loc.header()
                 )
                 # Grid lines
-                .tab_style(
-                    style=style.borders(weight="1px", color=DARK_BLUE),
-                    locations=loc.stub()
-                )
-                .tab_style(
-                    style=style.borders(sides=["all"], color=DARK_BLUE, weight='1px'),
-                    locations=loc.body()
-                )
-                .tab_style(
-                    style=style.borders(color=DARK_BLUE, weight='2px'),
-                    locations=loc.column_labels()
-                )
-                .tab_style(
-                    style=style.borders(color=DARK_BLUE, weight='2px'),
-                    locations=loc.stubhead()
-                )
+                # .tab_style(
+                #     style=style.borders(weight="1px", color=DARK_BLUE),
+                #     locations=loc.stub()
+                # )
+                # .tab_style(
+                #     style=style.borders(sides=["all"], color=DARK_BLUE, weight='1px'),
+                #     locations=loc.body()
+                # )
+                # .tab_style(
+                #     style=style.borders(color=DARK_BLUE, weight='2px'),
+                #     locations=loc.column_labels()
+                # )
+                # .tab_style(
+                #     style=style.borders(color=DARK_BLUE, weight='2px'),
+                #     locations=loc.stubhead()
+                # )
                 # Style total row
                 .tab_style(
-                    style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+                    style=[style.fill(color="#E6E6FA"), style.text(color=DARK_BLUE, weight="bold")],
                     locations=loc.body(rows=agg.index[-1])
                 )
                 .tab_style(
@@ -253,11 +268,11 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
                     locations=loc.stub(rows=[-1])
                 )
                 # Table borders
-                .tab_options(table_body_border_bottom_color=DARK_BLUE, table_body_border_bottom_width="2px")
-                .tab_options(table_border_right_color=DARK_BLUE, table_border_right_width="2px")
-                .tab_options(table_border_left_color=DARK_BLUE, table_border_left_width="2px")
-                .tab_options(table_border_top_color=DARK_BLUE, table_border_top_width="2px")
-                .tab_options(column_labels_border_top_color=DARK_BLUE, column_labels_border_top_width="2px")
+                # .tab_options(table_body_border_bottom_color=DARK_BLUE, table_body_border_bottom_width="2px")
+                # .tab_options(table_border_right_color=DARK_BLUE, table_border_right_width="2px")
+                # .tab_options(table_border_left_color=DARK_BLUE, table_border_left_width="2px")
+                # .tab_options(table_border_top_color=DARK_BLUE, table_border_top_width="2px")
+                # .tab_options(column_labels_border_top_color=DARK_BLUE, column_labels_border_top_width="2px")
                 # Source notes
                 .tab_source_note("Source: Summa DataWarehouse")
                 .tab_source_note("BO Report: C0_Budgetary_Execution_Details")
@@ -302,6 +317,7 @@ def build_payment_summary_tables(
     db_path: str,
     table_colors: dict = None
 ) -> Dict[str, pd.DataFrame]:
+    import time
     """
     Build & store one payment-summary table per programme (HE, H2020).
 
@@ -438,11 +454,26 @@ def build_payment_summary_tables(
                            groupname_col="Fund Source"
                            )
                         .tab_stubhead(label="Budget Address Type")
+                        .tab_options(
+                            table_font_size="12px",
+                            table_width="100%",
+                            table_background_color="#ffffff",
+                            table_font_color=DARK_BLUE
+                        )
+                        .opt_table_outline(style="solid", width='1px', color="#cccccc")
+                        .tab_style(
+                            style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                            locations=loc.body()
+                        )
+                        .tab_style(
+                            style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                            locations=loc.column_labels()
+                        )
                         .tab_style(
                             style=[
                                 style.text(color=DARK_BLUE, weight="bold", font='Arial'),
                                 style.fill(color=LIGHT_BLUE),
-                                style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
+                                # style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
                                 style.css("max-width:200px; line-height:1.2"),
                             ],
                             locations=loc.row_groups()
@@ -480,31 +511,16 @@ def build_payment_summary_tables(
                                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")],
                             locations=loc.stubhead()
                         )
+                      
                         .tab_style(
-                            style=style.borders(weight="1px", color=DARK_BLUE),
-                            locations=loc.stub()
-                        )
-                        .tab_style(
-                            style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                            locations=loc.body()
-                        )
-                        .tab_style(
-                            style=style.borders(color=DARK_BLUE, weight="2px"),
-                            locations=[loc.column_labels(), loc.stubhead()]
-                        )
-                        .tab_style(
-                            style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+                            style=[style.fill(color="#E6E6FA"), style.text(color=DARK_BLUE, weight="bold")],
                             locations=loc.body(rows=agg.index[-1])
                         )
                         .tab_style(
                             style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
                             locations=loc.stub(rows=[-1])
                         )
-                        .tab_options(table_body_border_bottom_color=DARK_BLUE, table_body_border_bottom_width="2px")
-                        .tab_options(table_border_right_color=DARK_BLUE, table_border_right_width="2px")
-                        .tab_options(table_border_left_color=DARK_BLUE, table_border_left_width="2px")
-                        .tab_options(table_border_top_color=DARK_BLUE, table_border_top_width="2px")
-                        .tab_options(column_labels_border_top_color=DARK_BLUE, column_labels_border_top_width="2px")
+                     
                         .tab_source_note("Source: Summa DataWarehouse")
                         .tab_source_note("BO Report: C0_Budgetary_Execution_Details")
                     )
@@ -525,6 +541,7 @@ def build_payment_summary_tables(
                         gt_table=tbl
                     )
                     logging.debug(f"Stored table_2a_{programme}_data ({len(agg)} rows)")
+                    time.sleep(0.2)  # Small delay between tables
                 except Exception as e:
                     logging.error(f"Error storing table for {programme}: {str(e)}")
                     # Continue even if storage fails, as the table is already built
@@ -706,6 +723,22 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
             .tab_header(
                 title="HE"
             )
+
+            .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+            .opt_table_outline(style="solid", width='1px', color="#cccccc")
+            .tab_style(
+                style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                locations=loc.body()
+            )
+            .tab_style(
+                style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                locations=loc.column_labels()
+            )
             .tab_style(
                 style.text(color=DARK_BLUE, weight="bold", align="center", font='Arial'),
                 locations=loc.header()
@@ -715,7 +748,7 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
                 style=[
                     style.text(color=DARK_BLUE, weight="bold", font='Arial'),
                     style.fill(color=LIGHT_BLUE),
-                    style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
+                    # style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
                     style.css("max-width:200px; line-height:1.2"),
                 ],
                 locations=loc.row_groups()
@@ -752,37 +785,16 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
                 ],
                 locations=loc.stubhead()
             )
+       
             .tab_style(
-                style=style.borders(weight="1px", color=DARK_BLUE),
-                locations=loc.stub()
-            )
-            .tab_style(
-                style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                locations=loc.body()
-            )
-            .tab_style(
-                style=style.borders(color=DARK_BLUE, weight="2px"),
-                locations=[loc.column_labels(), loc.stubhead()]
-            )
-            .tab_style(
-                style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+                style=[style.fill(color="#E6E6FA"), style.text(color=DARK_BLUE, weight="bold")],
                 locations=loc.body(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
             )
             .tab_style(
                 style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
                 locations=loc.stub(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
             )
-            .tab_options(table_body_border_bottom_color=DARK_BLUE,
-                         table_body_border_bottom_width="2px")
-            .tab_options(table_border_right_color=DARK_BLUE,
-                         table_border_right_width="2px")
-            .tab_options(table_border_left_color=DARK_BLUE,
-                         table_border_left_width="2px")
-            .tab_options(table_border_top_color=DARK_BLUE,
-                         table_border_top_width="2px")
-            .tab_options(column_labels_border_top_color=DARK_BLUE,
-                         column_labels_border_top_width="2px")
-
+      
             .tab_source_note("Source: Summa DataWarehouse")
             .tab_source_note("BO Report: C0_COMMITMENTS_SUMMA")
         )
@@ -880,11 +892,26 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
             groupname_col="Fund Source"
         )
         .tab_stubhead(label="L1 Commitments")
+        .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+        .opt_table_outline(style="solid", width='1px', color="#cccccc")
+        .tab_style(
+            style=style.borders(sides="all", color="#cccccc", weight="1px"),
+            locations=loc.body()
+        )
+        .tab_style(
+            style=style.borders(sides="all", color="#ffffff", weight="2px"),
+            locations=loc.column_labels()
+        )
         .tab_style(
             style=[
                 style.text(color=DARK_BLUE, weight="bold", font='Arial'),
                 style.fill(color=LIGHT_BLUE),
-                style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
+                # style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
                 style.css("max-width:200px; line-height:1.2"),
             ],
             locations=loc.row_groups()
@@ -920,35 +947,14 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
             locations=loc.stubhead())
 
         .tab_style(
-        style.borders(weight="1px", color=DARK_BLUE),
-        loc.stub(),
-         )
-
-        .tab_style(
-            style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-            locations=loc.body())
-        .tab_style(
-            style=style.borders(color=DARK_BLUE, weight="2px"),
-            locations=[loc.column_labels(), loc.stubhead()])
-        .tab_style(
-            style=[style.fill(color="#E6E6FA"), style.text(color="black", weight="bold")],
+            style=[style.fill(color="#E6E6FA"), style.text(color=DARK_BLUE, weight="bold")],
             locations=loc.body(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
         )
         .tab_style(
                 style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
                 locations=loc.stub(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
             )
-        .tab_options(table_body_border_bottom_color=DARK_BLUE,
-                     table_body_border_bottom_width="2px")
-        .tab_options(table_border_right_color=DARK_BLUE,
-                     table_border_right_width="2px")
-        .tab_options(table_border_left_color=DARK_BLUE,
-                     table_border_left_width="2px")
-        .tab_options(table_border_top_color=DARK_BLUE,
-                     table_border_top_width="2px")
-        .tab_options(column_labels_border_top_color=DARK_BLUE,
-                     column_labels_border_top_width="2px")
-
+   
         .tab_source_note("Source: Summa DataWarehouse")
         .tab_source_note("BO Report: C0_COMMITMENTS_SUMMA")
     )
@@ -1143,15 +1149,37 @@ def build_budget_summary_table(conn, db_path, report, cutoff, table_colors):
                 rowname_col="Indicator_Description"
             )
             .tab_stubhead("Indicator")
-            .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE)
+            .opt_table_outline(style="solid", width='1px', color="#cccccc")
             .opt_table_font(font="Arial")
+            .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+            .tab_style(
+                style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                locations=loc.body()
+            )
+            .tab_style(
+                style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                locations=loc.column_labels()
+            )
             .tab_style(
                 style=[
                     style.fill(color=BLUE),
                     style.text(weight="bold", align='center', size='medium'),
-                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: medium;")
                 ],
                 locations=loc.column_labels()
+            )
+             .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(weight="bold", align='center', size='medium'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: medium;")
+                ],
+                locations=loc.stubhead()
             )
             .tab_style(style.text(size='small'), loc.stub())
             .tab_style(style.text(size='small'), loc.body())
@@ -1159,10 +1187,10 @@ def build_budget_summary_table(conn, db_path, report, cutoff, table_colors):
                 container_width="100%",
                 column_labels_background_color=BLUE,
                 row_group_background_color=LIGHT_BLUE,
-                table_body_hlines_style="solid",
-                table_body_vlines_style="solid",
-                table_body_border_bottom_color=DARK_BLUE,
-                table_body_border_bottom_width="2px"
+                # table_body_hlines_style="solid",
+                # table_body_vlines_style="solid",
+                # table_body_border_bottom_color=DARK_BLUE,
+                # table_body_border_bottom_width="2px"
             )
         )
 

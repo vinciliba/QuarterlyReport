@@ -740,6 +740,121 @@ def altair_chart_to_path(chart: alt.TopLevelMixin, var_name: str, folder: str = 
     
 
 
+def save_gt_table_smart(gt_table, file_path, var_name):
+    """
+    Intelligently save GT table with optimal window size based on content and table type.
+    Balanced approach to prevent both cut-offs and excessive width.
+    """
+    from pathlib import Path
+    import logging
+    import time
+    
+    file_path = Path(file_path)
+    file_path.parent.mkdir(exist_ok=True)
+    
+    # Delete existing file if it exists to avoid rename conflicts
+    if file_path.exists():
+        try:
+            file_path.unlink()
+            logging.debug(f"Deleted existing file: {file_path}")
+        except Exception as e:
+            logging.warning(f"Could not delete existing file {file_path}: {e}")
+    
+    # More balanced defaults - narrower width, adequate height
+    default_width = 1200  # Reduced from 1800 - more appropriate for most tables
+    default_height = 1500  # Good height to prevent cut-offs
+    
+    # Adjust dimensions based on table type
+    if any(keyword in var_name.lower() for keyword in ['overview', 'summary', 'resources']):
+        # Overview/summary tables are usually narrow
+        default_width = 1000
+        default_height = 1200
+    elif any(keyword in var_name.lower() for keyword in ['table_1b', 'table_1c', 'table_1a']):
+        # Budget tables might need more width for multiple columns
+        default_width = 1400
+        default_height = 2000
+    elif any(keyword in var_name.lower() for keyword in ['external_audits', 'table_11']):
+        # Audit tables - medium width
+        default_width = 1200
+        default_height = 1800
+    elif any(keyword in var_name.lower() for keyword in ['he_', 'horizon', 'vobu']):
+        # HE tables - based on your examples
+        default_width = 1300
+        default_height = 1500
+    
+    # Try sizes in order - start conservative, expand if needed
+    window_sizes = [
+        (default_width, default_height),
+        (default_width + 200, default_height + 500),  # Slightly larger
+        (1400, 2000),  # Fallback size
+    ]
+    
+    last_exception = None
+    
+    for i, (width, height) in enumerate(window_sizes):
+        try:
+            start_time = time.time()
+            logging.debug(f"Attempting GT save for {var_name} with size {width}x{height} (attempt {i+1}/{len(window_sizes)})")
+            
+            # Save the table
+            gt_table.save(
+                file_path, 
+                web_driver='chrome', 
+                window_size=(width, height)
+            )
+            
+            # Small sleep to ensure file system catches up
+            time.sleep(0.3)
+            
+            elapsed = time.time() - start_time
+            
+            if file_path.exists():
+                file_size = file_path.stat().st_size
+                logging.debug(f"GT table {var_name} saved in {elapsed:.1f}s: {width}x{height} = {file_size} bytes")
+                
+                # Check if file size seems reasonable
+                if file_size > 15000:  # 15KB minimum for a complete table
+                    return str(file_path)
+                elif i == len(window_sizes) - 1:
+                    # Last attempt - accept whatever we got
+                    logging.warning(f"GT table {var_name} accepting small file ({file_size} bytes) on last attempt")
+                    return str(file_path)
+                else:
+                    # Try next size
+                    logging.warning(f"GT table {var_name} file size only {file_size} bytes, trying larger dimensions")
+                    file_path.unlink()
+                    continue
+                    
+            else:
+                logging.warning(f"GT table {var_name} save failed - no file created")
+                
+        except Exception as e:
+            last_exception = e
+            logging.error(f"GT table {var_name} save attempt {i+1} failed: {e}")
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                except:
+                    pass
+    
+    # Final attempt with moderate dimensions
+    try:
+        logging.debug(f"Final fallback attempt for GT table {var_name}")
+        gt_table.save(
+            file_path, 
+            web_driver='chrome', 
+            window_size=(1200, 1800)
+        )
+        if file_path.exists():
+            return str(file_path)
+    except Exception as e:
+        last_exception = e
+    
+    if last_exception:
+        raise Exception(f"Failed to save GT table {var_name} after all attempts: {last_exception}")
+    else:
+        raise Exception(f"Failed to save GT table {var_name} - file not created")
+
 def insert_variable(
     report: str,
     module: str,
@@ -750,6 +865,7 @@ def insert_variable(
     gt_table: great_tables.GT | None = None,
     altair_chart: alt.TopLevelMixin | None = None,
 ) -> None:
+    import time
     
    
     """
@@ -802,11 +918,16 @@ def insert_variable(
             # gt_image = str(tmp)
           
 
-            # Improved GT table save with better parameters for styling preservation
-            gt_table.save(
-                tmp, web_driver='chrome', window_size=(1400, 1000)
-            )
-            gt_image = str(tmp)
+            # # Improved GT table save with better parameters for styling preservation
+            # gt_table.save(
+            #     tmp, web_driver='chrome', window_size=(1400, 1000)
+            # )
+            # gt_image = str(tmp)
+            # logging.debug(f"Saved great_tables to {gt_image}")
+
+             # Smart GT table save with automatic size detection
+            gt_image = save_gt_table_smart(gt_table, tmp, var)
+            time.sleep(0.5)
             logging.debug(f"Saved great_tables to {gt_image}")
         elif altair_chart is not None:
             logging.debug(f"Rendering altair_chart for {var}")

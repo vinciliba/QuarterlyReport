@@ -420,9 +420,23 @@ def process_granting_data(
                     )
             # GENERAL FORMATTING
             # Table Outline
-            .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            # .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
             # Arial font
             .opt_table_font(font="Arial")
+            .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
             # Header and stub styling
             .tab_style(
                 style=[
@@ -433,19 +447,19 @@ def process_granting_data(
                 locations=loc.column_labels()
             )
             # # Table borders
-            .tab_options(
-                table_body_border_bottom_color=DARK_BLUE,
-                table_body_border_bottom_width="1px",
-                table_border_right_color=DARK_BLUE,
-                table_border_right_width="1px",
-                table_border_left_color=DARK_BLUE,
-                table_border_left_width="1px",
-                table_border_top_color=DARK_BLUE,
-                table_border_top_width="1px",
-                column_labels_border_top_color=DARK_BLUE,
-                column_labels_border_top_width="1px",
-                column_labels_background_color=BLUE
-            )
+            # .tab_options(
+            #     table_body_border_bottom_color=DARK_BLUE,
+            #     table_body_border_bottom_width="1px",
+            #     table_border_right_color=DARK_BLUE,
+            #     table_border_right_width="1px",
+            #     table_border_left_color=DARK_BLUE,
+            #     table_border_left_width="1px",
+            #     table_border_top_color=DARK_BLUE,
+            #     table_border_top_width="1px",
+            #     column_labels_border_top_color=DARK_BLUE,
+            #     column_labels_border_top_width="1px",
+            #     column_labels_background_color=BLUE
+            # )
             # BODY
             .fmt_percent(
                 rows=["Completion Rate"],  # or use `where` with a condition
@@ -481,7 +495,21 @@ def process_granting_data(
                     )
             # GENERAL FORMATTING
             # Table Outline
-            .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            # .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
             # Arial font
             .opt_table_font(font="Arial")
             # Header and stub styling
@@ -494,19 +522,19 @@ def process_granting_data(
                 locations=loc.column_labels()
             )
             # # Table borders
-            .tab_options(
-                    table_body_border_bottom_color=DARK_BLUE,
-                    table_body_border_bottom_width="1px",
-                    table_border_right_color=DARK_BLUE,
-                    table_border_right_width="1px",
-                    table_border_left_color=DARK_BLUE,
-                    table_border_left_width="1px",
-                    table_border_top_color=DARK_BLUE,
-                    table_border_top_width="1px",
-                    column_labels_border_top_color=DARK_BLUE,
-                    column_labels_border_top_width="1px",
-                    column_labels_background_color = BLUE
-                )
+            # .tab_options(
+                #     table_body_border_bottom_color=DARK_BLUE,
+                #     table_body_border_bottom_width="1px",
+                #     table_border_right_color=DARK_BLUE,
+                #     table_border_right_width="1px",
+                #     table_border_left_color=DARK_BLUE,
+                #     table_border_left_width="1px",
+                #     table_border_top_color=DARK_BLUE,
+                #     table_border_top_width="1px",
+                #     column_labels_border_top_color=DARK_BLUE,
+                #     column_labels_border_top_width="1px",
+                #     column_labels_background_color = BLUE
+                # )
             # BODY
             .fmt_percent(
                 rows=["Completion Rate"],  # or use `where` with a condition
@@ -520,7 +548,7 @@ def process_granting_data(
             # Source notes
             .tab_source_note("Source: Compass")
             .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
-            )
+        )
     except Exception as e:
                 logging.error(f"Error building GreatTables object: {str(e)}")
                 # Return the aggregated DataFrame without styling if table creation fails
@@ -541,9 +569,23 @@ def process_granting_data(
                     )
             # GENERAL FORMATTING
             # Table Outline
-            .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            # .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
             # Arial font
             .opt_table_font(font="Arial")
+            .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
             # Header and stub styling
             .tab_style(
                 style=[
@@ -555,19 +597,19 @@ def process_granting_data(
                 locations=loc.column_labels()
             )
             # # Table borders
-            .tab_options(
-                table_body_border_bottom_color=DARK_BLUE,
-                table_body_border_bottom_width="1px",
-                table_border_right_color=DARK_BLUE,
-                table_border_right_width="1px",
-                table_border_left_color=DARK_BLUE,
-                table_border_left_width="1px",
-                table_border_top_color=DARK_BLUE,
-                table_border_top_width="1px",
-                column_labels_border_top_color=DARK_BLUE,
-                column_labels_border_top_width="1px",
-                column_labels_background_color=BLUE
-            )
+            # .tab_options(
+            #     table_body_border_bottom_color=DARK_BLUE,
+            #     table_body_border_bottom_width="1px",
+            #     table_border_right_color=DARK_BLUE,
+            #     table_border_right_width="1px",
+            #     table_border_left_color=DARK_BLUE,
+            #     table_border_left_width="1px",
+            #     table_border_top_color=DARK_BLUE,
+            #     table_border_top_width="1px",
+            #     column_labels_border_top_color=DARK_BLUE,
+            #     column_labels_border_top_width="1px",
+            #     column_labels_background_color=BLUE
+            # )
             # BODY
             .fmt_percent(
                 rows=["Completion Rate"],  # or use `where` with a condition
@@ -601,9 +643,23 @@ def process_granting_data(
             )
             # GENERAL FORMATTING
             # Table Outline
-            .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
+            # .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
             # Arial font
             .opt_table_font(font="Arial")
+            .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
 
             # Header and stub styling
             .tab_style(
@@ -615,19 +671,19 @@ def process_granting_data(
                 locations=loc.column_labels()
             )
             # # Table borders
-            .tab_options(
-                table_body_border_bottom_color=DARK_BLUE,
-                table_body_border_bottom_width="1px",
-                table_border_right_color=DARK_BLUE,
-                table_border_right_width="1px",
-                table_border_left_color=DARK_BLUE,
-                table_border_left_width="1px",
-                table_border_top_color=DARK_BLUE,
-                table_border_top_width="1px",
-                column_labels_border_top_color=DARK_BLUE,
-                column_labels_border_top_width="1px",
-                column_labels_background_color = BLUE
-            )
+            # .tab_options(
+            #     table_body_border_bottom_color=DARK_BLUE,
+            #     table_body_border_bottom_width="1px",
+            #     table_border_right_color=DARK_BLUE,
+            #     table_border_right_width="1px",
+            #     table_border_left_color=DARK_BLUE,
+            #     table_border_left_width="1px",
+            #     table_border_top_color=DARK_BLUE,
+            #     table_border_top_width="1px",
+            #     column_labels_border_top_color=DARK_BLUE,
+            #     column_labels_border_top_width="1px",
+            #     column_labels_background_color = BLUE
+            # )
             # BODY
             .fmt_percent(
                 rows=["Completion Rate"],  # or use `where` with a condition
@@ -662,7 +718,20 @@ def process_granting_data(
             )
             # GENERAL FORMATTING
             # Table Outline
-            .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
+            .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
             # Arial font
             .opt_table_font(font="Arial")
             # Header and stub styling
@@ -687,19 +756,19 @@ def process_granting_data(
             loc.body()
         )
             # # Table borders
-            .tab_options(
-                    table_body_border_bottom_color=DARK_BLUE,
-                    table_body_border_bottom_width="1px",
-                    table_border_right_color=DARK_BLUE,
-                    table_border_right_width="1px",
-                    table_border_left_color=DARK_BLUE,
-                    table_border_left_width="1px",
-                    table_border_top_color=DARK_BLUE,
-                    table_border_top_width="1px",
-                    column_labels_border_top_color=DARK_BLUE,
-                    column_labels_border_top_width="1px",
-                    column_labels_background_color = LIGHT_BLUE
-                )
+            # .tab_options(
+            #         table_body_border_bottom_color=DARK_BLUE,
+            #         table_body_border_bottom_width="1px",
+            #         table_border_right_color=DARK_BLUE,
+            #         table_border_right_width="1px",
+            #         table_border_left_color=DARK_BLUE,
+            #         table_border_left_width="1px",
+            #         table_border_top_color=DARK_BLUE,
+            #         table_border_top_width="1px",
+            #         column_labels_border_top_color=DARK_BLUE,
+            #         column_labels_border_top_width="1px",
+            #         column_labels_background_color = LIGHT_BLUE
+            #     )
             # BODY
             .fmt_percent(
                 columns=["Completion_Rate"],  # or use `where` with a condition
@@ -1055,7 +1124,21 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
             )
             )
              # Table Outline
-            .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
+            # .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
+            .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
             # Arial font
             .opt_table_font(font="Arial")
             # Format numeric columns as integers (except percentage column)
@@ -1125,20 +1208,20 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
                 style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
                 locations=loc.stub(rows=df_with_totals.index[df_with_totals["PO Type"].str.contains("Total")].tolist())
             )
-            .tab_options(
-                table_body_border_bottom_color=DARK_BLUE,
-                table_body_border_bottom_width="1px",
-                table_border_right_color=DARK_BLUE,
-                table_border_right_width="1px",
-                table_border_left_color=DARK_BLUE,
-                table_border_left_width="1px",
-                table_border_top_color=DARK_BLUE,
-                table_border_top_width="1px",
-                column_labels_border_top_color=DARK_BLUE,
-                column_labels_border_top_width="1px",
-                heading_background_color=BLUE,
-                row_group_background_color=BLUE
-            )
+            # .tab_options(
+            #     table_body_border_bottom_color=DARK_BLUE,
+            #     table_body_border_bottom_width="1px",
+            #     table_border_right_color=DARK_BLUE,
+            #     table_border_right_width="1px",
+            #     table_border_left_color=DARK_BLUE,
+            #     table_border_left_width="1px",
+            #     table_border_top_color=DARK_BLUE,
+            #     table_border_top_width="1px",
+            #     column_labels_border_top_color=DARK_BLUE,
+            #     column_labels_border_top_width="1px",
+            #     heading_background_color=BLUE,
+            #     row_group_background_color=BLUE
+            # )
             .tab_source_note("Source: Compass")
             .tab_source_note("Reports: Call Overview Report - Budget Follow-Up Report - Ethics Requirements and Issues")
             .tab_style(
@@ -1367,7 +1450,21 @@ def build_signatures_table(
                     locations=loc.header()
                 )
                  # Table Outline
-                .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
+                # .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
+                .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
                 # Arial font
                 .opt_table_font(font="Arial")
 
@@ -1432,19 +1529,19 @@ def build_signatures_table(
                     style=[style.fill(color="#D3D3D3"), style.text(weight="bold")],
                     locations=loc.stub(rows=final_df.index[final_df["Signature Month"] == "Grand Total"].tolist())
                 )
-                .tab_options(
-                    table_body_border_bottom_color=DARK_BLUE,
-                    table_body_border_bottom_width="1px",
-                    table_border_right_color=DARK_BLUE,
-                    table_border_right_width="1px",
-                    table_border_left_color=DARK_BLUE,
-                    table_border_left_width="1px",
-                    table_border_top_color=DARK_BLUE,
-                    table_border_top_width="1px",
-                    column_labels_border_top_color=DARK_BLUE,
-                    column_labels_border_top_width="1px",
-                    column_labels_background_color=BLUE
-                )
+                # .tab_options(
+                #     table_body_border_bottom_color=DARK_BLUE,
+                #     table_body_border_bottom_width="1px",
+                #     table_border_right_color=DARK_BLUE,
+                #     table_border_right_width="1px",
+                #     table_border_left_color=DARK_BLUE,
+                #     table_border_left_width="1px",
+                #     table_border_top_color=DARK_BLUE,
+                #     table_border_top_width="1px",
+                #     column_labels_border_top_color=DARK_BLUE,
+                #     column_labels_border_top_width="1px",
+                #     column_labels_background_color=BLUE
+                # )
                 .tab_source_note("Source: Quarterly Report Data")
             )
         else:
@@ -1692,7 +1789,21 @@ def build_commitments_table(
                     title="HE Commitment Activity"
                 )
                  # Table Outline
-                .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
+                # .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
+                .tab_options(
+                    table_font_size="12px",
+                    table_width="100%",
+                    table_background_color="#ffffff",
+                    table_font_color=DARK_BLUE
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                    locations=loc.body()
+                )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.column_labels()
+                )
                 # Arial font
                 .opt_table_font(font="Arial")
                 # Format "amounts" group as currency (EUR with 2 decimal places)
@@ -1766,18 +1877,18 @@ def build_commitments_table(
                     style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
                     locations=loc.stub(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
                 )
-                .tab_options(
-                    table_body_border_bottom_color=DARK_BLUE,
-                    table_body_border_bottom_width="1px",
-                    table_border_right_color=DARK_BLUE,
-                    table_border_right_width="1px",
-                    table_border_left_color=DARK_BLUE,
-                    table_border_left_width="1px",
-                    table_border_top_color=DARK_BLUE,
-                    table_border_top_width="1px",
-                    column_labels_border_top_color=DARK_BLUE,
-                    column_labels_border_top_width="1px"
-                )
+                # .tab_options(
+                #     table_body_border_bottom_color=DARK_BLUE,
+                #     table_body_border_bottom_width="1px",
+                #     table_border_right_color=DARK_BLUE,
+                #     table_border_right_width="1px",
+                #     table_border_left_color=DARK_BLUE,
+                #     table_border_left_width="1px",
+                #     table_border_top_color=DARK_BLUE,
+                #     table_border_top_width="1px",
+                #     column_labels_border_top_color=DARK_BLUE,
+                #     column_labels_border_top_width="1px"
+                # )
                 .tab_source_note("Source: Compass")
                 .tab_source_note("Reports: Call Overview Report - Budget Follow-Up Report - Ethics Requirements and Issues")
                 .tab_style(
