@@ -19,7 +19,8 @@ import io, docx
 import pyperclip
 from pathlib import Path
 from io import BytesIO
-from great_tables import GT, style, loc
+from ui_helpers.ui_tables_helpers import *
+
 
 DB_PATH = 'database/reporting.db'
 
@@ -161,151 +162,6 @@ def _pretty_print_value(value: str | None) -> None:
         st.code(str(parsed))
 
 
-# Simplified styling function for the new tables
-def apply_audit_table_styling(gt: GT, table_type: str, params: dict = None) -> GT:
-    """
-    Apply styling to audit-related tables (External Audits and Error Rates).
-
-    Args:
-        gt: The great_tables object to style.
-        table_type: Type of table ('external_audits' or 'error_rates').
-        params: Dictionary of styling parameters, including colors (optional).
-
-    Returns:
-        Styled great_tables object.
-    """
-    # Default colors
-    default_colors = {
-        "BLUE": "#004A99",
-        "LIGHT_BLUE": "#d6e6f4",
-        "DARK_BLUE": "#01244B",
-        "SUBTOTAL_BACKGROUND": "#E6E6FA"
-    }
-    colors = params if params else default_colors
-    BLUE = colors.get("BLUE", default_colors["BLUE"])
-    LIGHT_BLUE = colors.get("LIGHT_BLUE", default_colors["LIGHT_BLUE"])
-    DARK_BLUE = colors.get("DARK_BLUE", default_colors["DARK_BLUE"])
-    SUBTOTAL_BACKGROUND = colors.get("SUBTOTAL_BACKGROUND", default_colors["SUBTOTAL_BACKGROUND"])
-
-    OUTLINE_B = '2px'
-
-    # Define columns
-    if table_type == "external_audits":
-        first_col = ["Status"]
-        other_cols = ["CAS", "Subtotal for joint with Court of auditors* and coverage", "Court of auditors only", "Total"]
-    elif table_type == "error_rates":
-        first_col = ["Name"]
-        other_cols = ["Error Rates (all cumulative)", "Comments", "To be reported"]
-    else:
-        raise ValueError(f"Unknown table type: {table_type}")
-
-    gt = (
-        gt
-        .opt_table_font(font="Arial")
-        .opt_table_outline(style="solid", width=OUTLINE_B, color=DARK_BLUE)
-
-        # Column labels styling
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align="left", size='small'),
-                style.css("min-width:50px; padding:5px; line-height:1.2")
-            ],
-            locations=loc.column_labels(columns=first_col)
-        )
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align="right", size='small'),
-                style.css("min-width:50px; padding:5px; line-height:1.2")
-            ],
-            locations=loc.column_labels(columns=other_cols)
-        )
-
-        # Stubhead styling
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align="center", size='small'),
-                style.css("min-width:150px; padding:20px; line-height:1.2")
-            ],
-            locations=loc.stubhead()
-        )
-
-        # Body cell styling
-        .tab_style(
-            style=[
-                style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                style.text(align="left", size='small', font='Arial'),
-                style.css("padding:5px")
-            ],
-            locations=loc.body(columns=first_col)
-        )
-        .tab_style(
-            style=[
-                style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                style.text(align="right", size='small', font='Arial'),
-                style.css("padding:5px")
-            ],
-            locations=loc.body(columns=other_cols)
-        )
-
-        # Stub cell styling
-        .tab_style(
-            style=[
-                style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                style.text(size='small', font='Arial'),
-                style.css("padding:5px")
-            ],
-            locations=loc.stub()
-        )
-
-        # Table options
-        .tab_options(
-            table_body_border_bottom_color=DARK_BLUE,
-            table_body_border_bottom_width="1px",
-            table_border_right_color=DARK_BLUE,
-            table_border_right_width="1px",
-            table_border_left_color=DARK_BLUE,
-            table_border_left_width="1px",
-            table_border_top_color=DARK_BLUE,
-            table_border_top_width="1px",
-            column_labels_border_top_color=DARK_BLUE,
-            column_labels_border_top_width="1px"
-        )
-
-        # Footer styling
-        .tab_source_note("Source: ERCEA ALOs")
-        .tab_style(
-            style=[
-                style.text(size="small", font='Arial'),
-                style.css("padding:5px; line-height:1.2")
-            ],
-            locations=loc.footer()
-        )
-    )
-
-    # Specific styling for each table type
-    if table_type == "external_audits":
-        gt = gt.tab_style(
-            style=[
-                style.fill(color=SUBTOTAL_BACKGROUND),
-                style.text(weight="bold")
-            ],
-            locations=[
-                loc.stub(rows=["TOTAL CUMULATIVELY CLOSED", "TOTAL AUDITED (open & closed) ***"]),
-                loc.body(rows=["TOTAL CUMULATIVELY CLOSED", "TOTAL AUDITED (open & closed) ***"])
-            ]
-        )
-    elif table_type == "error_rates":
-        gt = gt.tab_style(
-            style=[
-                style.css("white-space: normal; word-wrap: break-word; min-width: 200px; max-width: 300px;")
-            ],
-            locations=loc.body(columns=["Comments"])
-        )
-
-    return gt
 # ──────────────────────────────────────────────────
 # WORKFLOW – Launch & Validation (Refactored)
 # ──────────────────────────────────────────────────
@@ -2231,19 +2087,91 @@ elif selected_section == "template_editor":
         except Exception as e:
             st.error(f"Delete failed: {e}")
 
-# New Section: Audit Data Input
-# New Section: Audit Data Input
+# ---------------------------------------------------
+# AUDIT INPUT
+# ---------------------------------------------------
 elif selected_section == "audit_data_input":
+    from PIL import Image
+    from docxtpl import DocxTemplate, InlineImage
     st.header("📊 Audit Data Input")
     st.write("Enter the data for External Audits and Error Rates tables below.")
+    
+  
+    # Enhanced CSS for better form layout
+    st.markdown(
+        """
+        <style>
+        .stForm {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 25px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 15px;
+            border: 2px solid #dee2e6;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .stColumn {
+            padding: 0 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+        .stTextInput > div > div > input {
+            width: 100% !important;
+            height: 38px !important;
+            font-size: 13px !important;
+            text-align: center !important;
+            border: 2px solid #ced4da !important;
+            border-radius: 6px !important;
+            transition: border-color 0.3s ease !important;
+        }
+        .stTextInput > div > div > input:focus {
+            border-color: #1f4788 !important;
+            box-shadow: 0 0 0 2px rgba(31, 71, 136, 0.2) !important;
+        }
+        .column-header {
+            background: linear-gradient(135deg, #1f4788 0%, #2c5aa0 100%);
+            color: white;
+            padding: 12px 8px;
+            margin-bottom: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 12px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(31, 71, 136, 0.3);
+            border: 1px solid #1a3d6b;
+        }
+        .section-label {
+            background: linear-gradient(135deg, #e9ecef 0%, #f8f9fa 100%);
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            font-weight: bold;
+            border-left: 5px solid #1f4788;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            font-size: 14px;
+            color: #495057;
+        }
+        .form-title {
+            background: linear-gradient(135deg, #1f4788 0%, #2c5aa0 100%);
+            color: white;
+            padding: 20px;
+            margin: -25px -25px 20px -25px;
+            border-radius: 15px 15px 0 0;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     # Fetch reports and handle report selection/creation
     reports_df = get_all_reports(DB_PATH)
-
-    # Extract report names from the DataFrame
     report_names = ["-- Create new --"] + reports_df["report_name"].tolist() if not reports_df.empty else ["-- Create new --"]
-
-    # Selectbox for choosing a report
     chosen_report = st.selectbox("Select Report", report_names, key="audit_data_report_select")
 
     # Handle new report creation
@@ -2254,155 +2182,506 @@ elif selected_section == "audit_data_input":
                 try:
                     create_new_report(new_report_name.strip(), DB_PATH)
                     st.success(f"Report '{new_report_name}' created.")
-                    st.rerun()  # Rerun to refresh the report list
+                    st.rerun()
                 except ValueError as e:
                     st.error(f"Failed to create report: {e}")
             else:
                 st.warning("Please enter a report name.")
         st.stop()
+    
+    # Load report parameters
+    try:
+        report_params = load_report_params(chosen_report, DB_PATH)
+        current_year = report_params.get("current_year", datetime.now().year)
+        last_date = report_params.get("last_date", datetime.now().date())
+    except Exception as e:
+        st.error(f"Failed to load report parameters: {e}")
+        st.stop()
 
-    # If a report is selected, proceed with the forms
+    def load_existing_data_or_defaults(chosen_report, current_year):
+        """Load existing data from database or set default values."""
+        defaults = {
+            # External Audits defaults
+            'target_cas': "150", 'target_joint': "N/A", 'target_subtotal': "150", 'target_court': "N/A", 'target_total': "150",
+            'cumulative_cas': "1020 (900) ***", 'cumulative_joint': "N/A", 'cumulative_subtotal': "1020 (900) ***", 'cumulative_court': "N/A", 'cumulative_total': "1020 (900) ***",
+            'planned_cas': "150", 'planned_joint': "0", 'planned_subtotal': "150", 'planned_court': "0", 'planned_total': "150",
+            f'ongoing_{current_year}_cas': "70", f'ongoing_{current_year}_joint': "0", f'ongoing_{current_year}_subtotal': "70", f'ongoing_{current_year}_court': "5", f'ongoing_{current_year}_total': "75",
+            'ongoing_prev_cas': "73", 'ongoing_prev_joint': "0", 'ongoing_prev_subtotal': "73", 'ongoing_prev_court': "0", 'ongoing_prev_total': "73",
+            f'total_ongoing_{current_year}_cas': "143", f'total_ongoing_{current_year}_joint': "0", f'total_ongoing_{current_year}_subtotal': "143", f'total_ongoing_{current_year}_court': "5", f'total_ongoing_{current_year}_total': "148",
+            'closed_prev_cas': "823", 'closed_prev_joint': "13", 'closed_prev_subtotal': "836", 'closed_prev_court': "61", 'closed_prev_total': "897",
+            f'audited_{current_year}_cas': "8", f'audited_{current_year}_joint': "3", f'audited_{current_year}_subtotal': "11", f'audited_{current_year}_court': "15", f'audited_{current_year}_total': "26",
+            f'closed_{current_year}_prev_cas': "132", f'closed_{current_year}_prev_joint': "0", f'closed_{current_year}_prev_subtotal': "132", f'closed_{current_year}_prev_court': "1", f'closed_{current_year}_prev_total': "133",
+            f'total_closed_{current_year}_cas': "140", f'total_closed_{current_year}_joint': "3", f'total_closed_{current_year}_subtotal': "143", f'total_closed_{current_year}_court': "16", f'total_closed_{current_year}_total': "159",
+            'total_cumulative_closed_cas': "963", 'total_cumulative_closed_joint': "16", 'total_cumulative_closed_subtotal': "979", 'total_cumulative_closed_court': "77", 'total_cumulative_closed_total': "1056",
+            'total_audited_cas': "1106", 'total_audited_joint': "16", 'total_audited_subtotal': "1122", 'total_audited_court': "82", 'total_audited_total': "1204",
+            # Error Rates defaults
+            'cas_error_rate': "3.55", 'cas_comments': "Common Representative Error rate computed by the Common Audit Service (CAS) with top ups included. (source: SAR-Wiki)", 'cas_to_be_reported': "Quarterly basis",
+            'ercea_residual_error_rate': "0.92", 'ercea_residual_comments': "ERCEA Residual error rate based on the CRS 1, 2, 3 & 4 (source: SAR-Wiki)", 'ercea_residual_to_be_reported': "Quarterly basis",
+            'ercea_overall_error_rate': "1.30", 'ercea_overall_comments': "All ERCEA participations audited (source: SAR-Wiki)", 'ercea_overall_to_be_reported': "Quarterly basis"
+        }
+        
+        # Try to load existing data
+        try:
+            existing_data = fetch_vars_for_report(chosen_report, DB_PATH)
+            
+            if existing_data:
+                # Check if we have external_audits data and extract field values
+                if 'external_audits' in existing_data:
+                    st.success("✅ Found existing External Audits data - populating form!")
+                    external_data = existing_data['external_audits']
+                    
+                    # Extract individual field values from the saved DataFrame structure
+                    if isinstance(external_data, dict) and 'Status' in external_data:
+                        # Get the data columns
+                        cas_values = external_data.get('CAS', {})
+                        joint_values = external_data.get('Joint with Court of auditors*', {})
+                        subtotal_values = external_data.get('Subtotal for error rates and coverage', {})
+                        court_values = external_data.get('Court of auditors only', {})
+                        total_values = external_data.get('Total', {})
+                        
+                        # Map back to form fields by row index
+                        # Row 0: ERCEA TARGETS
+                        if '0' in cas_values:
+                            defaults['target_cas'] = str(cas_values['0'])
+                            defaults['target_joint'] = str(joint_values.get('0', 'N/A'))
+                            defaults['target_subtotal'] = str(subtotal_values.get('0', '150'))
+                            defaults['target_court'] = str(court_values.get('0', 'N/A'))
+                            defaults['target_total'] = str(total_values.get('0', '150'))
+                        
+                        # Row 1: ERCEA TARGETS Cumulative
+                        if '1' in cas_values:
+                            defaults['cumulative_cas'] = str(cas_values['1'])
+                            defaults['cumulative_joint'] = str(joint_values.get('1', 'N/A'))
+                            defaults['cumulative_subtotal'] = str(subtotal_values.get('1', '1020 (900) ***'))
+                            defaults['cumulative_court'] = str(court_values.get('1', 'N/A'))
+                            defaults['cumulative_total'] = str(total_values.get('1', '1020 (900) ***'))
+                        
+                        # Row 2: Planned
+                        if '2' in cas_values:
+                            defaults['planned_cas'] = str(cas_values['2'])
+                            defaults['planned_joint'] = str(joint_values.get('2', '0'))
+                            defaults['planned_subtotal'] = str(subtotal_values.get('2', '150'))
+                            defaults['planned_court'] = str(court_values.get('2', '0'))
+                            defaults['planned_total'] = str(total_values.get('2', '150'))
+                        
+                        # Row 3: On-going [Launched in current year]
+                        if '3' in cas_values:
+                            defaults[f'ongoing_{current_year}_cas'] = str(cas_values['3'])
+                            defaults[f'ongoing_{current_year}_joint'] = str(joint_values.get('3', '0'))
+                            defaults[f'ongoing_{current_year}_subtotal'] = str(subtotal_values.get('3', '70'))
+                            defaults[f'ongoing_{current_year}_court'] = str(court_values.get('3', '5'))
+                            defaults[f'ongoing_{current_year}_total'] = str(total_values.get('3', '75'))
+                        
+                        # Row 4: On-going [Launched in previous years]
+                        if '4' in cas_values:
+                            defaults['ongoing_prev_cas'] = str(cas_values['4'])
+                            defaults['ongoing_prev_joint'] = str(joint_values.get('4', '0'))
+                            defaults['ongoing_prev_subtotal'] = str(subtotal_values.get('4', '73'))
+                            defaults['ongoing_prev_court'] = str(court_values.get('4', '0'))
+                            defaults['ongoing_prev_total'] = str(total_values.get('4', '73'))
+                        
+                        # Row 5: TOTAL On-going as of 31 December
+                        if '5' in cas_values:
+                            defaults[f'total_ongoing_{current_year}_cas'] = str(cas_values['5'])
+                            defaults[f'total_ongoing_{current_year}_joint'] = str(joint_values.get('5', '0'))
+                            defaults[f'total_ongoing_{current_year}_subtotal'] = str(subtotal_values.get('5', '143'))
+                            defaults[f'total_ongoing_{current_year}_court'] = str(court_values.get('5', '5'))
+                            defaults[f'total_ongoing_{current_year}_total'] = str(total_values.get('5', '148'))
+                        
+                        # Row 6: Closed in previous years
+                        if '6' in cas_values:
+                            defaults['closed_prev_cas'] = str(cas_values['6'])
+                            defaults['closed_prev_joint'] = str(joint_values.get('6', '13'))
+                            defaults['closed_prev_subtotal'] = str(subtotal_values.get('6', '836'))
+                            defaults['closed_prev_court'] = str(court_values.get('6', '61'))
+                            defaults['closed_prev_total'] = str(total_values.get('6', '897'))
+                        
+                        # Row 7: Closed in current year from audited participations launched in current year
+                        if '7' in cas_values:
+                            defaults[f'audited_{current_year}_cas'] = str(cas_values['7'])
+                            defaults[f'audited_{current_year}_joint'] = str(joint_values.get('7', '3'))
+                            defaults[f'audited_{current_year}_subtotal'] = str(subtotal_values.get('7', '11'))
+                            defaults[f'audited_{current_year}_court'] = str(court_values.get('7', '15'))
+                            defaults[f'audited_{current_year}_total'] = str(total_values.get('7', '26'))
+                        
+                        # Row 8: Closed in current year from audited participations launched in previous years
+                        if '8' in cas_values:
+                            defaults[f'closed_{current_year}_prev_cas'] = str(cas_values['8'])
+                            defaults[f'closed_{current_year}_prev_joint'] = str(joint_values.get('8', '0'))
+                            defaults[f'closed_{current_year}_prev_subtotal'] = str(subtotal_values.get('8', '132'))
+                            defaults[f'closed_{current_year}_prev_court'] = str(court_values.get('8', '1'))
+                            defaults[f'closed_{current_year}_prev_total'] = str(total_values.get('8', '133'))
+                        
+                        # Row 9: TOTAL Closed in current year
+                        if '9' in cas_values:
+                            defaults[f'total_closed_{current_year}_cas'] = str(cas_values['9'])
+                            defaults[f'total_closed_{current_year}_joint'] = str(joint_values.get('9', '3'))
+                            defaults[f'total_closed_{current_year}_subtotal'] = str(subtotal_values.get('9', '143'))
+                            defaults[f'total_closed_{current_year}_court'] = str(court_values.get('9', '16'))
+                            defaults[f'total_closed_{current_year}_total'] = str(total_values.get('9', '159'))
+                        
+                        # Row 10: TOTAL cumulatively Closed
+                        if '10' in cas_values:
+                            defaults['total_cumulative_closed_cas'] = str(cas_values['10'])
+                            defaults['total_cumulative_closed_joint'] = str(joint_values.get('10', '16'))
+                            defaults['total_cumulative_closed_subtotal'] = str(subtotal_values.get('10', '979'))
+                            defaults['total_cumulative_closed_court'] = str(court_values.get('10', '77'))
+                            defaults['total_cumulative_closed_total'] = str(total_values.get('10', '1056'))
+                        
+                        # Row 11: Total Audited (open & closed)
+                        if '11' in cas_values:
+                            defaults['total_audited_cas'] = str(cas_values['11'])
+                            defaults['total_audited_joint'] = str(joint_values.get('11', '16'))
+                            defaults['total_audited_subtotal'] = str(subtotal_values.get('11', '1122'))
+                            defaults['total_audited_court'] = str(court_values.get('11', '82'))
+                            defaults['total_audited_total'] = str(total_values.get('11', '1204'))
+                
+                # Check if we have error_rates data  
+                if 'error_rates' in existing_data:
+                    st.success("✅ Found existing Error Rates data - populating form!")
+                    error_data = existing_data['error_rates']
+                    
+                    # Extract error rates values
+                    if isinstance(error_data, dict):
+                        error_rates = error_data.get('Error Rates (all cumulative)', {})
+                        comments = error_data.get('Comments', {})
+                        reporting = error_data.get('To be reported', {})
+                        
+                        # Map back to form fields
+                        if '0' in error_rates:
+                            defaults['cas_error_rate'] = str(error_rates['0']).replace('%', '')
+                            defaults['cas_comments'] = str(comments.get('0', defaults['cas_comments']))
+                            defaults['cas_to_be_reported'] = str(reporting.get('0', defaults['cas_to_be_reported']))
+                        
+                        if '1' in error_rates:
+                            defaults['ercea_residual_error_rate'] = str(error_rates['1']).replace('%', '')
+                            defaults['ercea_residual_comments'] = str(comments.get('1', defaults['ercea_residual_comments']))
+                            defaults['ercea_residual_to_be_reported'] = str(reporting.get('1', defaults['ercea_residual_to_be_reported']))
+                        
+                        if '2' in error_rates:
+                            defaults['ercea_overall_error_rate'] = str(error_rates['2']).replace('%', '')
+                            defaults['ercea_overall_comments'] = str(comments.get('2', defaults['ercea_overall_comments']))
+                            defaults['ercea_overall_to_be_reported'] = str(reporting.get('2', defaults['ercea_overall_to_be_reported']))
+            else:
+                st.info("📭 No existing data found, using defaults.")
+                
+        except Exception as e:
+            st.info(f"📭 No existing data found, using defaults.")
+        
+        return defaults
+
+    def collect_form_data_from_session_state():
+        """Collect all form data from Streamlit session state."""
+        form_data = {}
+        
+        # Complete list of ALL form fields
+        form_fields = [
+            'target_cas', 'target_joint', 'target_subtotal', 'target_court', 'target_total',
+            'cumulative_cas', 'cumulative_joint', 'cumulative_subtotal', 'cumulative_court', 'cumulative_total',
+            'planned_cas', 'planned_joint', 'planned_subtotal', 'planned_court', 'planned_total',
+            f'ongoing_{current_year}_cas', f'ongoing_{current_year}_joint', f'ongoing_{current_year}_subtotal',
+            f'ongoing_{current_year}_court', f'ongoing_{current_year}_total',
+            'ongoing_prev_cas', 'ongoing_prev_joint', 'ongoing_prev_subtotal', 'ongoing_prev_court', 'ongoing_prev_total',
+            f'total_ongoing_{current_year}_cas', f'total_ongoing_{current_year}_joint',
+            f'total_ongoing_{current_year}_subtotal', f'total_ongoing_{current_year}_court', f'total_ongoing_{current_year}_total',
+            'closed_prev_cas', 'closed_prev_joint', 'closed_prev_subtotal', 'closed_prev_court', 'closed_prev_total',
+            f'audited_{current_year}_cas', f'audited_{current_year}_joint', f'audited_{current_year}_subtotal',
+            f'audited_{current_year}_court', f'audited_{current_year}_total',
+            f'closed_{current_year}_prev_cas', f'closed_{current_year}_prev_joint',
+            f'closed_{current_year}_prev_subtotal', f'closed_{current_year}_prev_court', f'closed_{current_year}_prev_total',
+            f'total_closed_{current_year}_cas', f'total_closed_{current_year}_joint',
+            f'total_closed_{current_year}_subtotal', f'total_closed_{current_year}_court', f'total_closed_{current_year}_total',
+            'total_cumulative_closed_cas', 'total_cumulative_closed_joint',
+            'total_cumulative_closed_subtotal', 'total_cumulative_closed_court', 'total_cumulative_closed_total',
+            'total_audited_cas', 'total_audited_joint', 'total_audited_subtotal',
+            'total_audited_court', 'total_audited_total',
+            # Error Rates fields
+            'cas_error_rate', 'cas_comments', 'cas_to_be_reported',
+            'ercea_residual_error_rate', 'ercea_residual_comments', 'ercea_residual_to_be_reported',
+            'ercea_overall_error_rate', 'ercea_overall_comments', 'ercea_overall_to_be_reported'
+        ]
+        
+        for field in form_fields:
+            value = st.session_state.get(field, "")
+            form_data[field] = value if value else "N/A"
+        
+        return form_data
+    
+    # Load existing data or set defaults
+    field_values = load_existing_data_or_defaults(chosen_report, current_year)
+
     # Form for External Audits Table (Table 11a)
     st.subheader("External Audits (Table 11a)")
     with st.form(key="external_audits_form"):
-        st.write("Enter the data for the External Audits table.")
+        st.write("Enter data for each category. Use 'N/A' or leave blank for inapplicable fields.")
 
-        # 2024 ERCEA Targets
-        st.markdown("**2024 ERCEA TARGETS (Audited Participations foreseen acc. to H2020 audit strategy)**")
-        target_cas = st.number_input("CAS", value=150, min_value=0, step=1, key="target_cas")
-        target_subtotal = st.number_input("Subtotal for joint with Court of auditors* and coverage", value=150, min_value=0, step=1, key="target_subtotal")
-        target_court = st.number_input("Court of auditors only", value=150, min_value=0, step=1, key="target_court")
-        target_total = st.number_input("Total", value=150, min_value=0, step=1, key="target_total")
+        # Column headers
+        cols_header = st.columns([3, 1, 1.2, 2, 1.2, 1])
+        headers = ["Status", "CAS", "Joint with Court*", "Subtotal for error rates", "Court only", "Total"]
+        for i, header in enumerate(headers):
+            with cols_header[i]:
+                st.markdown(f'<div class="column-header">{header}</div>', unsafe_allow_html=True)
 
-        # ERCEA Targets Cumulative
-        st.markdown("**ERCEA TARGETS CUMULATIVE**")
-        cumulative_planned = st.number_input("Planned", value=1020, min_value=0, step=1, key="cumulative_planned")
-        cumulative_planned_900 = st.number_input("(900) ***", value=900, min_value=0, step=1, key="cumulative_planned_900")
-        cumulative_subtotal = st.number_input("Subtotal for joint with Court of auditors* and coverage (Cumulative)", value=1020, min_value=0, step=1, key="cumulative_subtotal")
-        cumulative_subtotal_900 = st.number_input("(900) *** (Subtotal)", value=900, min_value=0, step=1, key="cumulative_subtotal_900")
-        cumulative_total = st.number_input("Total (Cumulative)", value=1020, min_value=0, step=1, key="cumulative_total")
-        cumulative_total_900 = st.number_input("(900) *** (Total)", value=900, min_value=0, step=1, key="cumulative_total_900")
+        # 1. ERCEA TARGETS
+        st.markdown(f'<div class="section-label">{current_year} ERCEA TARGETS (Audited Participations foreseen acc. to H2020 audit strategy)</div>', unsafe_allow_html=True)
+        cols1 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols1[0]:
+            st.write("")  # Empty for alignment
+        with cols1[1]:
+            target_cas = st.text_input("CAS", value=field_values.get('target_cas', "150"), key="target_cas", label_visibility="collapsed")
+        with cols1[2]:
+            target_joint = st.text_input("Joint", value=field_values.get('target_joint', "N/A"), key="target_joint", label_visibility="collapsed")
+        with cols1[3]:
+            target_subtotal = st.text_input("Subtotal", value=field_values.get('target_subtotal', "150"), key="target_subtotal", label_visibility="collapsed")
+        with cols1[4]:
+            target_court = st.text_input("Court", value=field_values.get('target_court', "N/A"), key="target_court", label_visibility="collapsed")
+        with cols1[5]:
+            target_total = st.text_input("Total", value=field_values.get('target_total', "150"), key="target_total", label_visibility="collapsed")
 
-        # Planned
-        st.markdown("**Planned**")
-        planned_cas = st.number_input("CAS (Planned)", value=150, min_value=0, step=1, key="planned_cas")
-        planned_subtotal = st.number_input("Subtotal for joint with Court of auditors* and coverage (Planned)", value=0, min_value=0, step=1, key="planned_subtotal")
-        planned_total = st.number_input("Total (Planned)", value=150, min_value=0, step=1, key="planned_total")
+        # 2. ERCEA TARGETS CUMULATIVE
+        st.markdown('<div class="section-label">ERCEA TARGETS Cumulative</div>', unsafe_allow_html=True)
+        cols2 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols2[0]:
+            st.write("")
+        with cols2[1]:
+            cumulative_cas = st.text_input("CAS", value=field_values.get('cumulative_cas', "1020 (900) ***"), key="cumulative_cas", label_visibility="collapsed")
+        with cols2[2]:
+            cumulative_joint = st.text_input("Joint", value=field_values.get('cumulative_joint', "N/A"), key="cumulative_joint", label_visibility="collapsed")
+        with cols2[3]:
+            cumulative_subtotal = st.text_input("Subtotal", value=field_values.get('cumulative_subtotal', "1020 (900) ***"), key="cumulative_subtotal", label_visibility="collapsed")
+        with cols2[4]:
+            cumulative_court = st.text_input("Court", value=field_values.get('cumulative_court', "N/A"), key="cumulative_court", label_visibility="collapsed")
+        with cols2[5]:
+            cumulative_total = st.text_input("Total", value=field_values.get('cumulative_total', "1020 (900) ***"), key="cumulative_total", label_visibility="collapsed")
 
-        # On-going Launched in 2024
-        st.markdown("**On-going [Launched in 2024]**")
-        ongoing_2024_cas = st.number_input("CAS (On-going 2024)", value=70, min_value=0, step=1, key="ongoing_2024_cas")
-        ongoing_2024_subtotal = st.number_input("Subtotal (On-going 2024)", value=0, min_value=0, step=1, key="ongoing_2024_subtotal")
-        ongoing_2024_court = st.number_input("Court of auditors only (On-going 2024)", value=5, min_value=0, step=1, key="ongoing_2024_court")
-        ongoing_2024_total = st.number_input("Total (On-going 2024)", value=75, min_value=0, step=1, key="ongoing_2024_total")
+        # 3. PLANNED
+        st.markdown('<div class="section-label">Planned</div>', unsafe_allow_html=True)
+        cols3 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols3[0]:
+            st.write("")
+        with cols3[1]:
+            planned_cas = st.text_input("CAS", value=field_values.get('planned_cas', "150"), key="planned_cas", label_visibility="collapsed")
+        with cols3[2]:
+            planned_joint = st.text_input("Joint", value=field_values.get('planned_joint', "0"), key="planned_joint", label_visibility="collapsed")
+        with cols3[3]:
+            planned_subtotal = st.text_input("Subtotal", value=field_values.get('planned_subtotal', "150"), key="planned_subtotal", label_visibility="collapsed")
+        with cols3[4]:
+            planned_court = st.text_input("Court", value=field_values.get('planned_court', "0"), key="planned_court", label_visibility="collapsed")
+        with cols3[5]:
+            planned_total = st.text_input("Total", value=field_values.get('planned_total', "150"), key="planned_total", label_visibility="collapsed")
 
-        # On-going Launched in Previous Years
-        st.markdown("**On-going [Launched in previous years]**")
-        ongoing_prev_cas = st.number_input("CAS (On-going Previous)", value=73, min_value=0, step=1, key="ongoing_prev_cas")
-        ongoing_prev_subtotal = st.number_input("Subtotal (On-going Previous)", value=0, min_value=0, step=1, key="ongoing_prev_subtotal")
-        ongoing_prev_total = st.number_input("Total (On-going Previous)", value=73, min_value=0, step=1, key="ongoing_prev_total")
+        # 4. ON-GOING [LAUNCHED IN CURRENT YEAR]
+        st.markdown(f'<div class="section-label">On-going [Launched in {current_year}]</div>', unsafe_allow_html=True)
+        cols4 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols4[0]:
+            st.write("")
+        with cols4[1]:
+            ongoing_current_cas = st.text_input("CAS", value=field_values.get(f'ongoing_{current_year}_cas', "70"), key=f"ongoing_{current_year}_cas", label_visibility="collapsed")
+        with cols4[2]:
+            ongoing_current_joint = st.text_input("Joint", value=field_values.get(f'ongoing_{current_year}_joint', "0"), key=f"ongoing_{current_year}_joint", label_visibility="collapsed")
+        with cols4[3]:
+            ongoing_current_subtotal = st.text_input("Subtotal", value=field_values.get(f'ongoing_{current_year}_subtotal', "70"), key=f"ongoing_{current_year}_subtotal", label_visibility="collapsed")
+        with cols4[4]:
+            ongoing_current_court = st.text_input("Court", value=field_values.get(f'ongoing_{current_year}_court', "5"), key=f"ongoing_{current_year}_court", label_visibility="collapsed")
+        with cols4[5]:
+            ongoing_current_total = st.text_input("Total", value=field_values.get(f'ongoing_{current_year}_total', "75"), key=f"ongoing_{current_year}_total", label_visibility="collapsed")
 
-        # Total On-going as of 31 December 2024
-        st.markdown("**TOTAL On-going as of 31 December 2024**")
-        total_ongoing_2024_cas = st.number_input("CAS (Total On-going 2024)", value=143, min_value=0, step=1, key="total_ongoing_2024_cas")
-        total_ongoing_2024_subtotal = st.number_input("Subtotal (Total On-going 2024)", value=0, min_value=0, step=1, key="total_ongoing_2024_subtotal")
-        total_ongoing_2024_court = st.number_input("Court of auditors only (Total On-going 2024)", value=5, min_value=0, step=1, key="total_ongoing_2024_court")
-        total_ongoing_2024_total = st.number_input("Total (Total On-going 2024)", value=148, min_value=0, step=1, key="total_ongoing_2024_total")
+        # 5. ON-GOING [LAUNCHED IN PREVIOUS YEARS]
+        st.markdown('<div class="section-label">On-going [Launched in previous years]</div>', unsafe_allow_html=True)
+        cols5 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols5[0]:
+            st.write("")
+        with cols5[1]:
+            ongoing_prev_cas = st.text_input("CAS", value=field_values.get('ongoing_prev_cas', "73"), key="ongoing_prev_cas", label_visibility="collapsed")
+        with cols5[2]:
+            ongoing_prev_joint = st.text_input("Joint", value=field_values.get('ongoing_prev_joint', "0"), key="ongoing_prev_joint", label_visibility="collapsed")
+        with cols5[3]:
+            ongoing_prev_subtotal = st.text_input("Subtotal", value=field_values.get('ongoing_prev_subtotal', "73"), key="ongoing_prev_subtotal", label_visibility="collapsed")
+        with cols5[4]:
+            ongoing_prev_court = st.text_input("Court", value=field_values.get('ongoing_prev_court', "0"), key="ongoing_prev_court", label_visibility="collapsed")
+        with cols5[5]:
+            ongoing_prev_total = st.text_input("Total", value=field_values.get('ongoing_prev_total', "73"), key="ongoing_prev_total", label_visibility="collapsed")
 
-        # Closed in Previous Years
-        st.markdown("**Closed in previous years**")
-        closed_prev_cas = st.number_input("CAS (Closed Previous)", value=823, min_value=0, step=1, key="closed_prev_cas")
-        closed_prev_subtotal = st.number_input("Subtotal (Closed Previous)", value=13, min_value=0, step=1, key="closed_prev_subtotal")
-        closed_prev_court = st.number_input("Court of auditors only (Closed Previous)", value=61, min_value=0, step=1, key="closed_prev_court")
-        closed_prev_total = st.number_input("Total (Closed Previous)", value=887, min_value=0, step=1, key="closed_prev_total")
+        # 6. TOTAL ON-GOING
+        st.markdown(f'<div class="section-label">TOTAL On-going as of 31 December {current_year}</div>', unsafe_allow_html=True)
+        cols6 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols6[0]:
+            st.write("")
+        with cols6[1]:
+            total_ongoing_cas = st.text_input("CAS", value=field_values.get(f'total_ongoing_{current_year}_cas', "143"), key=f"total_ongoing_{current_year}_cas", label_visibility="collapsed")
+        with cols6[2]:
+            total_ongoing_joint = st.text_input("Joint", value=field_values.get(f'total_ongoing_{current_year}_joint', "0"), key=f"total_ongoing_{current_year}_joint", label_visibility="collapsed")
+        with cols6[3]:
+            total_ongoing_subtotal = st.text_input("Subtotal", value=field_values.get(f'total_ongoing_{current_year}_subtotal', "143"), key=f"total_ongoing_{current_year}_subtotal", label_visibility="collapsed")
+        with cols6[4]:
+            total_ongoing_court = st.text_input("Court", value=field_values.get(f'total_ongoing_{current_year}_court', "5"), key=f"total_ongoing_{current_year}_court", label_visibility="collapsed")
+        with cols6[5]:
+            total_ongoing_total = st.text_input("Total", value=field_values.get(f'total_ongoing_{current_year}_total', "148"), key=f"total_ongoing_{current_year}_total", label_visibility="collapsed")
 
-        # Audited Participations Launched in 2024
-        st.markdown("**audited participations launched in 2024 (Letter of Conclusion sent)**")
-        audited_2024_cas = st.number_input("CAS (Audited 2024)", value=8, min_value=0, step=1, key="audited_2024_cas")
-        audited_2024_subtotal = st.number_input("Subtotal (Audited 2024)", value=11, min_value=0, step=1, key="audited_2024_subtotal")
-        audited_2024_court = st.number_input("Court of auditors only (Audited 2024)", value=15, min_value=0, step=1, key="audited_2024_court")
-        audited_2024_total = st.number_input("Total (Audited 2024)", value=26, min_value=0, step=1, key="audited_2024_total")
+        # 7. CLOSED IN PREVIOUS YEARS
+        st.markdown('<div class="section-label">Closed in previous years</div>', unsafe_allow_html=True)
+        cols7 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols7[0]:
+            st.write("")
+        with cols7[1]:
+            closed_prev_cas = st.text_input("CAS", value=field_values.get('closed_prev_cas', "823"), key="closed_prev_cas", label_visibility="collapsed")
+        with cols7[2]:
+            closed_prev_joint = st.text_input("Joint", value=field_values.get('closed_prev_joint', "13"), key="closed_prev_joint", label_visibility="collapsed")
+        with cols7[3]:
+            closed_prev_subtotal = st.text_input("Subtotal", value=field_values.get('closed_prev_subtotal', "836"), key="closed_prev_subtotal", label_visibility="collapsed")
+        with cols7[4]:
+            closed_prev_court = st.text_input("Court", value=field_values.get('closed_prev_court', "61"), key="closed_prev_court", label_visibility="collapsed")
+        with cols7[5]:
+            closed_prev_total = st.text_input("Total", value=field_values.get('closed_prev_total', "897"), key="closed_prev_total", label_visibility="collapsed")
 
-        # Closed in 2024 from Previous Years
-        st.markdown("**Closed in 2024 from audited participations launched in previous years**")
-        closed_2024_prev_cas = st.number_input("CAS (Closed 2024 Previous)", value=132, min_value=0, step=1, key="closed_2024_prev_cas")
-        closed_2024_prev_subtotal = st.number_input("Subtotal (Closed 2024 Previous)", value=0, min_value=0, step=1, key="closed_2024_prev_subtotal")
-        closed_2024_prev_court = st.number_input("Court of auditors only (Closed 2024 Previous)", value=1, min_value=0, step=1, key="closed_2024_prev_court")
-        closed_2024_prev_total = st.number_input("Total (Closed 2024 Previous)", value=133, min_value=0, step=1, key="closed_2024_prev_total")
+        # 8. CLOSED IN CURRENT YEAR FROM AUDITED PARTICIPATIONS LAUNCHED IN CURRENT YEAR
+        st.markdown(f'<div class="section-label">Closed in {current_year} from audited participations launched in {current_year} (Letter of Conclusion sent)</div>', unsafe_allow_html=True)
+        cols8 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols8[0]:
+            st.write("")
+        with cols8[1]:
+            audited_current_cas = st.text_input("CAS", value=field_values.get(f'audited_{current_year}_cas', "8"), key=f"audited_{current_year}_cas", label_visibility="collapsed")
+        with cols8[2]:
+            audited_current_joint = st.text_input("Joint", value=field_values.get(f'audited_{current_year}_joint', "3"), key=f"audited_{current_year}_joint", label_visibility="collapsed")
+        with cols8[3]:
+            audited_current_subtotal = st.text_input("Subtotal", value=field_values.get(f'audited_{current_year}_subtotal', "11"), key=f"audited_{current_year}_subtotal", label_visibility="collapsed")
+        with cols8[4]:
+            audited_current_court = st.text_input("Court", value=field_values.get(f'audited_{current_year}_court', "15"), key=f"audited_{current_year}_court", label_visibility="collapsed")
+        with cols8[5]:
+            audited_current_total = st.text_input("Total", value=field_values.get(f'audited_{current_year}_total', "26"), key=f"audited_{current_year}_total", label_visibility="collapsed")
 
-        # Total Closed in 2024
-        st.markdown("**TOTAL Closed in 2024**")
-        total_closed_2024_cas = st.number_input("CAS (Total Closed 2024)", value=140, min_value=0, step=1, key="total_closed_2024_cas")
-        total_closed_2024_subtotal = st.number_input("Subtotal (Total Closed 2024)", value=3, min_value=0, step=1, key="total_closed_2024_subtotal")
-        total_closed_2024_court = st.number_input("Court of auditors only (Total Closed 2024)", value=16, min_value=0, step=1, key="total_closed_2024_court")
-        total_closed_2024_total = st.number_input("Total (Total Closed 2024)", value=159, min_value=0, step=1, key="total_closed_2024_total")
+        # 9. CLOSED IN CURRENT YEAR FROM AUDITED PARTICIPATIONS LAUNCHED IN PREVIOUS YEARS
+        st.markdown(f'<div class="section-label">Closed in {current_year} from audited participations launched in previous years</div>', unsafe_allow_html=True)
+        cols9 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols9[0]:
+            st.write("")
+        with cols9[1]:
+            closed_current_prev_cas = st.text_input("CAS", value=field_values.get(f'closed_{current_year}_prev_cas', "132"), key=f"closed_{current_year}_prev_cas", label_visibility="collapsed")
+        with cols9[2]:
+            closed_current_prev_joint = st.text_input("Joint", value=field_values.get(f'closed_{current_year}_prev_joint', "0"), key=f"closed_{current_year}_prev_joint", label_visibility="collapsed")
+        with cols9[3]:
+            closed_current_prev_subtotal = st.text_input("Subtotal", value=field_values.get(f'closed_{current_year}_prev_subtotal', "132"), key=f"closed_{current_year}_prev_subtotal", label_visibility="collapsed")
+        with cols9[4]:
+            closed_current_prev_court = st.text_input("Court", value=field_values.get(f'closed_{current_year}_prev_court', "1"), key=f"closed_{current_year}_prev_court", label_visibility="collapsed")
+        with cols9[5]:
+            closed_current_prev_total = st.text_input("Total", value=field_values.get(f'closed_{current_year}_prev_total', "133"), key=f"closed_{current_year}_prev_total", label_visibility="collapsed")
 
-        # Total Cumulatively Closed
-        st.markdown("**TOTAL CUMULATIVELY CLOSED**")
-        total_cumulative_closed_cas = st.number_input("CAS (Total Cumulatively Closed)", value=963, min_value=0, step=1, key="total_cumulative_closed_cas")
-        total_cumulative_closed_subtotal = st.number_input("Subtotal (Total Cumulatively Closed)", value=16, min_value=0, step=1, key="total_cumulative_closed_subtotal")
-        total_cumulative_closed_court = st.number_input("Court of auditors only (Total Cumulatively Closed)", value=77, min_value=0, step=1, key="total_cumulative_closed_court")
-        total_cumulative_closed_total = st.number_input("Total (Total Cumulatively Closed)", value=1056, min_value=0, step=1, key="total_cumulative_closed_total")
+        # 10. TOTAL CLOSED IN CURRENT YEAR
+        st.markdown(f'<div class="section-label">TOTAL Closed in {current_year}</div>', unsafe_allow_html=True)
+        cols10 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols10[0]:
+            st.write("")
+        with cols10[1]:
+            total_closed_cas = st.text_input("CAS", value=field_values.get(f'total_closed_{current_year}_cas', "140"), key=f"total_closed_{current_year}_cas", label_visibility="collapsed")
+        with cols10[2]:
+            total_closed_joint = st.text_input("Joint", value=field_values.get(f'total_closed_{current_year}_joint', "3"), key=f"total_closed_{current_year}_joint", label_visibility="collapsed")
+        with cols10[3]:
+            total_closed_subtotal = st.text_input("Subtotal", value=field_values.get(f'total_closed_{current_year}_subtotal', "143"), key=f"total_closed_{current_year}_subtotal", label_visibility="collapsed")
+        with cols10[4]:
+            total_closed_court = st.text_input("Court", value=field_values.get(f'total_closed_{current_year}_court', "16"), key=f"total_closed_{current_year}_court", label_visibility="collapsed")
+        with cols10[5]:
+            total_closed_total = st.text_input("Total", value=field_values.get(f'total_closed_{current_year}_total', "159"), key=f"total_closed_{current_year}_total", label_visibility="collapsed")
 
-        # Total Audited (Open & Closed)
-        st.markdown("**TOTAL AUDITED (open & closed) ***")
-        total_audited_cas = st.number_input("CAS (Total Audited)", value=1106, min_value=0, step=1, key="total_audited_cas")
-        total_audited_subtotal = st.number_input("Subtotal (Total Audited)", value=16, min_value=0, step=1, key="total_audited_subtotal")
-        total_audited_court = st.number_input("Court of auditors only (Total Audited)", value=82, min_value=0, step=1, key="total_audited_court")
-        total_audited_total = st.number_input("Total (Total Audited)", value=1204, min_value=0, step=1, key="total_audited_total")
+        # 11. TOTAL CUMULATIVELY CLOSED
+        st.markdown('<div class="section-label">TOTAL cumulatively Closed</div>', unsafe_allow_html=True)
+        cols11 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols11[0]:
+            st.write("")
+        with cols11[1]:
+            total_cumulative_cas = st.text_input("CAS", value=field_values.get('total_cumulative_closed_cas', "963"), key="total_cumulative_closed_cas", label_visibility="collapsed")
+        with cols11[2]:
+            total_cumulative_joint = st.text_input("Joint", value=field_values.get('total_cumulative_closed_joint', "16"), key="total_cumulative_closed_joint", label_visibility="collapsed")
+        with cols11[3]:
+            total_cumulative_subtotal = st.text_input("Subtotal", value=field_values.get('total_cumulative_closed_subtotal', "979"), key="total_cumulative_closed_subtotal", label_visibility="collapsed")
+        with cols11[4]:
+            total_cumulative_court = st.text_input("Court", value=field_values.get('total_cumulative_closed_court', "77"), key="total_cumulative_closed_court", label_visibility="collapsed")
+        with cols11[5]:
+            total_cumulative_total = st.text_input("Total", value=field_values.get('total_cumulative_closed_total', "1056"), key="total_cumulative_closed_total", label_visibility="collapsed")
 
-        submit_external_audits = st.form_submit_button("Submit External Audits Data")
+        # 12. TOTAL AUDITED (OPEN & CLOSED)
+        st.markdown('<div class="section-label">Total Audited (open & closed) **</div>', unsafe_allow_html=True)
+        cols12 = st.columns([3, 1, 1, 2, 1, 1])
+        with cols12[0]:
+            st.write("")
+        with cols12[1]:
+            total_audited_cas = st.text_input("CAS", value=field_values.get('total_audited_cas', "1106"), key="total_audited_cas", label_visibility="collapsed")
+        with cols12[2]:
+            total_audited_joint = st.text_input("Joint", value=field_values.get('total_audited_joint', "16"), key="total_audited_joint", label_visibility="collapsed")
+        with cols12[3]:
+            total_audited_subtotal = st.text_input("Subtotal", value=field_values.get('total_audited_subtotal', "1122"), key="total_audited_subtotal", label_visibility="collapsed")
+        with cols12[4]:
+            total_audited_court = st.text_input("Court", value=field_values.get('total_audited_court', "82"), key="total_audited_court", label_visibility="collapsed")
+        with cols12[5]:
+            total_audited_total = st.text_input("Total", value=field_values.get('total_audited_total', "1204"), key="total_audited_total", label_visibility="collapsed")
+
+        submit_external_audits = st.form_submit_button("Submit External Audits Data", type="primary")
 
     # Form for Error Rates Table (Table 11b)
     st.subheader("Error Rates (Table 11b)")
     with st.form(key="error_rates_form"):
-        st.write("Enter the data for the Error Rates table.")
+        st.write("Enter data for each category. Use numbers or text as needed.")
 
-        # Row 1: CAS CRS 1 to 6
-        st.markdown("**CAS CRS 1 to 6 - Latest figures**")
-        cas_error_rate = st.number_input("Error Rate (%)", value=3.55, min_value=0.0, step=0.01, format="%.3f", key="cas_error_rate")
-        cas_comments = st.text_area("Comments (CAS)", value="Common Representative Error rate computed by the Common Audit Service (CAS) with top ups included. (source: SAR-Wiki)", height=100, key="cas_comments")
-        cas_to_be_reported = st.text_input("To be reported (CAS)", value="Quarterly basis", key="cas_to_be_reported")
+        # Column headers for Error Rates
+        cols_header_error = st.columns([3, 1, 3, 1])
+        headers_error = ["Name", "Error Rate (%)", "Comments", "To be reported"]
+        for i, header in enumerate(headers_error):
+            with cols_header_error[i]:
+                st.markdown(f'<div class="column-header">{header}</div>', unsafe_allow_html=True)
 
-        # Row 2: ERCEA Residual Based on CRS 1 to 5
-        st.markdown("**ERCEA Residual Based on CRS 1 to 5 - Latest figures**")
-        ercea_residual_error_rate = st.number_input("Error Rate (%) (ERCEA Residual)", value=0.92, min_value=0.0, step=0.01, format="%.3f", key="ercea_residual_error_rate")
-        ercea_residual_comments = st.text_area("Comments (ERCEA Residual)", value="ERCEA Residual error rate based on the CRS 1, 2, 3 & 4 (source: SAR-Wiki)", height=100, key="ercea_residual_comments")
-        ercea_residual_to_be_reported = st.text_input("To be reported (ERCEA Residual)", value="Quarterly basis", key="ercea_residual_to_be_reported")
+        # 1. CAS CRS 1 to 6 - Latest figures
+        st.markdown('<div class="section-label">CAS CRS 1 to 6 - Latest figures</div>', unsafe_allow_html=True)
+        cols_error1 = st.columns([3, 1, 3, 1])
+        with cols_error1[0]:
+            st.write("")  # Empty for alignment
+        with cols_error1[1]:
+            cas_error_rate = st.text_input("Rate", value=field_values.get('cas_error_rate', "3.55"), key="cas_error_rate", label_visibility="collapsed")
+        with cols_error1[2]:
+            cas_comments = st.text_input("Comments", value=field_values.get('cas_comments', "Common Representative Error rate computed by the Common Audit Service (CAS) with top ups included. (source: SAR-Wiki)"), key="cas_comments", label_visibility="collapsed")
+        with cols_error1[3]:
+            cas_to_be_reported = st.text_input("Reporting", value=field_values.get('cas_to_be_reported', "Quarterly basis"), key="cas_to_be_reported", label_visibility="collapsed")
 
-        # Row 3: ERCEA Overall Detected Average Error Rate
-        st.markdown("**ERCEA overall detected average error rate - Latest figures**")
-        ercea_overall_error_rate = st.number_input("Error Rate (%) (ERCEA Overall)", value=1.30, min_value=0.0, step=0.01, format="%.3f", key="ercea_overall_error_rate")
-        ercea_overall_comments = st.text_area("Comments (ERCEA Overall)", value="All ERCEA participations audited (source: SAR-Wiki)", height=100, key="ercea_overall_comments")
-        ercea_overall_to_be_reported = st.text_input("To be reported (ERCEA Overall)", value="Quarterly basis", key="ercea_overall_to_be_reported")
+        # 2. ERCEA Residual Based on CRS 1 to 5 - Latest figures
+        st.markdown('<div class="section-label">ERCEA Residual Based on CRS 1 to 5 - Latest figures</div>', unsafe_allow_html=True)
+        cols_error2 = st.columns([3, 1, 3, 1])
+        with cols_error2[0]:
+            st.write("")
+        with cols_error2[1]:
+            ercea_residual_error_rate = st.text_input("Rate", value=field_values.get('ercea_residual_error_rate', "0.92"), key="ercea_residual_error_rate", label_visibility="collapsed")
+        with cols_error2[2]:
+            ercea_residual_comments = st.text_input("Comments", value=field_values.get('ercea_residual_comments', "ERCEA Residual error rate based on the CRS 1, 2, 3 & 4 (source: SAR-Wiki)"), key="ercea_residual_comments", label_visibility="collapsed")
+        with cols_error2[3]:
+            ercea_residual_to_be_reported = st.text_input("Reporting", value=field_values.get('ercea_residual_to_be_reported', "Quarterly basis"), key="ercea_residual_to_be_reported", label_visibility="collapsed")
 
-        submit_error_rates = st.form_submit_button("Submit Error Rates Data")
+        # 3. ERCEA overall detected average error rate - Latest figures
+        st.markdown('<div class="section-label">ERCEA overall detected average error rate - Latest figures</div>', unsafe_allow_html=True)
+        cols_error3 = st.columns([3, 1, 3, 1])
+        with cols_error3[0]:
+            st.write("")
+        with cols_error3[1]:
+            ercea_overall_error_rate = st.text_input("Rate", value=field_values.get('ercea_overall_error_rate', "1.30"), key="ercea_overall_error_rate", label_visibility="collapsed")
+        with cols_error3[2]:
+            ercea_overall_comments = st.text_input("Comments", value=field_values.get('ercea_overall_comments', "All ERCEA participations audited (source: SAR-Wiki)"), key="ercea_overall_comments", label_visibility="collapsed")
+        with cols_error3[3]:
+            ercea_overall_to_be_reported = st.text_input("Reporting", value=field_values.get('ercea_overall_to_be_reported', "Quarterly basis"), key="ercea_overall_to_be_reported", label_visibility="collapsed")
+
+        submit_error_rates = st.form_submit_button("Submit Error Rates Data", type="primary")
 
     # Process External Audits Form Submission
     if submit_external_audits:
         try:
+            # Collect form data
+            form_data = collect_form_data_from_session_state()
+            
             # Build DataFrame for External Audits
-            external_audits_data = [
-                {"Status": "2024 ERCEA TARGETS (Audited Participations foreseen acc. to H2020 audit strategy)", "CAS": target_cas, "Subtotal for joint with Court of auditors* and coverage": "N/A", "Court of auditors only": "N/A", "Total": target_total},
-                {"Status": "", "CAS": "", "Subtotal for joint with Court of auditors* and coverage": target_subtotal, "Court of auditors only": target_court, "Total": ""},
-                {"Status": "ERCEA TARGETS CUMULATIVE", "CAS": f"{cumulative_planned} ({cumulative_planned_900}) ***", "Subtotal for joint with Court of auditors* and coverage": "N/A", "Court of auditors only": "N/A", "Total": f"{cumulative_total} ({cumulative_total_900}) ***"},
-                {"Status": "", "CAS": "", "Subtotal for joint with Court of auditors* and coverage": f"{cumulative_subtotal} ({cumulative_subtotal_900}) ***", "Court of auditors only": "", "Total": ""},
-                {"Status": "Planned", "CAS": planned_cas, "Subtotal for joint with Court of auditors* and coverage": planned_subtotal, "Court of auditors only": "", "Total": planned_total},
-                {"Status": "On-going [Launched in 2024]", "CAS": ongoing_2024_cas, "Subtotal for joint with Court of auditors* and coverage": ongoing_2024_subtotal, "Court of auditors only": ongoing_2024_court, "Total": ongoing_2024_total},
-                {"Status": "On-going [Launched in previous years]", "CAS": ongoing_prev_cas, "Subtotal for joint with Court of auditors* and coverage": ongoing_prev_subtotal, "Court of auditors only": "", "Total": ongoing_prev_total},
-                {"Status": "TOTAL On-going as of 31 December 2024", "CAS": total_ongoing_2024_cas, "Subtotal for joint with Court of auditors* and coverage": total_ongoing_2024_subtotal, "Court of auditors only": total_ongoing_2024_court, "Total": total_ongoing_2024_total},
-                {"Status": "Closed in previous years", "CAS": closed_prev_cas, "Subtotal for joint with Court of auditors* and coverage": closed_prev_subtotal, "Court of auditors only": closed_prev_court, "Total": closed_prev_total},
-                {"Status": "audited participations launched in 2024 (Letter of Conclusion sent)", "CAS": audited_2024_cas, "Subtotal for joint with Court of auditors* and coverage": audited_2024_subtotal, "Court of auditors only": audited_2024_court, "Total": audited_2024_total},
-                {"Status": "Closed in 2024 from audited participations launched in previous years", "CAS": closed_2024_prev_cas, "Subtotal for joint with Court of auditors* and coverage": closed_2024_prev_subtotal, "Court of auditors only": closed_2024_prev_court, "Total": closed_2024_prev_total},
-                {"Status": "TOTAL Closed in 2024", "CAS": total_closed_2024_cas, "Subtotal for joint with Court of auditors* and coverage": total_closed_2024_subtotal, "Court of auditors only": total_closed_2024_court, "Total": total_closed_2024_total},
-                {"Status": "TOTAL CUMULATIVELY CLOSED", "CAS": total_cumulative_closed_cas, "Subtotal for joint with Court of auditors* and coverage": total_cumulative_closed_subtotal, "Court of auditors only": total_cumulative_closed_court, "Total": total_cumulative_closed_total},
-                {"Status": "TOTAL AUDITED (open & closed) ***", "CAS": total_audited_cas, "Subtotal for joint with Court of auditors* and coverage": total_audited_subtotal, "Court of auditors only": total_audited_court, "Total": total_audited_total}
-            ]
-            external_audits_df = pd.DataFrame(external_audits_data)
+            external_audits_df = create_external_audits_dataframe(current_year, last_date, form_data)
 
-            # Create GT Table
-            external_audits_gt = GT(external_audits_df)
-            external_audits_gt = apply_audit_table_styling(external_audits_gt, table_type="external_audits")
+            # Create GT Table with error handling
+            try:
+                external_audits_gt = GT(external_audits_df)
+                external_audits_gt = apply_external_audits_styling(external_audits_gt, report_params)
+            except Exception as gt_error:
+                st.warning(f"⚠️ GT Table styling failed: {gt_error}")
+                external_audits_gt = GT(external_audits_df)  # Use basic GT table
 
             # Save to Database
             insert_variable(
@@ -2415,28 +2694,77 @@ elif selected_section == "audit_data_input":
                 gt_table=external_audits_gt
             )
 
-            st.success("External Audits data saved successfully!")
-            st.write("### Preview of External Audits Table")
-            st.dataframe(external_audits_df)
+            st.success("✅ External Audits data saved successfully!")
+      
+            # 🔍 IMMEDIATE IMAGE VERIFICATION FROM DATABASE
+            st.write("### 🔍 Immediate Image Verification from Database")
+            try:
+                # Fetch the image that was just saved
+                gt_image, anchor_name = fetch_gt_image(chosen_report, "external_audits", DB_PATH)
+                
+                if gt_image:
+                    st.write(f"📊 **Image found in database!**")
+                    st.write(f"🔍 **Image type:** {type(gt_image)}")
+                    st.write(f"🔍 **Image length:** {len(str(gt_image))} characters/bytes")
+                    
+                    try:
+                        if isinstance(gt_image, str):  # If gt_image is a file path
+                            st.write(f"📁 **Image path:** {gt_image}")
+                            image_path = Path(gt_image)
+                            if image_path.exists():
+                                st.write(f"✅ **File exists:** {image_path.stat().st_size} bytes")
+                                image = Image.open(image_path)
+                                st.image(image, caption=f"Saved image for {anchor_name}", use_container_width=True)
+                            else:
+                                st.error(f"❌ **Image file not found at:** {gt_image}")
+                        else:  # If gt_image is bytes
+                            st.write(f"💾 **Image is stored as bytes**")
+                            image = Image.open(io.BytesIO(gt_image))
+                            st.image(image, caption=f"Saved image for {anchor_name}", use_container_width=True)
+                            
+                        st.write(f"📍 **Anchor name:** `{anchor_name or '–'}`")
+                        
+                    except Exception as img_error:
+                        st.error(f"❌ **Failed to display saved image:** {img_error}")
+                        st.code(f"Error details: {img_error}")
+                else:
+                    st.error("❌ **No image found in database after save!**")
+                    
+            except Exception as verification_error:
+                st.error(f"❌ **Image verification failed:** {verification_error}")
+                import traceback
+                st.code(traceback.format_exc())
+            
+            # Display the table in Streamlit (for comparison)
+            st.write("### 📋 Streamlit GT Table Display (for comparison)")
+            try:
+                st.write(external_audits_gt.as_raw_html(), unsafe_allow_html=True)
+            except Exception as display_error:
+                st.warning(f"⚠️ GT display failed: {display_error}")
+            st.dataframe(external_audits_df, use_container_width=True)
+
 
         except Exception as e:
-            st.error(f"Failed to save External Audits data: {str(e)}")
-            traceback.print_exc()
+            st.error(f"❌ Failed to process External Audits data: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
 
     # Process Error Rates Form Submission
     if submit_error_rates:
         try:
+            # Collect form data
+            form_data = collect_form_data_from_session_state()
+            
             # Build DataFrame for Error Rates
-            error_rates_data = [
-                {"Name": "CAS CRS 1 to 6 - Latest figures", "Error Rates (all cumulative)": f"{cas_error_rate:.3f}%", "Comments": cas_comments, "To be reported": cas_to_be_reported},
-                {"Name": "ERCEA Residual Based on CRS 1 to 5 - Latest figures", "Error Rates (all cumulative)": f"{ercea_residual_error_rate:.3f}%", "Comments": ercea_residual_comments, "To be reported": ercea_residual_to_be_reported},
-                {"Name": "ERCEA overall detected average error rate - Latest figures", "Error Rates (all cumulative)": f"{ercea_overall_error_rate:.3f}%", "Comments": ercea_overall_comments, "To be reported": ercea_overall_to_be_reported}
-            ]
-            error_rates_df = pd.DataFrame(error_rates_data)
+            error_rates_df = create_error_rates_dataframe(form_data)
 
-            # Create GT Table
-            error_rates_gt = GT(error_rates_df)
-            error_rates_gt = apply_audit_table_styling(error_rates_gt, table_type="error_rates")
+            # Create GT Table with error handling
+            try:
+                error_rates_gt = GT(error_rates_df)
+                error_rates_gt = apply_error_rates_styling(error_rates_gt, report_params)
+            except Exception as gt_error:
+                st.warning(f"⚠️ GT Table styling failed: {gt_error}")
+                error_rates_gt = GT(error_rates_df)  # Use basic GT table
 
             # Save to Database
             insert_variable(
@@ -2449,10 +2777,58 @@ elif selected_section == "audit_data_input":
                 gt_table=error_rates_gt
             )
 
-            st.success("Error Rates data saved successfully!")
-            st.write("### Preview of Error Rates Table")
-            st.dataframe(error_rates_df)
+            st.success("✅ Error Rates data saved successfully!")
+            
+            # Display the table
+            # 🔍 IMMEDIATE IMAGE VERIFICATION FROM DATABASE
+            st.write("### 🔍 Immediate Image Verification from Database")
+            try:
+                # Fetch the image that was just saved
+                gt_image, anchor_name = fetch_gt_image(chosen_report, "error_rates", DB_PATH)
+                
+                if gt_image:
+                    st.write(f"📊 **Image found in database!**")
+                    st.write(f"🔍 **Image type:** {type(gt_image)}")
+                    st.write(f"🔍 **Image length:** {len(str(gt_image))} characters/bytes")
+                    
+                    try:
+                        if isinstance(gt_image, str):  # If gt_image is a file path
+                            st.write(f"📁 **Image path:** {gt_image}")
+                            image_path = Path(gt_image)
+                            if image_path.exists():
+                                st.write(f"✅ **File exists:** {image_path.stat().st_size} bytes")
+                                image = Image.open(image_path)
+                                st.image(image, caption=f"Saved image for {anchor_name}", use_container_width=True)
+                            else:
+                                st.error(f"❌ **Image file not found at:** {gt_image}")
+                        else:  # If gt_image is bytes
+                            st.write(f"💾 **Image is stored as bytes**")
+                            image = Image.open(io.BytesIO(gt_image))
+                            st.image(image, caption=f"Saved image for {anchor_name}", use_container_width=True)
+                            
+                        st.write(f"📍 **Anchor name:** `{anchor_name or '–'}`")
+                        
+                    except Exception as img_error:
+                        st.error(f"❌ **Failed to display saved image:** {img_error}")
+                        st.code(f"Error details: {img_error}")
+                else:
+                    st.error("❌ **No image found in database after save!**")
+                    
+            except Exception as verification_error:
+                st.error(f"❌ **Image verification failed:** {verification_error}")
+                import traceback
+                st.code(traceback.format_exc())
+            
+            # Display the table in Streamlit (for comparison)
+            st.write("### 📋 Streamlit GT Table Display (for comparison)")
+            try:
+                st.write(error_rates_gt.as_raw_html(), unsafe_allow_html=True)
+            except Exception as display_error:
+                st.warning(f"⚠️ GT display failed: {display_error}")
+            st.dataframe(error_rates_df , use_container_width=True)
+
 
         except Exception as e:
-            st.error(f"Failed to save Error Rates data: {str(e)}")
-            traceback.print_exc()
+            st.error(f"❌ Failed to process Error Rates data: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())

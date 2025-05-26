@@ -797,7 +797,15 @@ def insert_variable(
             logging.debug(f"Rendering gt_table for {var}")
             tmp = Path(f"charts_out/{var}_gt.png")
             tmp.parent.mkdir(exist_ok=True)
-            gt_table.save(tmp, web_driver='chrome', window_size=(8000, 8000))  # Playwright renders PNG
+
+            # gt_table.save(tmp, web_driver='chrome', window_size=(8000, 8000))  # Playwright renders PNG
+            # gt_image = str(tmp)
+          
+
+            # Improved GT table save with better parameters for styling preservation
+            gt_table.save(
+                tmp, web_driver='chrome', window_size=(1400, 1000)
+            )
             gt_image = str(tmp)
             logging.debug(f"Saved great_tables to {gt_image}")
         elif altair_chart is not None:
