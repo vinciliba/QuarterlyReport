@@ -684,11 +684,63 @@ def upsert_report_module(report_name: str, module_name: str,
         """, (report_name, module_name, run_order, int(enabled)))
         conn.commit()
 
-def delete_report_module(row_id: int, db_path="database/reporting.db"):
-    with sqlite3.connect(db_path) as conn:
-        conn.execute("DELETE FROM report_modules WHERE id = ?", (row_id,))
-        conn.commit()
+# def delete_report_module(row_id: int, db_path="database/reporting.db"):
+#     with sqlite3.connect(db_path) as conn:
+#         conn.execute("DELETE FROM report_modules WHERE id = ?", (row_id,))
+#         conn.commit()
+# In ingestion/db_utils.py
 
+def delete_report_module(mapping_id, db_path):
+    """
+    Delete a report module mapping by ID.
+    
+    Args:
+        mapping_id: The ID of the mapping to delete
+        db_path: Path to the SQLite database
+        
+    Returns:
+        bool: True if deletion was successful, False otherwise
+    """
+    import sqlite3
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Convert mapping_id to int to ensure proper type
+        mapping_id = int(mapping_id)
+        
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            
+            # First check if the mapping exists
+            cursor.execute("SELECT id FROM report_modules WHERE id = ?", (mapping_id,))
+            if cursor.fetchone() is None:
+                logger.error(f"Mapping with ID {mapping_id} does not exist")
+                return False
+            
+            # Perform the delete
+            cursor.execute("DELETE FROM report_modules WHERE id = ?", (mapping_id,))
+            
+            # Explicitly commit the transaction
+            conn.commit()
+            
+            # Check if the delete was successful
+            rows_affected = cursor.rowcount
+            
+            if rows_affected > 0:
+                logger.info(f"Successfully deleted mapping with ID {mapping_id}")
+                return True
+            else:
+                logger.error(f"No rows were affected when deleting mapping ID {mapping_id}")
+                return False
+                
+    except sqlite3.Error as e:
+        logger.error(f"Database error when deleting mapping {mapping_id}: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error when deleting mapping {mapping_id}: {e}")
+        return False
 #-------------  Create Report Variables  ------------------
 from pathlib import Path
 import altair as alt

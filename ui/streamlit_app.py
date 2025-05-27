@@ -1335,18 +1335,34 @@ elif selected_section == "report_structure":
     # Fetch reports and handle report selection/creation
     reports = get_all_reports(DB_PATH)
 
-    # Determine the type of data returned by get_all_reports
-    if reports and isinstance(reports[0], dict):
-        # If get_all_reports returns a list of dictionaries
-        report_names = ["-- Create new --"] + [report["report_name"] for report in reports]
+    # Handle different return types from get_all_reports
+    if reports is not None and not reports.empty:
+        # If get_all_reports returns a DataFrame
+        if hasattr(reports, 'to_dict'):
+            # Convert DataFrame to list of dicts or extract report names
+            if 'report_name' in reports.columns:
+                report_names = ["-- Create new --"] + reports['report_name'].tolist()
+            else:
+                # If it's a DataFrame but structure is unclear, convert to list of dicts
+                reports_list = reports.to_dict('records')
+                report_names = ["-- Create new --"] + [report.get("report_name", str(report)) for report in reports_list]
+        elif isinstance(reports, list) and len(reports) > 0:
+            # If get_all_reports returns a list
+            if isinstance(reports[0], dict):
+                report_names = ["-- Create new --"] + [report["report_name"] for report in reports]
+            else:
+                report_names = ["-- Create new --"] + reports
+        else:
+            # Fallback for other data types
+            report_names = ["-- Create new --"]
     else:
-        # If get_all_reports returns a list of strings (or is empty)
-        report_names = ["-- Create new --"] + (reports if reports else [])
+        # If reports is None or empty
+        report_names = ["-- Create new --"]
 
-    # Selectbox for choosing a report
+     # Selectbox for choosing a report
     chosen_report = st.selectbox("Select Report", report_names, key="audit_data_report_select")
 
-    # Handle new report creation
+     # Handle new report creation
     if chosen_report == "-- Create new --":
         new_report_name = st.text_input("New Report Name")
         if st.button("➕ Create Report"):
@@ -1775,6 +1791,7 @@ elif selected_section == "report_structure":
 
         st.markdown("---")
 
+ 
     # --------------------------------------------------
     # 7) ☰ Report-Modules mapping
     # --------------------------------------------------
@@ -1850,13 +1867,155 @@ elif selected_section == "report_structure":
             with sqlite3.connect(db_path) as conn:
                 query = "SELECT * FROM report_modules ORDER BY report_name, run_order"
                 df = pd.read_sql_query(query, conn)
+                logger.debug(f"Fetched {len(df)} report modules from database")
                 return df
         except sqlite3.Error as e:
             logger.error(f"Error fetching report modules: {str(e)}")
             st.error(f"⚠️ Database error: {str(e)}")
             return pd.DataFrame()
 
+    # Force refresh data if we just performed a delete operation
+    if "force_refresh_mappings" in st.session_state:
+        st.session_state.pop("force_refresh_mappings")
+        st.cache_data.clear()  # Clear any cached data
+
+    # Enhanced delete function with aggressive debugging
+    def delete_mapping_debug(mapping_id, db_path):
+        """Debug version with extensive logging"""
+        try:
+            logger.debug(f"=== STARTING DELETE OPERATION FOR ID: {mapping_id} ===")
+            
+            # Step 1: Verify mapping exists
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM report_modules WHERE id = ?", (mapping_id,))
+                existing_mapping = cursor.fetchone()
+                
+                if not existing_mapping:
+                    return False, f"No mapping found with ID: {mapping_id}"
+                
+                logger.debug(f"Found mapping: {existing_mapping}")
+            
+            # Step 2: Try direct SQL delete (bypass the original function)
+            logger.debug("Attempting direct SQL delete...")
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Get count before
+                cursor.execute("SELECT COUNT(*) FROM report_modules WHERE id = ?", (mapping_id,))
+                count_before = cursor.fetchone()[0]
+                logger.debug(f"Count before delete: {count_before}")
+                
+                # Perform delete
+                cursor.execute("DELETE FROM report_modules WHERE id = ?", (mapping_id,))
+                rows_affected = cursor.rowcount
+                logger.debug(f"Rows affected by DELETE: {rows_affected}")
+                
+                # IMPORTANT: Explicit commit
+                conn.commit()
+                logger.debug("Explicit COMMIT executed")
+                
+                # Get count after
+                cursor.execute("SELECT COUNT(*) FROM report_modules WHERE id = ?", (mapping_id,))
+                count_after = cursor.fetchone()[0]
+                logger.debug(f"Count after delete: {count_after}")
+                
+                # Get all remaining IDs to see what's in the table
+                cursor.execute("SELECT id FROM report_modules ORDER BY id")
+                all_ids = [row[0] for row in cursor.fetchall()]
+                logger.debug(f"All remaining IDs: {all_ids}")
+                
+                if count_after == 0 and rows_affected > 0:
+                    return True, f"Direct SQL delete successful (ID: {mapping_id})"
+                else:
+                    return False, f"Direct SQL delete failed - before: {count_before}, after: {count_after}, affected: {rows_affected}"
+                    
+        except sqlite3.Error as e:
+            logger.error(f"Database error: {str(e)}")
+            return False, f"Database error: {str(e)}"
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            return False, f"Unexpected error: {str(e)}"
+
     st.markdown("## ⚙️ Manage Report-Module Mappings")
+
+    # Add database debugging section
+    with st.expander("🔍 Database Debug Tools", expanded=False):
+        st.markdown("### Database Integrity Check")
+        
+        if st.button("🔍 Check Database State"):
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    cursor = conn.cursor()
+                    
+                    # Check if table exists
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='report_modules'")
+                    table_exists = cursor.fetchone()
+                    st.write(f"**Table exists:** {bool(table_exists)}")
+                    
+                    if table_exists:
+                        # Get table schema
+                        cursor.execute("PRAGMA table_info(report_modules)")
+                        schema = cursor.fetchall()
+                        st.write("**Table schema:**")
+                        st.write(schema)
+                        
+                        # Get all records
+                        cursor.execute("SELECT * FROM report_modules ORDER BY id")
+                        all_records = cursor.fetchall()
+                        st.write(f"**Total records:** {len(all_records)}")
+                        
+                        if all_records:
+                            df_debug = pd.DataFrame(all_records, columns=[col[1] for col in schema])
+                            st.dataframe(df_debug)
+                        
+                        # Check for any constraints or triggers
+                        cursor.execute("SELECT sql FROM sqlite_master WHERE type='trigger' AND tbl_name='report_modules'")
+                        triggers = cursor.fetchall()
+                        if triggers:
+                            st.write("**Triggers found:**")
+                            for trigger in triggers:
+                                st.code(trigger[0])
+                        else:
+                            st.write("**No triggers found**")
+                            
+            except Exception as e:
+                st.error(f"Database check failed: {e}")
+        
+        if st.button("🧪 Test Direct Delete"):
+            try:
+                with sqlite3.connect(DB_PATH) as conn:
+                    cursor = conn.cursor()
+                    
+                    # Create a test record
+                    cursor.execute("""
+                        INSERT INTO report_modules (report_name, module_name, run_order, enabled) 
+                        VALUES ('TEST_REPORT', 'TEST_MODULE', 999, 1)
+                    """)
+                    test_id = cursor.lastrowid
+                    conn.commit()
+                    st.write(f"Created test record with ID: {test_id}")
+                    
+                    # Try to delete it
+                    cursor.execute("DELETE FROM report_modules WHERE id = ?", (test_id,))
+                    rows_affected = cursor.rowcount
+                    conn.commit()
+                    
+                    # Check if it's gone
+                    cursor.execute("SELECT COUNT(*) FROM report_modules WHERE id = ?", (test_id,))
+                    still_exists = cursor.fetchone()[0]
+                    
+                    st.write(f"**Delete test results:**")
+                    st.write(f"- Rows affected: {rows_affected}")
+                    st.write(f"- Record still exists: {still_exists > 0}")
+                    
+                    if still_exists == 0:
+                        st.success("✅ Direct delete works fine!")
+                    else:
+                        st.error("❌ Direct delete failed!")
+                        
+            except Exception as e:
+                st.error(f"Test delete failed: {e}")
 
     # ── Display Current Mappings ────────────────────────────────────────────────
     st.markdown("### Current Mappings")
@@ -1866,18 +2025,19 @@ elif selected_section == "report_structure":
     else:
         st.dataframe(all_mappings_df, hide_index=True, use_container_width=True)
 
-    # ── Add New Mapping ─────────────────────────────────────────────
+    # ── Add New Mapping ─────────────────────────────────────────────────
     with st.expander("➕ Add New Mapping", expanded=True):
         st.markdown("### Add a New Report-Module Mapping")
-        selected_report = st.selectbox("Select Report", options=list(report_to_module.keys()))
+        selected_report = st.selectbox("Select Report", options=list(report_to_module.keys()), key="add_report_select")
         if selected_report in available_modules and available_modules[selected_report]:
             module_options = list(available_modules[selected_report].keys())
-            selected_module = st.selectbox("Select Module", options=module_options)
-            run_order = st.number_input("Run Order (1 = first)", min_value=1, value=1, step=1)
-            # Add unique key for the checkbox
-            enabled = st.checkbox("Enabled", value=True, key=f"add_enabled_{selected_report}_{selected_module}")
+            selected_module = st.selectbox("Select Module", options=module_options, key="add_module_select")
+            run_order = st.number_input("Run Order (1 = first)", min_value=1, value=1, step=1, key="add_run_order")
+            # Add unique key for the checkbox with timestamp-like suffix
+            import time
+            enabled = st.checkbox("Enabled", value=True, key=f"add_enabled_main")
 
-            if st.button("💾 Add Mapping"):
+            if st.button("💾 Add Mapping", key="add_mapping_btn"):
                 try:
                     upsert_report_module(
                         report_name=selected_report,
@@ -1898,16 +2058,21 @@ elif selected_section == "report_structure":
     if not all_mappings_df.empty:
         with st.expander("✏️ Edit Existing Mapping", expanded=False):
             st.markdown("### Edit an Existing Mapping")
-            mapping_to_edit = st.selectbox("Select Mapping to Edit", options=all_mappings_df.index, format_func=lambda x: f"{all_mappings_df.loc[x, 'report_name']} - {all_mappings_df.loc[x, 'module_name']}")
+            mapping_to_edit = st.selectbox(
+                "Select Mapping to Edit", 
+                options=all_mappings_df.index, 
+                format_func=lambda x: f"{all_mappings_df.loc[x, 'report_name']} - {all_mappings_df.loc[x, 'module_name']} (ID: {all_mappings_df.loc[x, 'id']})",
+                key="edit_mapping_selectbox"
+            )
             selected_mapping = all_mappings_df.loc[mapping_to_edit]
             
             edit_report_name = selected_mapping['report_name']
-            edit_module_name = st.selectbox("Module", options=list(available_modules[edit_report_name].keys()), index=list(available_modules[edit_report_name].keys()).index(selected_mapping['module_name']))
-            edit_run_order = st.number_input("Run Order", min_value=1, value=int(selected_mapping['run_order']), step=1)
-            # Add unique key for the checkbox
-            edit_enabled = st.checkbox("Enabled", value=bool(selected_mapping['enabled']), key=f"edit_enabled_{selected_mapping['id']}")
+            edit_module_name = st.selectbox("Module", options=list(available_modules[edit_report_name].keys()), index=list(available_modules[edit_report_name].keys()).index(selected_mapping['module_name']), key="edit_module_select")
+            edit_run_order = st.number_input("Run Order", min_value=1, value=int(selected_mapping['run_order']), step=1, key="edit_run_order")
+            # Add unique key for the checkbox using the mapping ID
+            edit_enabled = st.checkbox("Enabled", value=bool(selected_mapping['enabled']), key=f"edit_enabled_main_{selected_mapping['id']}")
 
-            if st.button("💾 Update Mapping"):
+            if st.button("💾 Update Mapping", key="update_mapping_btn"):
                 try:
                     upsert_report_module(
                         report_name=edit_report_name,
@@ -1923,19 +2088,185 @@ elif selected_section == "report_structure":
                     st.error(f"⚠️ Failed to update mapping: {str(e)}")
 
     # ── Delete Mapping ────────────────────────────────────────────────
+    # if not all_mappings_df.empty:
+    #     with st.expander("🗑️ Delete Mapping", expanded=False):
+    #         st.markdown("### Delete a Mapping")
+            
+    #         # Get fresh data to avoid stale IDs
+    #         fresh_mappings_df = fetch_all_report_modules(DB_PATH)
+            
+    #         if fresh_mappings_df.empty:
+    #             st.info("No mappings available to delete.")
+    #         else:
+    #             # Create a more descriptive format function
+    #             def format_mapping_for_delete(x):
+    #                 row = fresh_mappings_df.loc[x]
+    #                 return f"{row['report_name']} - {row['module_name']} (ID: {row['id']}, Order: {row['run_order']})"
+                
+    #             mapping_to_delete = st.selectbox(
+    #                 "Select Mapping to Delete", 
+    #                 options=fresh_mappings_df.index, 
+    #                 format_func=format_mapping_for_delete,
+    #                 key="delete_mapping_selectbox"
+    #             )
+                
+    #             # Show details of selected mapping
+    #             selected_for_delete = fresh_mappings_df.loc[mapping_to_delete]
+    #             st.info(f"**Selected for deletion:**\n"
+    #                    f"- Report: {selected_for_delete['report_name']}\n"
+    #                    f"- Module: {selected_for_delete['module_name']}\n"
+    #                    f"- ID: {selected_for_delete['id']}\n"
+    #                    f"- Run Order: {selected_for_delete['run_order']}")
+                
+    #             # Add confirmation checkbox
+    #             confirm_delete = st.checkbox("I confirm I want to delete this mapping", key="confirm_delete_checkbox")
+                
+    #             if st.button("🗑️ Delete Selected Mapping", disabled=not confirm_delete):
+    #                 try:
+    #                     delete_id = fresh_mappings_df.loc[mapping_to_delete, 'id']
+                        
+    #                     # Create a placeholder for our debug output
+    #                     debug_placeholder = st.empty()
+                        
+    #                     with debug_placeholder.container():
+    #                         st.write(f"🔍 **Starting delete operation for ID: {delete_id}**")
+                            
+    #                         # Show current count before deletion
+    #                         with sqlite3.connect(DB_PATH) as conn:
+    #                             cursor = conn.cursor()
+    #                             cursor.execute("SELECT COUNT(*) FROM report_modules", ())
+    #                             count_before = cursor.fetchone()[0]
+    #                             cursor.execute("SELECT COUNT(*) FROM report_modules WHERE id = ?", (delete_id,))
+    #                             exists_before = cursor.fetchone()[0] > 0
+                            
+    #                         st.write(f"**Before deletion:**")
+    #                         st.write(f"- Total mappings: {count_before}")
+    #                         st.write(f"- Target mapping exists: {exists_before}")
+    #                         st.write(f"- Target ID: {delete_id}")
+                            
+    #                         if not exists_before:
+    #                             st.error(f"❌ Mapping with ID {delete_id} no longer exists.")
+    #                             st.stop()  # Use st.stop() instead of return
+                            
+    #                         # Show the actual delete operation step by step
+    #                         st.write("🔄 **Executing delete operation...**")
+                            
+    #                         # Use direct SQL with extensive logging
+    #                         try:
+    #                             with sqlite3.connect(DB_PATH) as conn:
+    #                                 cursor = conn.cursor()
+                                    
+    #                                 # Execute the delete
+    #                                 st.write(f"- Executing: DELETE FROM report_modules WHERE id = {delete_id}")
+    #                                 cursor.execute("DELETE FROM report_modules WHERE id = ?", (delete_id,))
+    #                                 rows_affected = cursor.rowcount
+    #                                 st.write(f"- Rows affected: {rows_affected}")
+                                    
+    #                                 # Commit the transaction
+    #                                 st.write("- Committing transaction...")
+    #                                 conn.commit()
+    #                                 st.write("- ✅ Commit successful")
+                                    
+    #                                 # Check the result
+    #                                 cursor.execute("SELECT COUNT(*) FROM report_modules WHERE id = ?", (delete_id,))
+    #                                 still_exists = cursor.fetchone()[0] > 0
+    #                                 cursor.execute("SELECT COUNT(*) FROM report_modules", ())
+    #                                 count_after = cursor.fetchone()[0]
+                                    
+    #                                 st.write(f"**After deletion:**")
+    #                                 st.write(f"- Total mappings: {count_after}")
+    #                                 st.write(f"- Target mapping still exists: {still_exists}")
+    #                                 st.write(f"- Count difference: {count_before - count_after}")
+                                    
+    #                                 if not still_exists and rows_affected > 0:
+    #                                     st.success(f"✅ Successfully deleted mapping ID: {delete_id}")
+                                        
+    #                                     # Only rerun after successful deletion and user confirmation
+    #                                     if st.button("🔄 Refresh Page to See Changes"):
+    #                                         st.cache_data.clear()
+    #                                         if "delete_mapping_select" in st.session_state:
+    #                                             del st.session_state["delete_mapping_select"]
+    #                                         if "confirm_delete_checkbox" in st.session_state:
+    #                                             del st.session_state["confirm_delete_checkbox"]
+    #                                         st.rerun()
+    #                                 else:
+    #                                     st.error(f"❌ Delete operation failed!")
+    #                                     st.write(f"- Rows affected: {rows_affected}")
+    #                                     st.write(f"- Still exists: {still_exists}")
+                                        
+    #                                     # Let's also check what's actually in the database
+    #                                     cursor.execute("SELECT id, report_name, module_name FROM report_modules ORDER BY id")
+    #                                     all_records = cursor.fetchall()
+    #                                     st.write("**Current database contents:**")
+    #                                     for record in all_records:
+    #                                         st.write(f"- ID {record[0]}: {record[1]} - {record[2]}")
+                                            
+    #                         except sqlite3.Error as db_error:
+    #                             st.error(f"❌ Database error: {db_error}")
+    #                         except Exception as delete_error:
+    #                             st.error(f"❌ Delete error: {delete_error}")
+                            
+    #                 except Exception as e:
+    #                     st.error(f"⚠️ Unexpected error: {str(e)}")
+    #                     logger.error(f"Unexpected error in delete operation: {str(e)}")
+                
+    #             if not confirm_delete:
+    #                 st.warning("⚠️ Please confirm deletion by checking the box above.")
+    # ── Delete Mapping (Simplified Version) ────────────────────────────────────────
+    # Replace your delete section with this simplified version
     if not all_mappings_df.empty:
         with st.expander("🗑️ Delete Mapping", expanded=False):
             st.markdown("### Delete a Mapping")
-            mapping_to_delete = st.selectbox("Select Mapping to Delete", options=all_mappings_df.index, format_func=lambda x: f"{all_mappings_df.loc[x, 'report_name']} - {all_mappings_df.loc[x, 'module_name']}")
-            if st.button("🗑️ Delete Selected Mapping"):
-                try:
-                    delete_id = all_mappings_df.loc[mapping_to_delete, 'id']
-                    delete_report_module(delete_id, DB_PATH)
-                    st.success("Mapping deleted.")
-                    st.rerun()
-                except Exception as e:
-                    logger.error(f"Error deleting mapping: {str(e)}")
-                    st.error(f"⚠️ Failed to delete mapping: {str(e)}")
+            
+            # Get fresh data
+            with sqlite3.connect(DB_PATH) as conn:
+                fresh_df = pd.read_sql_query(
+                    "SELECT * FROM report_modules ORDER BY report_name, run_order", 
+                    conn
+                )
+            
+            if fresh_df.empty:
+                st.info("No mappings to delete.")
+            else:
+                # Create selection options
+                options = []
+                for _, row in fresh_df.iterrows():
+                    option = f"{row['report_name']} - {row['module_name']} (ID: {row['id']})"
+                    options.append((row['id'], option))
+                
+                selected = st.selectbox(
+                    "Select Mapping to Delete",
+                    options=options,
+                    format_func=lambda x: x[1]
+                )
+                
+                if selected and st.button("🗑️ Delete Selected", type="primary"):
+                    delete_id = selected[0]
+                    
+                    try:
+                        # Direct SQL approach
+                        conn = sqlite3.connect(DB_PATH)
+                        conn.execute("PRAGMA foreign_keys = OFF")  # Temporarily disable FK constraints
+                        
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM report_modules WHERE id = ?", (delete_id,))
+                        
+                        if cursor.rowcount > 0:
+                            conn.commit()
+                            conn.close()
+                            
+                            st.success(f"✅ Deleted mapping ID {delete_id}")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            conn.close()
+                            st.error("❌ No rows were deleted")
+                            
+                    except Exception as e:
+                        if conn:
+                            conn.close()
+                        st.error(f"❌ Error: {str(e)}")
+# ---------------------------------------------------
 # ---------------------------------------------------
 # Template Management
 # ---------------------------------------------------
