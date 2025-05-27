@@ -1222,7 +1222,7 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
             )
             .tab_header(
             title=html(
-                f"<strong style='color: white; font-size: large;'>PO Purchase Orders exceeding the Final Date of Implementation</strong>  "
+                f"<strong style='color: {DARK_BLUE}font-size: large;'>PO Purchase Orders exceeding the Final Date of Implementation</strong>  "
             )
             )
              # Table Outline
