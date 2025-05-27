@@ -22,6 +22,24 @@ from reporting.quarterly_report.utils import RenderContext, BaseModule
 from reporting.quarterly_report.report_utils.granting_utils import enrich_grants, _ensure_timedelta_cols, _coerce_date_columns
 from ingestion.db_utils import load_report_params
 from reporting.quarterly_report.utils import Database, RenderContext
+import traceback
+import functools
+
+def debug_wrapper(func):
+    """Wrapper to add detailed error logging to functions"""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            log.debug(f"Starting {func.__name__}")
+            result = func(*args, **kwargs)
+            log.debug(f"Completed {func.__name__} successfully")
+            return result
+        except Exception as e:
+            log.error(f"Error in {func.__name__}: {str(e)}")
+            log.error(f"Error type: {type(e).__name__}")
+            log.error(f"Traceback:\n{traceback.format_exc()}")
+            raise
+    return wrapper
 
 # Constants
 CALL_OVERVIEW_ALIAS = "call_overview"
@@ -56,6 +74,7 @@ def _df_to_gt(df: pd.DataFrame, title: str) -> GT:
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger("Granting")
 
+@debug_wrapper
 def get_quarter_dates(cutoff: pd.Timestamp, earliest_date: pd.Timestamp) -> Tuple[pd.Timestamp, pd.Timestamp]:
     """
     Determine the start date (earliest GA Signature - Commission date) and the end of the quarter
@@ -78,6 +97,7 @@ def get_quarter_dates(cutoff: pd.Timestamp, earliest_date: pd.Timestamp) -> Tupl
 
     return period_start, period_end
 
+@debug_wrapper
 def compute_quantiles(call_list: List[str],
                       df_filtered: pd.DataFrame,
                       cutoff: pd.Timestamp,
@@ -184,6 +204,7 @@ def compute_quantiles(call_list: List[str],
 
     return [df_tts, df_ttg]
 
+@debug_wrapper
 def transpose_table_quantiles(df: pd.DataFrame) -> pd.DataFrame:
     """
     Transpose table for quantile data (df_tts, df_ttg).
@@ -200,6 +221,7 @@ def transpose_table_quantiles(df: pd.DataFrame) -> pd.DataFrame:
     log.debug(f"Transposed DataFrame columns: {df_transposed.columns.tolist()}")
     return df_transposed
 
+@debug_wrapper
 def transpose_table_metrics(df: pd.DataFrame, metric: str) -> pd.DataFrame:
     """
     Transposes selected metrics for TTG or TTS based on 'Call'.
@@ -242,8 +264,38 @@ def transpose_table_metrics(df: pd.DataFrame, metric: str) -> pd.DataFrame:
     log.debug(f"Transposed DataFrame columns: {df_transposed.columns.tolist()}")
     return df_transposed
 
+@debug_wrapper
+def clean_dataframe(df, standardize_columns=True):
+    """
+    Clean a dataframe by handling common data quality issues
+    
+    Args:
+        df: pandas DataFrame to clean
+        standardize_columns: if True, standardize column names
+    
+    Returns:
+        Cleaned DataFrame
+    """
+    # Create a copy to avoid modifying the original
+    df_clean = df.copy()
+    
+    # 1. Strip whitespace from column names
+    df_clean.columns = df_clean.columns.str.strip()
+    
+    if standardize_columns:
+        # 2. Optional: Convert to uppercase and replace spaces with underscores
+        df_clean.columns = df_clean.columns.str.upper().str.replace(' ', '_')
+        # Remove multiple underscores
+        df_clean.columns = df_clean.columns.str.replace('_+', '_', regex=True)
+    
+    # 3. Strip whitespace from string values in all object columns
+    string_columns = df_clean.select_dtypes(include=['object']).columns
+    for col in string_columns:
+        df_clean[col] = df_clean[col].apply(lambda x: x.strip() if isinstance(x, str) else x)
+    
+    return df_clean
 
-
+@debug_wrapper
 def process_granting_data(
     conn: sqlite3.Connection,
     cutoff: pd.Timestamp,
@@ -273,9 +325,45 @@ def process_granting_data(
         if df.empty:
             raise RuntimeError(f"No rows found for alias '{alias}'. Upload data first.")
         log.debug(f"Loaded {alias} with shape {df.shape} and columns {df.columns.tolist()}")
+    
+    # Clean the budget_follow dataframe
+    budget_follow = clean_dataframe(budget_follow, standardize_columns=False)
+    
+    # Debug: Print column names to see what we have
+    log.debug(f"Budget follow columns after cleaning: {budget_follow.columns.tolist()}")
+    
+    # Try to find the INVITED column with various names
+    invited_column = None
+    possible_names = ['INVITED', 'invited', 'Invited']
+    
+    for col_name in possible_names:
+        if col_name in budget_follow.columns:
+            invited_column = col_name
+            break
+    
+    # If not found in simple variations, check for columns containing 'INVITED'
+    if invited_column is None:
+        for col in budget_follow.columns:
+            if 'INVITED' in col.upper():
+                invited_column = col
+                log.debug(f"Found INVITED column as: '{invited_column}'")
+                break
+    
+    if invited_column is None:
+        # List all columns for debugging
+        log.error(f"Could not find INVITED column. Available columns: {budget_follow.columns.tolist()}")
+        raise KeyError("Could not find INVITED column in budget_follow DataFrame")
+    
+    # Use the found column name
+    try:
+        budget_follow = budget_follow.loc[budget_follow[invited_column] == 1]
+    except Exception as e:
+        log.error(f"Error filtering by INVITED column '{invited_column}': {str(e)}")
+        log.error(f"Column data type: {budget_follow[invited_column].dtype}")
+        log.error(f"Unique values in column: {budget_follow[invited_column].unique()}")
+        raise
 
-    # Merge and clean
-    budget_follow = budget_follow.loc[budget_follow['INVITED '] == 1]
+    # Continue with the rest of the function...
     df_grants = (
         call_overview
         .merge(budget_follow, left_on="Grant Number", right_on="Project Number", how="inner")
@@ -288,6 +376,7 @@ def process_granting_data(
     df_grants = df_grants.merge(ethics_df, left_on="Grant Number", right_on="PROPOSAL\nNUMBER", how="inner")
     _coerce_date_columns(df_grants)
 
+    # Rest of the function continues as before...
     for status in PROJECT_STATUS:
         df_grants['GA Signature - Commission'] = np.where(
             (df_grants['GA Signature - Commission'].isnull()) &
@@ -329,6 +418,7 @@ def process_granting_data(
             "HEU_TTG_TOTAL": 0,
             "HEU_TTG_C_Y": 0
         }
+
 
     earliest_date = df_grants['GA Signature - Commission'].min()
     if pd.isna(earliest_date):
@@ -446,20 +536,24 @@ def process_granting_data(
                 ],
                 locations=loc.column_labels()
             )
-            # # Table borders
-            # .tab_options(
-            #     table_body_border_bottom_color=DARK_BLUE,
-            #     table_body_border_bottom_width="1px",
-            #     table_border_right_color=DARK_BLUE,
-            #     table_border_right_width="1px",
-            #     table_border_left_color=DARK_BLUE,
-            #     table_border_left_width="1px",
-            #     table_border_top_color=DARK_BLUE,
-            #     table_border_top_width="1px",
-            #     column_labels_border_top_color=DARK_BLUE,
-            #     column_labels_border_top_width="1px",
-            #     column_labels_background_color=BLUE
-            # )
+
+             .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text( align='left', size ='small' ),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.stubhead()
+            )
+            .tab_style(
+                style=[
+                    style.fill(color=LIGHT_BLUE),
+                    style.text( align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.stub()
+            )
+      
             # BODY
             .fmt_percent(
                 rows=["Completion Rate"],  # or use `where` with a condition
@@ -521,20 +615,22 @@ def process_granting_data(
                 ],
                 locations=loc.column_labels()
             )
-            # # Table borders
-            # .tab_options(
-                #     table_body_border_bottom_color=DARK_BLUE,
-                #     table_body_border_bottom_width="1px",
-                #     table_border_right_color=DARK_BLUE,
-                #     table_border_right_width="1px",
-                #     table_border_left_color=DARK_BLUE,
-                #     table_border_left_width="1px",
-                #     table_border_top_color=DARK_BLUE,
-                #     table_border_top_width="1px",
-                #     column_labels_border_top_color=DARK_BLUE,
-                #     column_labels_border_top_width="1px",
-                #     column_labels_background_color = BLUE
-                # )
+             .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text( align='left', size ='small' ),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.stubhead()
+            )
+            .tab_style(
+                style=[
+                    style.fill(color=LIGHT_BLUE),
+                    style.text(align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.stub()
+            )
             # BODY
             .fmt_percent(
                 rows=["Completion Rate"],  # or use `where` with a condition
@@ -596,20 +692,24 @@ def process_granting_data(
                 ],
                 locations=loc.column_labels()
             )
-            # # Table borders
-            # .tab_options(
-            #     table_body_border_bottom_color=DARK_BLUE,
-            #     table_body_border_bottom_width="1px",
-            #     table_border_right_color=DARK_BLUE,
-            #     table_border_right_width="1px",
-            #     table_border_left_color=DARK_BLUE,
-            #     table_border_left_width="1px",
-            #     table_border_top_color=DARK_BLUE,
-            #     table_border_top_width="1px",
-            #     column_labels_border_top_color=DARK_BLUE,
-            #     column_labels_border_top_width="1px",
-            #     column_labels_background_color=BLUE
-            # )
+
+             .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text( align='left', size ='small' ),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.stubhead()
+            )
+            .tab_style(
+                style=[
+                    style.fill(color=LIGHT_BLUE),
+                    style.text(align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.stub()
+            )
+          
             # BODY
             .fmt_percent(
                 rows=["Completion Rate"],  # or use `where` with a condition
@@ -670,20 +770,22 @@ def process_granting_data(
                 ],
                 locations=loc.column_labels()
             )
-            # # Table borders
-            # .tab_options(
-            #     table_body_border_bottom_color=DARK_BLUE,
-            #     table_body_border_bottom_width="1px",
-            #     table_border_right_color=DARK_BLUE,
-            #     table_border_right_width="1px",
-            #     table_border_left_color=DARK_BLUE,
-            #     table_border_left_width="1px",
-            #     table_border_top_color=DARK_BLUE,
-            #     table_border_top_width="1px",
-            #     column_labels_border_top_color=DARK_BLUE,
-            #     column_labels_border_top_width="1px",
-            #     column_labels_background_color = BLUE
-            # )
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text( align='left', size ='small' ),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.stubhead()
+            )
+            .tab_style(
+                style=[
+                    style.fill(color=LIGHT_BLUE),
+                    style.text( align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+                ],
+                locations=loc.stub()
+            )
             # BODY
             .fmt_percent(
                 rows=["Completion Rate"],  # or use `where` with a condition
@@ -732,6 +834,10 @@ def process_granting_data(
                     style=style.borders(sides="all", color="#ffffff", weight="2px"),
                     locations=loc.column_labels()
                 )
+                .tab_style(
+                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                    locations=loc.stubhead()
+                )
             # Arial font
             .opt_table_font(font="Arial")
             # Header and stub styling
@@ -744,6 +850,13 @@ def process_granting_data(
                 ],
                 locations=loc.column_labels()
             )
+              .tab_style(
+                style=[
+                    style.fill(color=LIGHT_BLUE),
+                ],
+                locations=loc.stubhead()
+            )
+
             .cols_label(
             Completion_Rate=html(
                 "Completion Rate <span style='font-size: smaller;'> (8)</span> <br> --------------------------</br> "
@@ -751,24 +864,10 @@ def process_granting_data(
                 )   
             )
             .tab_style(
-            style.text(size = 'medium'),
+            style.text(size = 'small'),
             
             loc.body()
         )
-            # # Table borders
-            # .tab_options(
-            #         table_body_border_bottom_color=DARK_BLUE,
-            #         table_body_border_bottom_width="1px",
-            #         table_border_right_color=DARK_BLUE,
-            #         table_border_right_width="1px",
-            #         table_border_left_color=DARK_BLUE,
-            #         table_border_left_width="1px",
-            #         table_border_top_color=DARK_BLUE,
-            #         table_border_top_width="1px",
-            #         column_labels_border_top_color=DARK_BLUE,
-            #         column_labels_border_top_width="1px",
-            #         column_labels_background_color = LIGHT_BLUE
-            #     )
             # BODY
             .fmt_percent(
                 columns=["Completion_Rate"],  # or use `where` with a condition
@@ -905,7 +1004,7 @@ def process_granting_data(
         "HEU_TTG_C_Y": HEU_TTG_C_Y
         }
 
-
+@debug_wrapper
 def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cutoff: pd.Timestamp, report: str, db_path: str, table_colors: Dict = None, save_to_db: bool = False) -> pd.DataFrame:
     """
     Build table 3c for PO exceeding FDI commitments.
@@ -937,12 +1036,15 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
     # GRID_CLR = table_colors.get("GRID_CLR", "#004A99") if table_colors else "#004A99"
     DARK_BLUE = table_colors.get("DARK_BLUE", "#01244B") if table_colors else "#01244B"
     # DARK_GREY = table_colors.get("DARK_GREY", "#242425") if table_colors else "#242425"
+    SUB_TOTAL_BACKGROUND = table_colors.get("subtotal_background_color", "#E6E6FA")
 
     df_summa_filtered = df_summa[df_summa['Functional Area'].isin(PROGRAMMES_LIST)]
     df_summa_filtered = df_summa_filtered[df_summa_filtered['Fund Source'].isin(FUND_SOURCES)]
    
     # Function to determine PO_CATEGORY based on the rules
     def determine_po_category(row):
+        import time 
+
         po_category_desc = str(row.get('PO Category Desc', '')).strip()
         po_abac_sap_ref = str(row.get('PO ABAC SAP Reference', '')).strip()
         po_purchase_order_desc = str(row.get('PO Purchase Order Desc', '')).strip()
@@ -1131,16 +1233,35 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
                     table_background_color="#ffffff",
                     table_font_color=DARK_BLUE
                 )
-                .tab_style(
-                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
-                    locations=loc.body()
-                )
-                .tab_style(
-                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
-                    locations=loc.column_labels()
-                )
+            .tab_style(
+                style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                locations=loc.body()
+            )
+            .tab_style(
+                style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                locations=loc.column_labels()
+            )
             # Arial font
             .opt_table_font(font="Arial")
+            .opt_table_outline(width='1px', color="#cccccc")
+            .tab_style(
+                    style=[
+                        # style.borders(weight="1px", color=DARK_BLUE),
+                        style.fill(color=BLUE),
+                        style.text(color="white", weight="bold", align="center"),
+                        style.css("max-width:200px; line-height:1.2")
+                    ],
+                    locations=loc.column_labels()
+               )
+
+            .tab_style(
+                style=[
+                    style.text(color='white', weight="bold", align="center", size='small'),
+                    style.fill(color=BLUE),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
+                ],
+                locations=loc.stubhead()
+            )
             # Format numeric columns as integers (except percentage column)
             .fmt_number(
                 columns=[col for col in df_with_totals.columns[2:-1] if col != '% of Overdue/running grants'],
@@ -1159,69 +1280,34 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
             .tab_stubhead(label="PO Type")
             .tab_style(
                 style=[
-                    style.borders(weight="1px", color=DARK_BLUE),
                     style.text(color=DARK_BLUE, weight="bold", font='Arial', size='medium'),
                     style.fill(color=LIGHT_BLUE),
-                    style.css(f"border-bottom: 2px solid {DARK_BLUE}; border-right: 2px solid {DARK_BLUE}; border-top: 2px solid {DARK_BLUE}; border-left: 2px solid {DARK_BLUE};"),
                     style.css("max-width:200px; line-height:1.2"),
                 ],
                 locations=loc.row_groups()
             )
            
+           
             .tab_style(
                 style=[
-                    style.borders(weight="1px", color=DARK_BLUE),
-                    style.borders(weight="1px", color=DARK_BLUE),
-                    style.text( weight="bold", align="center", size='small'),
-                    style.css("max-width:200px; line-height:1.2")
-                ],
-                locations=loc.column_labels()
-            )
-            .tab_style(
-                style=[
-                    style.borders(weight="1px", color=DARK_BLUE),
-                    style.borders(weight="1px", color=DARK_BLUE),
-                    style.text( weight="bold", align="center", size='small'),
-                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
-                ],
-                locations=loc.stubhead()
-            )
-            .tab_style(
-                style=[style.borders(weight="1px", color=DARK_BLUE),
+                    #    style.borders(weight="1px", color=DARK_BLUE),
                        style.text(size='small')],
                 locations=loc.stub()
             )
             .tab_style(
-                style=[style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                style=[
+                    #    style.borders(sides="all", color=DARK_BLUE, weight="1px"),
                        style.text(align="center", size='small')],
                 locations=loc.body()
             )
             .tab_style(
-                style=style.borders(color=DARK_BLUE, weight="1px"),
-                locations=[loc.column_labels(), loc.stubhead()]
-            )
-            .tab_style(
-                style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
+                style=[style.fill(color=SUB_TOTAL_BACKGROUND), style.text( weight="bold")],
                 locations=loc.body(rows=df_with_totals.index[df_with_totals["PO Type"].str.contains("Total")].tolist())
             )
             .tab_style(
-                style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
+                style=[style.fill(color=SUB_TOTAL_BACKGROUND), style.text( weight="bold")],
                 locations=loc.stub(rows=df_with_totals.index[df_with_totals["PO Type"].str.contains("Total")].tolist())
             )
-            # .tab_options(
-            #     table_body_border_bottom_color=DARK_BLUE,
-            #     table_body_border_bottom_width="1px",
-            #     table_border_right_color=DARK_BLUE,
-            #     table_border_right_width="1px",
-            #     table_border_left_color=DARK_BLUE,
-            #     table_border_left_width="1px",
-            #     table_border_top_color=DARK_BLUE,
-            #     table_border_top_width="1px",
-            #     column_labels_border_top_color=DARK_BLUE,
-            #     column_labels_border_top_width="1px",
-            #     heading_background_color=BLUE,
-            #     row_group_background_color=BLUE
-            # )
             .tab_source_note("Source: Compass")
             .tab_source_note("Reports: Call Overview Report - Budget Follow-Up Report - Ethics Requirements and Issues")
             .tab_style(
@@ -1250,7 +1336,7 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
     log.debug("Complete processing build_po_exceeding_FDI_tb_3c ")
     return df_with_totals  # Corrected return value from agg_with_subtotals to df_with_totals
 
-
+@debug_wrapper
 def build_signatures_table(
     df: pd.DataFrame,
     cutoff: datetime,
@@ -1280,8 +1366,8 @@ def build_signatures_table(
     # Define expected columns for validation
     df['SIGNED'] = df['Project Status'].isin(PROJECT_STATUS).astype('int8')  
 
-    df.to_excel('df_grants.xlsx')
-    expected_columns = ["GA Signature - Commission", "Topic", "SIGNED", "STATUS "]
+    # df.to_excel('df_grants.xlsx')
+    expected_columns = ["GA Signature - Commission", "Topic", "SIGNED", "STATUS"]
 
     # Validate input DataFrame
     if not isinstance(df, pd.DataFrame):
@@ -1314,6 +1400,7 @@ def build_signatures_table(
         BLUE = table_colors['BLUE']
         LIGHT_BLUE = table_colors['LIGHT_BLUE']
         DARK_BLUE = table_colors['DARK_BLUE']
+        SUB_TOTAL_BACKGROUND = table_colors.get("subtotal_background_color", "#E6E6FA")
 
         # Filter in-scope data for signed grants
         in_scope = (
@@ -1401,7 +1488,7 @@ def build_signatures_table(
         logging.debug(f"Signed data processed. Shape: {agg_with_totals.shape}")
 
         # Under-preparation in-scope
-        under_prep = df[df['STATUS '].eq("UNDER_PREPARATION")]
+        under_prep = df[df['STATUS'].eq("UNDER_PREPARATION")]
         under_prep = under_prep[~under_prep["Topic"].isin(exclude_topics)]
 
         # --- UNDER-PREPARATION • one “total” row --------------------------------
@@ -1445,10 +1532,10 @@ def build_signatures_table(
                     title="Signatures and Under Preparation by Topic"
                 )
         
-                .tab_style(
-                    style.text(color=BLUE, weight="bold", align="center", font='Arial'),
-                    locations=loc.header()
-                )
+                # .tab_style(
+                #     style.text(color=BLUE, weight="bold", align="center", font='Arial'),
+                #     locations=loc.header()
+                # )
                  # Table Outline
                 # .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
                 .tab_options(
@@ -1471,11 +1558,11 @@ def build_signatures_table(
                 .tab_stubhead(label="Signature Month")
                 .tab_style(
                     style=[
-                        style.borders(weight="1px", color=DARK_BLUE),
+                        # style.borders(weight="1px", color=DARK_BLUE),
                         style.text(color=DARK_BLUE, weight="bold", font='Arial'),
                         style.fill(color=LIGHT_BLUE),
-                        style.css(f"border-bottom: 1px solid {DARK_BLUE}; border-right: 1px solid {DARK_BLUE}; border-top: 1px solid {DARK_BLUE}; border-left: 1px solid {DARK_BLUE};"),
-                        style.css("max-width:200px; line-height:1.2"),
+                        style.css(f"border-left: 1px solid #cccccc;" ),
+                        style.css("max-width:200px; line-height:1.2;"),
                     ],
                     locations=loc.row_groups()
                 )
@@ -1489,7 +1576,7 @@ def build_signatures_table(
                 )
                 .tab_style(
                     style=[
-                        style.borders(weight="1px", color=DARK_BLUE),
+                        # style.borders(weight="1px", color=DARK_BLUE),
                         style.fill(color=BLUE),
                         style.text(color="white", weight="bold", align="center"),
                         style.css("max-width:200px; line-height:1.2")
@@ -1498,7 +1585,7 @@ def build_signatures_table(
                 )
                 .tab_style(
                     style=[
-                        style.borders(weight="1px", color=DARK_BLUE),
+                        # style.borders(weight="1px", color=DARK_BLUE),
                         style.fill(color=BLUE),
                         style.text(color="white", weight="bold", align="center"),
                         style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
@@ -1507,41 +1594,16 @@ def build_signatures_table(
                 )
 
                 .tab_style(
-                    style=style.borders(weight="1px", color=DARK_BLUE),
-                    locations=loc.stub()
-                )
-                .tab_style(
-                    style=style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                    locations=loc.body(columns=display_columns)
-                )
-                .tab_style(
-                    style=style.borders(color=DARK_BLUE, weight="1px"),
-                    locations=[loc.column_labels(columns=display_columns), loc.stubhead()]
-                )
-                .tab_style(
-                    style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
+                    style=[style.fill(color=SUB_TOTAL_BACKGROUND), style.text(color="black", weight="bold")],
                     locations=loc.body(
                         rows=final_df.index[final_df["Signature Month"] == "Grand Total"].tolist(),
                         columns=display_columns
                     )
                 )
                 .tab_style(
-                    style=[style.fill(color="#D3D3D3"), style.text(weight="bold")],
+                    style=[style.fill(color=SUB_TOTAL_BACKGROUND), style.text(weight="bold")],
                     locations=loc.stub(rows=final_df.index[final_df["Signature Month"] == "Grand Total"].tolist())
                 )
-                # .tab_options(
-                #     table_body_border_bottom_color=DARK_BLUE,
-                #     table_body_border_bottom_width="1px",
-                #     table_border_right_color=DARK_BLUE,
-                #     table_border_right_width="1px",
-                #     table_border_left_color=DARK_BLUE,
-                #     table_border_left_width="1px",
-                #     table_border_top_color=DARK_BLUE,
-                #     table_border_top_width="1px",
-                #     column_labels_border_top_color=DARK_BLUE,
-                #     column_labels_border_top_width="1px",
-                #     column_labels_background_color=BLUE
-                # )
                 .tab_source_note("Source: Quarterly Report Data")
             )
         else:
@@ -1569,6 +1631,7 @@ def build_signatures_table(
         log.debug("End processing build_signatures_table")
         return {"data": pd.DataFrame(), "table": None}
 
+@debug_wrapper
 def build_commitments_table(
     df: pd.DataFrame,
     cutoff: datetime,
@@ -1629,6 +1692,8 @@ def build_commitments_table(
         BLUE = table_colors['BLUE']
         LIGHT_BLUE = table_colors['LIGHT_BLUE']
         DARK_BLUE = table_colors['DARK_BLUE']
+        SUB_TOTAL_BACKGROUND = table_colors.get("subtotal_background_color", "#E6E6FA")
+
 
         in_scope = (
             df["Commitment AO visa"].dt.year.eq(cutoff.year) &
@@ -1828,10 +1893,10 @@ def build_commitments_table(
                 .tab_stubhead(label="Commitment Month")
                 .tab_style(
                     style=[
-                        style.borders(weight="1px", color=DARK_BLUE),
+                        # style.borders(weight="1px", color=DARK_BLUE),
                         style.text(color=DARK_BLUE, weight="bold", font='Arial', size='medium'),
                         style.fill(color=LIGHT_BLUE),
-                        style.css(f"border-bottom: 1px solid {DARK_BLUE}; border-right: 1px solid {DARK_BLUE}; border-top: 1px solid {DARK_BLUE}; border-left: 1px solid {DARK_BLUE};"),
+                        style.css(f" border-left: 1px solid #cccccc;"),
                         style.css("max-width:200px; line-height:1.2"),
                     ],
                     locations=loc.row_groups()
@@ -1839,7 +1904,7 @@ def build_commitments_table(
                 .opt_table_font(font="Arial")
                 .tab_style(
                     style=[
-                        style.borders(weight="1px", color=DARK_BLUE),
+                        # style.borders(weight="1px", color=DARK_BLUE),
                         style.fill(color=BLUE),
                         style.text(color="white", weight="bold", align="center", size='small'),
                         style.css("max-width:200px; line-height:1.2")
@@ -1848,7 +1913,7 @@ def build_commitments_table(
                 )
                 .tab_style(
                     style=[
-                        style.borders(weight="1px", color=DARK_BLUE),
+                        # style.borders(weight="1px", color=DARK_BLUE),
                         style.fill(color=BLUE),
                         style.text(color="white", weight="bold", align="center", size='small'),
                         style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2")
@@ -1856,39 +1921,29 @@ def build_commitments_table(
                     locations=loc.stubhead()
                 )
                 .tab_style(
-                    style=[style.borders(weight="1px", color=DARK_BLUE),
+                     style=[
+                        #    style.borders(weight="1px", color=DARK_BLUE),
                            style.text(size='small')],
                     locations=loc.stub()
                 )
                 .tab_style(
-                    style=[style.borders(sides="all", color=DARK_BLUE, weight="1px"),
+                    style=[
+                        #    style.borders(sides="all", color=DARK_BLUE, weight="1px"),
                            style.text(align="center", size='small')],
                     locations=loc.body()
                 )
+                # .tab_style(
+                #     style=style.borders(color=DARK_BLUE, weight="1px"),
+                #     locations=[loc.column_labels(), loc.stubhead()]
+                # )
                 .tab_style(
-                    style=style.borders(color=DARK_BLUE, weight="1px"),
-                    locations=[loc.column_labels(), loc.stubhead()]
-                )
-                .tab_style(
-                    style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
+                    style=[style.fill(color=SUB_TOTAL_BACKGROUND ), style.text(color="black", weight="bold")],
                     locations=loc.body(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
                 )
                 .tab_style(
-                    style=[style.fill(color="#D3D3D3"), style.text(color="black", weight="bold")],
+                    style=[style.fill(color=SUB_TOTAL_BACKGROUND ), style.text(color="black", weight="bold")],
                     locations=loc.stub(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
                 )
-                # .tab_options(
-                #     table_body_border_bottom_color=DARK_BLUE,
-                #     table_body_border_bottom_width="1px",
-                #     table_border_right_color=DARK_BLUE,
-                #     table_border_right_width="1px",
-                #     table_border_left_color=DARK_BLUE,
-                #     table_border_left_width="1px",
-                #     table_border_top_color=DARK_BLUE,
-                #     table_border_top_width="1px",
-                #     column_labels_border_top_color=DARK_BLUE,
-                #     column_labels_border_top_width="1px"
-                # )
                 .tab_source_note("Source: Compass")
                 .tab_source_note("Reports: Call Overview Report - Budget Follow-Up Report - Ethics Requirements and Issues")
                 .tab_style(
