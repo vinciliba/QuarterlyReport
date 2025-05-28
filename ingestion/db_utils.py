@@ -739,122 +739,259 @@ def altair_chart_to_path(chart: alt.TopLevelMixin, var_name: str, folder: str = 
         raise RuntimeError(f"Failed to render Altair chart {var_name}: {str(e)}")
     
 
-
 def save_gt_table_smart(gt_table, file_path, var_name):
     """
     Intelligently save GT table with optimal window size based on content and table type.
-    Balanced approach to prevent both cut-offs and excessive width.
+    Uses dynamic sizing based on actual table dimensions with improved truncation handling.
     """
     from pathlib import Path
     import logging
     import time
-    
+    import os
+
     file_path = Path(file_path)
     file_path.parent.mkdir(exist_ok=True)
-    
-    # Delete existing file if it exists to avoid rename conflicts
+
+    # Delete existing file if it exists
     if file_path.exists():
         try:
             file_path.unlink()
             logging.debug(f"Deleted existing file: {file_path}")
+            time.sleep(0.3)
         except Exception as e:
             logging.warning(f"Could not delete existing file {file_path}: {e}")
+
+    # Get table dimensions from GT table
+    def get_table_dimensions(gt_table):
+        """Extract column and row count from GT table object"""
+        num_cols = 5  # default
+        num_rows = 10  # default
+        
+        try:
+            # Try different methods to get dimensions
+            if hasattr(gt_table, '_data'):
+                # Access underlying data
+                if hasattr(gt_table._data, 'columns'):
+                    num_cols = len(gt_table._data.columns)
+                elif hasattr(gt_table._data, 'shape'):
+                    num_cols = gt_table._data.shape[1]
+                    num_rows = gt_table._data.shape[0]
+                
+                # Try to get row count
+                if hasattr(gt_table._data, 'index'):
+                    num_rows = len(gt_table._data.index)
+            
+            # Try to access through other GT table attributes
+            if hasattr(gt_table, '_boxhead'):
+                if hasattr(gt_table._boxhead, '_columns'):
+                    num_cols = len(gt_table._boxhead._columns)
+            
+            # Check for stub (row labels) which adds width
+            has_stub = hasattr(gt_table, '_stub') and gt_table._stub is not None
+            
+            logging.debug(f"Table dimensions: {num_cols} columns x {num_rows} rows, has_stub={has_stub}")
+            return num_cols, num_rows, has_stub
+            
+        except Exception as e:
+            logging.warning(f"Error getting table dimensions: {e}, using defaults")
+            return num_cols, num_rows, False
+
+    # Calculate dynamic dimensions based on content
+    num_columns, num_rows, has_stub = get_table_dimensions(gt_table)
     
-    # More balanced defaults - narrower width, adequate height
-    default_width = 1200  # Reduced from 1800 - more appropriate for most tables
-    default_height = 1500  # Good height to prevent cut-offs
+    # More realistic width calculations
+    base_width = 200  # Base padding for table chrome
+    stub_width = 150 if has_stub else 0  # Extra width for row labels
     
-    # Adjust dimensions based on table type
-    if any(keyword in var_name.lower() for keyword in ['overview', 'summary', 'resources']):
-        # Overview/summary tables are usually narrow
-        default_width = 1000
-        default_height = 1200
-    elif any(keyword in var_name.lower() for keyword in ['table_1b', 'table_1c', 'table_1a']):
-        # Budget tables might need more width for multiple columns
-        default_width = 1400
-        default_height = 2000
-    elif any(keyword in var_name.lower() for keyword in ['external_audits', 'table_11']):
-        # Audit tables - medium width
-        default_width = 1200
-        default_height = 1800
-    elif any(keyword in var_name.lower() for keyword in ['he_', 'horizon', 'vobu']):
-        # HE tables - based on your examples
-        default_width = 1300
-        default_height = 1500
+    # Adaptive column width based on column count
+    if num_columns <= 4:
+        column_width = 180  # Wider columns for few-column tables
+    elif num_columns <= 6:
+        column_width = 150  # Medium width
+    elif num_columns <= 8:
+        column_width = 130  # Narrower for more columns
+    else:
+        column_width = 110  # Minimum practical width
     
-    # Try sizes in order - start conservative, expand if needed
-    window_sizes = [
-        (default_width, default_height),
-        (default_width + 200, default_height + 500),  # Slightly larger
-        (1400, 2000),  # Fallback size
+    calculated_width = base_width + stub_width + (num_columns * column_width)
+    
+    # Height calculations
+    row_height = 40  # Average row height including padding
+    header_height = 120  # Space for headers, title, etc.
+    footer_height = 50  # Space for notes, source, etc.
+    calculated_height = header_height + (num_rows * row_height) + footer_height
+    
+    # Set reasonable defaults with safety margins
+    default_width = min(max(calculated_width, 800), 2000)  # Min 800, max 2000
+    default_height = min(max(calculated_height, 400), 1500)  # Min 400, max 1500
+
+    # Table-specific adjustments
+    if 'signature' in var_name.lower() or 'table_3' in var_name.lower():
+        # Your table appears to be a signature table - needs extra width
+        default_width = max(1200, calculated_width + 200)
+        default_height = 600
+        
+    elif any(keyword in var_name.lower() for keyword in ['commitment', 'table_3b', 'purchase', 'po_']):
+        default_width = min(1400, calculated_width + 300)
+        default_height = 1000
+        
+    elif any(keyword in var_name.lower() for keyword in ['ttg', 'tts', 'granting', 'amend', 'time_to']):
+        default_width = min(1500, calculated_width + 400)
+        default_height = 800
+        
+    elif any(keyword in var_name.lower() for keyword in ['overview', 'summary']):
+        default_width = min(1200, calculated_width + 200)
+        default_height = 900
+        
+    elif any(keyword in var_name.lower() for keyword in ['table_1', 'budget']):
+        default_width = min(1300, calculated_width + 250)
+        default_height = 1100
+
+    # Progressive window sizes with expand and zoom strategies
+    window_configs = [
+        # (width, height, expand_px, zoom_level)
+        (default_width, default_height, 50, None),  # Start with calculated size
+        (default_width + 200, default_height, 100, None),  # Wider with more expand
+        (default_width + 400, default_height, 150, None),  # Much wider
+        (min(1800, default_width + 600), default_height, 200, None),  # Very wide
+        (2000, default_height + 200, 250, None),  # Maximum practical size
+        (2000, default_height + 200, 300, 0.9),  # Try with zoom out
+        (2400, default_height + 300, 400, 0.8),  # Extreme width with zoom
     ]
-    
+
     last_exception = None
+    successful_save = False
+
+    # Add initial delay
+    time.sleep(0.5)
     
-    for i, (width, height) in enumerate(window_sizes):
+    for i, (width, height, expand_px, zoom) in enumerate(window_configs):
         try:
             start_time = time.time()
-            logging.debug(f"Attempting GT save for {var_name} with size {width}x{height} (attempt {i+1}/{len(window_sizes)})")
+            logging.info(
+                f"Attempting GT save for {var_name} with size {width}x{height}, "
+                f"expand={expand_px}px, zoom={zoom} (attempt {i+1}/{len(window_configs)}, "
+                f"{num_columns} columns)")
             
-            # Save the table
-            gt_table.save(
-                file_path, 
-                web_driver='chrome', 
-                window_size=(width, height)
-            )
+            # Delay between attempts
+            if i > 0:
+                time.sleep(1.0)
             
-            # Small sleep to ensure file system catches up
-            time.sleep(0.3)
+            # Build save parameters
+            save_params = {
+                'file': file_path,
+                'web_driver': 'chrome',
+                'window_size': (width, height),
+            }
             
-            elapsed = time.time() - start_time
+            # Try with all available parameters
+            try:
+                # First try with all modern parameters
+                save_params.update({
+                    'delay': 3,  # Longer delay for complex tables
+                    'expand': expand_px,
+                    'zoom': zoom,
+                    'debug': False,  # Set True to see browser window
+                })
+                gt_table.save(**save_params)
+                
+            except TypeError as e:
+                # Remove unsupported parameters one by one
+                if 'zoom' in str(e):
+                    save_params.pop('zoom', None)
+                if 'debug' in str(e):
+                    save_params.pop('debug', None)
+                if 'delay' in str(e):
+                    save_params.pop('delay', None)
+                    
+                try:
+                    gt_table.save(**save_params)
+                except TypeError:
+                    # Minimal parameters
+                    gt_table.save(
+                        file_path,
+                        web_driver='chrome',
+                        window_size=(width, height)
+                    )
+
+            # Wait for file to be written
+            time.sleep(1.5)
             
+            # Verify file exists and has reasonable size
             if file_path.exists():
                 file_size = file_path.stat().st_size
-                logging.debug(f"GT table {var_name} saved in {elapsed:.1f}s: {width}x{height} = {file_size} bytes")
+                elapsed = time.time() - start_time
+                logging.info(
+                    f"GT table {var_name} saved in {elapsed:.1f}s: "
+                    f"{width}x{height} (expand={expand_px}px) = {file_size} bytes")
                 
-                # Check if file size seems reasonable
-                if file_size > 15000:  # 15KB minimum for a complete table
-                    return str(file_path)
-                elif i == len(window_sizes) - 1:
-                    # Last attempt - accept whatever we got
-                    logging.warning(f"GT table {var_name} accepting small file ({file_size} bytes) on last attempt")
+                # More intelligent file size check based on table dimensions
+                expected_min_size = 5000 + (num_columns * num_rows * 100)  # Rough estimate
+                
+                if file_size > expected_min_size:
+                    successful_save = True
                     return str(file_path)
                 else:
-                    # Try next size
-                    logging.warning(f"GT table {var_name} file size only {file_size} bytes, trying larger dimensions")
-                    file_path.unlink()
-                    continue
-                    
-            else:
-                logging.warning(f"GT table {var_name} save failed - no file created")
-                
+                    logging.warning(
+                        f"File size too small ({file_size} bytes < {expected_min_size} expected), "
+                        f"trying larger size")
+                    if i < len(window_configs) - 1:
+                        try:
+                            file_path.unlink()
+                        except:
+                            pass
+
         except Exception as e:
             last_exception = e
             logging.error(f"GT table {var_name} save attempt {i+1} failed: {e}")
+
             if file_path.exists():
                 try:
                     file_path.unlink()
+                    time.sleep(0.3)
                 except:
                     pass
-    
-    # Final attempt with moderate dimensions
-    try:
-        logging.debug(f"Final fallback attempt for GT table {var_name}")
-        gt_table.save(
-            file_path, 
-            web_driver='chrome', 
-            window_size=(1200, 1800)
-        )
-        if file_path.exists():
-            return str(file_path)
-    except Exception as e:
-        last_exception = e
+
+    # Final fallback with HTML export
+    if not successful_save:
+        try:
+            logging.info(f"Trying HTML export fallback for GT table {var_name}")
+            html_path = file_path.with_suffix('.html')
+            
+            # Export as HTML first
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(gt_table.as_raw_html())
+            
+            # Then try to convert HTML to image with very wide viewport
+            time.sleep(1.0)
+            gt_table.save(
+                file_path,
+                web_driver='chrome',
+                window_size=(2500, 1200),
+                expand=500  # Maximum expand
+            )
+            
+            # Clean up HTML file
+            try:
+                html_path.unlink()
+            except:
+                pass
+                
+            if file_path.exists():
+                return str(file_path)
+                
+        except Exception as e:
+            last_exception = e
     
     if last_exception:
-        raise Exception(f"Failed to save GT table {var_name} after all attempts: {last_exception}")
+        raise Exception(
+            f"Failed to save GT table {var_name} after all attempts: {last_exception}")
     else:
-        raise Exception(f"Failed to save GT table {var_name} - file not created")
+        raise Exception(
+            f"Failed to save GT table {var_name} - file not created")
 
+
+    
 def insert_variable(
     report: str,
     module: str,
@@ -913,17 +1050,6 @@ def insert_variable(
             logging.debug(f"Rendering gt_table for {var}")
             tmp = Path(f"charts_out/{var}_gt.png")
             tmp.parent.mkdir(exist_ok=True)
-
-            # gt_table.save(tmp, web_driver='chrome', window_size=(8000, 8000))  # Playwright renders PNG
-            # gt_image = str(tmp)
-          
-
-            # # Improved GT table save with better parameters for styling preservation
-            # gt_table.save(
-            #     tmp, web_driver='chrome', window_size=(1400, 1000)
-            # )
-            # gt_image = str(tmp)
-            # logging.debug(f"Saved great_tables to {gt_image}")
 
              # Smart GT table save with automatic size detection
             gt_image = save_gt_table_smart(gt_table, tmp, var)
