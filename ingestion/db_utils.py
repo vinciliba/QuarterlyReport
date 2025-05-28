@@ -1086,25 +1086,7 @@ def insert_variable(
             tmp = Path(f"charts_out/{var}_gt.png")
             tmp.parent.mkdir(exist_ok=True)
 
-<<<<<<< HEAD
              # Smart GT table save with automatic size detection
-=======
-            # Add a small delay before rendering if this is not the first table
-            # This helps prevent browser resource conflicts
-            if hasattr(insert_variable, '_render_count'):
-                insert_variable._render_count += 1
-                if insert_variable._render_count % 3 == 0:
-                    # Every 3rd render, add a longer pause and force garbage collection
-                    logging.debug(f"Pausing for resource cleanup after {insert_variable._render_count} renders")
-                    gc.collect()
-                    time.sleep(1.5)
-                else:
-                    time.sleep(0.3)
-            else:
-                insert_variable._render_count = 1
-
-            # Smart GT table save with automatic size detection
->>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
             gt_image = save_gt_table_smart(gt_table, tmp, var)
             
             # Post-render delay to ensure file is fully written and resources are freed
