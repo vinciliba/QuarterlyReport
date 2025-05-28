@@ -785,20 +785,6 @@ def generate_amendments_report(
                     locations=loc.stub()
                 )
 
-                # Consistent and strong external border
-                # .tab_options(
-                #     table_body_border_bottom_color=DARK_BLUE,
-                #     table_body_border_bottom_width="1px",
-                #     table_border_right_color=DARK_BLUE,
-                #     table_border_right_width="1px",
-                #     table_border_left_color=DARK_BLUE,
-                #     table_border_left_width="1px",
-                #     table_border_top_color=DARK_BLUE,
-                #     table_border_top_width="1px",
-                #     column_labels_border_top_color=DARK_BLUE,
-                #     column_labels_border_top_width="1px"
-                # )
-
                 # Format all "Total" rows consistently in stub and body
                 .tab_style(
                     style=[

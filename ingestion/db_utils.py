@@ -684,11 +684,63 @@ def upsert_report_module(report_name: str, module_name: str,
         """, (report_name, module_name, run_order, int(enabled)))
         conn.commit()
 
-def delete_report_module(row_id: int, db_path="database/reporting.db"):
-    with sqlite3.connect(db_path) as conn:
-        conn.execute("DELETE FROM report_modules WHERE id = ?", (row_id,))
-        conn.commit()
+# def delete_report_module(row_id: int, db_path="database/reporting.db"):
+#     with sqlite3.connect(db_path) as conn:
+#         conn.execute("DELETE FROM report_modules WHERE id = ?", (row_id,))
+#         conn.commit()
+# In ingestion/db_utils.py
 
+def delete_report_module(mapping_id, db_path):
+    """
+    Delete a report module mapping by ID.
+    
+    Args:
+        mapping_id: The ID of the mapping to delete
+        db_path: Path to the SQLite database
+        
+    Returns:
+        bool: True if deletion was successful, False otherwise
+    """
+    import sqlite3
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Convert mapping_id to int to ensure proper type
+        mapping_id = int(mapping_id)
+        
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            
+            # First check if the mapping exists
+            cursor.execute("SELECT id FROM report_modules WHERE id = ?", (mapping_id,))
+            if cursor.fetchone() is None:
+                logger.error(f"Mapping with ID {mapping_id} does not exist")
+                return False
+            
+            # Perform the delete
+            cursor.execute("DELETE FROM report_modules WHERE id = ?", (mapping_id,))
+            
+            # Explicitly commit the transaction
+            conn.commit()
+            
+            # Check if the delete was successful
+            rows_affected = cursor.rowcount
+            
+            if rows_affected > 0:
+                logger.info(f"Successfully deleted mapping with ID {mapping_id}")
+                return True
+            else:
+                logger.error(f"No rows were affected when deleting mapping ID {mapping_id}")
+                return False
+                
+    except sqlite3.Error as e:
+        logger.error(f"Database error when deleting mapping {mapping_id}: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error when deleting mapping {mapping_id}: {e}")
+        return False
 #-------------  Create Report Variables  ------------------
 from pathlib import Path
 import altair as alt
@@ -739,16 +791,244 @@ def altair_chart_to_path(chart: alt.TopLevelMixin, var_name: str, folder: str = 
         raise RuntimeError(f"Failed to render Altair chart {var_name}: {str(e)}")
     
 
+<<<<<<< HEAD
 def save_gt_table_smart(gt_table, file_path, var_name):
     """
     Intelligently save GT table with optimal window size based on content and table type.
     Uses dynamic sizing based on actual table dimensions with improved truncation handling.
+=======
+
+# def save_gt_table_smart(gt_table, file_path, var_name):
+#     """
+#     Intelligently save GT table with optimal window size based on content and table type.
+#     Balanced approach to prevent both cut-offs and excessive width.
+#     """
+#     from pathlib import Path
+#     import logging
+#     import time
+    
+#     file_path = Path(file_path)
+#     file_path.parent.mkdir(exist_ok=True)
+    
+#     # Delete existing file if it exists to avoid rename conflicts
+#     if file_path.exists():
+#         try:
+#             file_path.unlink()
+#             logging.debug(f"Deleted existing file: {file_path}")
+#         except Exception as e:
+#             logging.warning(f"Could not delete existing file {file_path}: {e}")
+    
+#     # More balanced defaults - narrower width, adequate height
+#     default_width = 1200  # Reduced from 1800 - more appropriate for most tables
+#     default_height = 1500  # Good height to prevent cut-offs
+    
+#     # Adjust dimensions based on table type
+#     if any(keyword in var_name.lower() for keyword in ['overview', 'summary', 'resources']):
+#         # Overview/summary tables are usually narrow
+#         default_width = 1000
+#         default_height = 1200
+#     elif any(keyword in var_name.lower() for keyword in ['table_1b', 'table_1c', 'table_1a']):
+#         # Budget tables might need more width for multiple columns
+#         default_width = 1400
+#         default_height = 2000
+#     elif any(keyword in var_name.lower() for keyword in ['external_audits', 'table_11']):
+#         # Audit tables - medium width
+#         default_width = 1200
+#         default_height = 1800
+#     elif any(keyword in var_name.lower() for keyword in ['he_', 'horizon', 'vobu']):
+#         # HE tables - based on your examples
+#         default_width = 1300
+#         default_height = 1500
+    
+#     # Try sizes in order - start conservative, expand if needed
+#     window_sizes = [
+#         (default_width, default_height),
+#         (default_width + 200, default_height + 500),  # Slightly larger
+#         (1400, 2000),  # Fallback size
+#     ]
+    
+#     last_exception = None
+    
+#     for i, (width, height) in enumerate(window_sizes):
+#         try:
+#             start_time = time.time()
+#             logging.debug(f"Attempting GT save for {var_name} with size {width}x{height} (attempt {i+1}/{len(window_sizes)})")
+            
+#             # Save the table
+#             gt_table.save(
+#                 file_path, 
+#                 web_driver='chrome', 
+#                 window_size=(width, height)
+#             )
+            
+#             # Small sleep to ensure file system catches up
+#             time.sleep(0.3)
+            
+#             elapsed = time.time() - start_time
+            
+#             if file_path.exists():
+#                 file_size = file_path.stat().st_size
+#                 logging.debug(f"GT table {var_name} saved in {elapsed:.1f}s: {width}x{height} = {file_size} bytes")
+                
+#                 # Check if file size seems reasonable
+#                 if file_size > 15000:  # 15KB minimum for a complete table
+#                     return str(file_path)
+#                 elif i == len(window_sizes) - 1:
+#                     # Last attempt - accept whatever we got
+#                     logging.warning(f"GT table {var_name} accepting small file ({file_size} bytes) on last attempt")
+#                     return str(file_path)
+#                 else:
+#                     # Try next size
+#                     logging.warning(f"GT table {var_name} file size only {file_size} bytes, trying larger dimensions")
+#                     file_path.unlink()
+#                     continue
+                    
+#             else:
+#                 logging.warning(f"GT table {var_name} save failed - no file created")
+                
+#         except Exception as e:
+#             last_exception = e
+#             logging.error(f"GT table {var_name} save attempt {i+1} failed: {e}")
+#             if file_path.exists():
+#                 try:
+#                     file_path.unlink()
+#                 except:
+#                     pass
+    
+#     # Final attempt with moderate dimensions
+#     try:
+#         logging.debug(f"Final fallback attempt for GT table {var_name}")
+#         gt_table.save(
+#             file_path, 
+#             web_driver='chrome', 
+#             window_size=(1200, 1800)
+#         )
+#         if file_path.exists():
+#             return str(file_path)
+#     except Exception as e:
+#         last_exception = e
+    
+#     if last_exception:
+#         raise Exception(f"Failed to save GT table {var_name} after all attempts: {last_exception}")
+#     else:
+#         raise Exception(f"Failed to save GT table {var_name} - file not created")
+
+# def insert_variable(
+#     report: str,
+#     module: str,
+#     var: str,
+#     value: Any,
+#     db_path: str,
+#     anchor: str | None = None,
+#     gt_table: great_tables.GT | None = None,
+#     altair_chart: alt.TopLevelMixin | None = None,
+# ) -> None:
+#     import time
+    
+   
+#     """
+#     Overwrite the row (report_name, var_name) with a new value (and picture path).
+
+#     Exactly ONE row per variable is kept. Either gt_table or altair_chart can be provided, not both.
+#     Stores the file path to the rendered PNG in gt_image instead of the image bytes.
+
+#     Args:
+#         report: Report name.
+#         module: Module name.
+#         var: Variable name.
+#         value: Value to serialize (e.g., DataFrame, dict).
+#         db_path: Path to SQLite database.
+#         anchor: Anchor name (defaults to var).
+#         gt_table: great_tables.GT object to render as PNG.
+#         altair_chart: Altair chart object (Chart or LayerChart) to render as PNG.
+
+#     Raises:
+#         ValueError: If both gt_table and altair_chart are provided or invalid types.
+#         sqlite3.Error: If database operations fail.
+#     """
+#     if gt_table is not None and altair_chart is not None:
+#         raise ValueError("Cannot provide both gt_table and altair_chart")
+#     if gt_table is not None and not isinstance(gt_table, great_tables.GT):
+#         raise ValueError(f"Expected great_tables.GT, got {type(gt_table)}")
+#     if altair_chart is not None and not isinstance(altair_chart, alt.TopLevelMixin):
+#         raise ValueError(f"Expected alt.TopLevelMixin (Chart or LayerChart), got {type(altair_chart)}")
+
+#     con = sqlite3.connect(db_path)
+#     cur = con.cursor()
+#     try:
+#         # 1) Remove any previous copy of this variable
+#         cur.execute(
+#             "DELETE FROM report_variables WHERE report_name = ? AND var_name = ?",
+#             (report, var),
+#         )
+
+#         # 2) Serialize the Python value
+#         val_json = json.dumps(value, default=str)
+
+#         # 3) Optional: Render great-tables or Altair chart to PNG and store the path
+#         gt_image = None
+#         if gt_table is not None:
+#             logging.debug(f"Rendering gt_table for {var}")
+#             tmp = Path(f"charts_out/{var}_gt.png")
+#             tmp.parent.mkdir(exist_ok=True)
+
+#             # gt_table.save(tmp, web_driver='chrome', window_size=(8000, 8000))  # Playwright renders PNG
+#             # gt_image = str(tmp)
+          
+
+#             # # Improved GT table save with better parameters for styling preservation
+#             # gt_table.save(
+#             #     tmp, web_driver='chrome', window_size=(1400, 1000)
+#             # )
+#             # gt_image = str(tmp)
+#             # logging.debug(f"Saved great_tables to {gt_image}")
+
+#              # Smart GT table save with automatic size detection
+#             gt_image = save_gt_table_smart(gt_table, tmp, var)
+#             time.sleep(0.5)
+#             logging.debug(f"Saved great_tables to {gt_image}")
+#         elif altair_chart is not None:
+#             logging.debug(f"Rendering altair_chart for {var}")
+#             gt_image = altair_chart_to_path(altair_chart, var)
+#             logging.debug(f"Saved Altair chart path: {gt_image}")
+
+#         # 4) Insert the fresh row
+#         cur.execute(
+#             """
+#             INSERT INTO report_variables
+#                   (report_name, module_name, var_name,
+#                    anchor_name, value, gt_image, created_at)
+#             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+#             """,
+#             (report, module, var, anchor or var, val_json, gt_image),
+#         )
+
+#         con.commit()
+#         logging.debug("Stored variable %s for report %s (rowid=%s)",
+#                       var, report, cur.lastrowid)
+
+#     except Exception as exc:
+#         con.rollback()
+#         logging.error("insert_variable failed for %s/%s: %s", report, var, exc, exc_info=True)
+#         raise
+#     finally:
+#         con.close()
+
+def save_gt_table_smart(gt_table, file_path, var_name):
+    """
+    Intelligently save GT table with optimal window size based on content and table type.
+    Enhanced with better timing control and error recovery.
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
     """
     from pathlib import Path
     import logging
     import time
     import os
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
     file_path = Path(file_path)
     file_path.parent.mkdir(exist_ok=True)
 
@@ -757,7 +1037,11 @@ def save_gt_table_smart(gt_table, file_path, var_name):
         try:
             file_path.unlink()
             logging.debug(f"Deleted existing file: {file_path}")
+<<<<<<< HEAD
             time.sleep(0.3)
+=======
+            time.sleep(0.2)  # Give OS time to release file handle
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
         except Exception as e:
             logging.warning(f"Could not delete existing file {file_path}: {e}")
 
@@ -803,6 +1087,7 @@ def save_gt_table_smart(gt_table, file_path, var_name):
     base_width = 200  # Base padding for table chrome
     stub_width = 150 if has_stub else 0  # Extra width for row labels
     
+<<<<<<< HEAD
     # Adaptive column width based on column count
     if num_columns <= 4:
         column_width = 180  # Wider columns for few-column tables
@@ -857,13 +1142,50 @@ def save_gt_table_smart(gt_table, file_path, var_name):
         (2000, default_height + 200, 250, None),  # Maximum practical size
         (2000, default_height + 200, 300, 0.9),  # Try with zoom out
         (2400, default_height + 300, 400, 0.8),  # Extreme width with zoom
+=======
+    # Adjust dimensions based on table type
+    if any(keyword in var_name.lower() for keyword in ['overview', 'summary', 'resources']):
+        # Overview/summary tables are usually narrow
+        default_width = 1000
+        default_height = 1200
+    elif any(keyword in var_name.lower() for keyword in ['table_1b', 'table_1c', 'table_1a']):
+        # Budget tables might need more width for multiple columns
+        default_width = 1400
+        default_height = 2000
+    elif any(keyword in var_name.lower() for keyword in ['external_audits', 'table_11']):
+        # Audit tables - medium width
+        default_width = 1200
+        default_height = 1800
+    elif any(keyword in var_name.lower() for keyword in ['he_', 'horizon', 'vobu']):
+        # HE tables - based on your examples
+        default_width = 1300
+        default_height = 1500
+    elif any(keyword in var_name.lower() for keyword in ['ttg', 'tts', 'granting']):
+        # Granting tables often have many columns
+        default_width = 1600
+        default_height = 1800
+    elif any(keyword in var_name.lower() for keyword in ['commitment', 'signature']):
+        # Commitment/signature tables can be wide
+        default_width = 1500
+        default_height = 1600
+    
+    # Try sizes in order - start conservative, expand if needed
+    window_sizes = [
+        (default_width, default_height),
+        (default_width + 200, default_height + 500),  # Slightly larger
+        (1600, 2000),  # Larger fallback
+        (1800, 2200),  # Even larger for stubborn tables
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
     ]
 
     last_exception = None
     successful_save = False
+<<<<<<< HEAD
 
     # Add initial delay
     time.sleep(0.5)
+=======
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
     
     for i, (width, height, expand_px, zoom) in enumerate(window_configs):
         try:
@@ -873,6 +1195,7 @@ def save_gt_table_smart(gt_table, file_path, var_name):
                 f"expand={expand_px}px, zoom={zoom} (attempt {i+1}/{len(window_configs)}, "
                 f"{num_columns} columns)")
             
+<<<<<<< HEAD
             # Delay between attempts
             if i > 0:
                 time.sleep(1.0)
@@ -883,6 +1206,48 @@ def save_gt_table_smart(gt_table, file_path, var_name):
                 'web_driver': 'chrome',
                 'window_size': (width, height),
             }
+=======
+            # Add pre-save delay to ensure previous operations are complete
+            if i > 0:
+                time.sleep(0.5)  # Longer delay between retries
+            
+            # Save the table with retry logic
+            retry_count = 0
+            max_retries = 2
+            
+            while retry_count <= max_retries:
+                try:
+                    gt_table.save(
+                        file_path, 
+                        web_driver='chrome', 
+                        window_size=(width, height)
+                    )
+                    break  # Success, exit retry loop
+                except Exception as retry_e:
+                    retry_count += 1
+                    if retry_count > max_retries:
+                        raise retry_e
+                    logging.debug(f"Retry {retry_count} for {var_name} after error: {retry_e}")
+                    time.sleep(1.0)  # Wait before retry
+            
+            # Wait for file to be written completely
+            time.sleep(0.5)
+            
+            # Check file multiple times to ensure it's fully written
+            file_check_attempts = 0
+            file_stable = False
+            last_size = 0
+            
+            while file_check_attempts < 3:
+                if file_path.exists():
+                    current_size = file_path.stat().st_size
+                    if current_size == last_size and current_size > 0:
+                        file_stable = True
+                        break
+                    last_size = current_size
+                time.sleep(0.3)
+                file_check_attempts += 1
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
             
             # Try with all available parameters
             try:
@@ -917,14 +1282,19 @@ def save_gt_table_smart(gt_table, file_path, var_name):
             # Wait for file to be written
             time.sleep(1.5)
             
+<<<<<<< HEAD
             # Verify file exists and has reasonable size
             if file_path.exists():
+=======
+            if file_stable:
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 file_size = file_path.stat().st_size
                 elapsed = time.time() - start_time
                 logging.info(
                     f"GT table {var_name} saved in {elapsed:.1f}s: "
                     f"{width}x{height} (expand={expand_px}px) = {file_size} bytes")
                 
+<<<<<<< HEAD
                 # More intelligent file size check based on table dimensions
                 expected_min_size = 5000 + (num_columns * num_rows * 100)  # Rough estimate
                 
@@ -941,6 +1311,39 @@ def save_gt_table_smart(gt_table, file_path, var_name):
                         except:
                             pass
 
+=======
+                # More nuanced file size checks based on table type
+                min_size_threshold = 15000  # Default 15KB
+                
+                # Some tables might legitimately be smaller
+                if any(keyword in var_name.lower() for keyword in ['summary', 'overview', 'total']):
+                    min_size_threshold = 10000  # 10KB for summary tables
+                elif any(keyword in var_name.lower() for keyword in ['ttg', 'tts', 'commitment']):
+                    min_size_threshold = 20000  # 20KB for complex tables
+                
+                if file_size > min_size_threshold:
+                    successful_save = True
+                    return str(file_path)
+                elif i == len(window_sizes) - 1:
+                    # Last attempt - accept whatever we got if it's not empty
+                    if file_size > 5000:  # At least 5KB
+                        logging.warning(f"GT table {var_name} accepting small file ({file_size} bytes) on last attempt")
+                        successful_save = True
+                        return str(file_path)
+                    else:
+                        logging.error(f"GT table {var_name} file too small ({file_size} bytes)")
+                else:
+                    # Try next size
+                    logging.warning(f"GT table {var_name} file size only {file_size} bytes, trying larger dimensions")
+                    try:
+                        file_path.unlink()
+                    except:
+                        pass
+                    continue
+            else:
+                logging.warning(f"GT table {var_name} save failed - file not stable or not created")
+                
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
         except Exception as e:
             last_exception = e
             logging.error(f"GT table {var_name} save attempt {i+1} failed: {e}")
@@ -948,6 +1351,7 @@ def save_gt_table_smart(gt_table, file_path, var_name):
             if file_path.exists():
                 try:
                     file_path.unlink()
+<<<<<<< HEAD
                     time.sleep(0.3)
                 except:
                     pass
@@ -980,6 +1384,28 @@ def save_gt_table_smart(gt_table, file_path, var_name):
             if file_path.exists():
                 return str(file_path)
                 
+=======
+                    time.sleep(0.2)
+                except:
+                    pass
+    
+    # Final attempt with very conservative dimensions and longer waits
+    if not successful_save:
+        try:
+            logging.debug(f"Final fallback attempt for GT table {var_name}")
+            time.sleep(1.0)  # Longer wait before final attempt
+            
+            gt_table.save(
+                file_path, 
+                web_driver='chrome', 
+                window_size=(1400, 2000)  # Conservative but not too small
+            )
+            
+            time.sleep(1.0)  # Wait for file to be written
+            
+            if file_path.exists() and file_path.stat().st_size > 5000:
+                return str(file_path)
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
         except Exception as e:
             last_exception = e
     
@@ -987,8 +1413,13 @@ def save_gt_table_smart(gt_table, file_path, var_name):
         raise Exception(
             f"Failed to save GT table {var_name} after all attempts: {last_exception}")
     else:
+<<<<<<< HEAD
         raise Exception(
             f"Failed to save GT table {var_name} - file not created")
+=======
+        raise Exception(f"Failed to save GT table {var_name} - file not created or too small")
+
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
 
 
     
@@ -1002,29 +1433,13 @@ def insert_variable(
     gt_table: great_tables.GT | None = None,
     altair_chart: alt.TopLevelMixin | None = None,
 ) -> None:
-    import time
-    
-   
     """
     Overwrite the row (report_name, var_name) with a new value (and picture path).
-
-    Exactly ONE row per variable is kept. Either gt_table or altair_chart can be provided, not both.
-    Stores the file path to the rendered PNG in gt_image instead of the image bytes.
-
-    Args:
-        report: Report name.
-        module: Module name.
-        var: Variable name.
-        value: Value to serialize (e.g., DataFrame, dict).
-        db_path: Path to SQLite database.
-        anchor: Anchor name (defaults to var).
-        gt_table: great_tables.GT object to render as PNG.
-        altair_chart: Altair chart object (Chart or LayerChart) to render as PNG.
-
-    Raises:
-        ValueError: If both gt_table and altair_chart are provided or invalid types.
-        sqlite3.Error: If database operations fail.
+    Enhanced with better timing and error handling.
     """
+    import time
+    import gc  # Garbage collection
+    
     if gt_table is not None and altair_chart is not None:
         raise ValueError("Cannot provide both gt_table and altair_chart")
     if gt_table is not None and not isinstance(gt_table, great_tables.GT):
@@ -1051,13 +1466,35 @@ def insert_variable(
             tmp = Path(f"charts_out/{var}_gt.png")
             tmp.parent.mkdir(exist_ok=True)
 
+<<<<<<< HEAD
              # Smart GT table save with automatic size detection
+=======
+            # Add a small delay before rendering if this is not the first table
+            # This helps prevent browser resource conflicts
+            if hasattr(insert_variable, '_render_count'):
+                insert_variable._render_count += 1
+                if insert_variable._render_count % 3 == 0:
+                    # Every 3rd render, add a longer pause and force garbage collection
+                    logging.debug(f"Pausing for resource cleanup after {insert_variable._render_count} renders")
+                    gc.collect()
+                    time.sleep(1.5)
+                else:
+                    time.sleep(0.3)
+            else:
+                insert_variable._render_count = 1
+
+            # Smart GT table save with automatic size detection
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
             gt_image = save_gt_table_smart(gt_table, tmp, var)
+            
+            # Post-render delay to ensure file is fully written and resources are freed
             time.sleep(0.5)
             logging.debug(f"Saved great_tables to {gt_image}")
+            
         elif altair_chart is not None:
             logging.debug(f"Rendering altair_chart for {var}")
             gt_image = altair_chart_to_path(altair_chart, var)
+            time.sleep(0.3)  # Small delay after Altair render too
             logging.debug(f"Saved Altair chart path: {gt_image}")
 
         # 4) Insert the fresh row
@@ -1081,6 +1518,7 @@ def insert_variable(
         raise
     finally:
         con.close()
+
 
 def fetch_vars_for_report(report_name, db_path):
     con = sqlite3.connect(db_path)

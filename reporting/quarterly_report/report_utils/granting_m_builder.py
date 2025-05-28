@@ -24,7 +24,10 @@ from ingestion.db_utils import load_report_params
 from reporting.quarterly_report.utils import Database, RenderContext
 import traceback
 import functools
+<<<<<<< HEAD
 import logging 
+=======
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
 
 def debug_wrapper(func):
     """Wrapper to add detailed error logging to functions"""
@@ -541,16 +544,26 @@ def process_granting_data(
              .tab_style(
                 style=[
                     style.fill(color=BLUE),
+<<<<<<< HEAD
                     style.text(align='left', size='small' ),
                     style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2;")
+=======
+                    style.text( align='left', size ='small' ),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 ],
                 locations=loc.stubhead()
             )
             .tab_style(
                 style=[
                     style.fill(color=LIGHT_BLUE),
+<<<<<<< HEAD
                     style.text(align='center', size='small'),
                     style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2;")
+=======
+                    style.text( align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 ],
                 locations=loc.stub()
             )
@@ -620,15 +633,24 @@ def process_granting_data(
                 style=[
                     style.fill(color=BLUE),
                     style.text( align='left', size ='small' ),
+<<<<<<< HEAD
                     style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2;")
+=======
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 ],
                 locations=loc.stubhead()
             )
             .tab_style(
                 style=[
                     style.fill(color=LIGHT_BLUE),
+<<<<<<< HEAD
                     style.text(align='center', size ='small'),
                     style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2;")
+=======
+                    style.text(align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 ],
                 locations=loc.stub()
             )
@@ -698,15 +720,24 @@ def process_granting_data(
                 style=[
                     style.fill(color=BLUE),
                     style.text( align='left', size ='small' ),
+<<<<<<< HEAD
                     style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2;")
+=======
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 ],
                 locations=loc.stubhead()
             )
             .tab_style(
                 style=[
                     style.fill(color=LIGHT_BLUE),
+<<<<<<< HEAD
                     style.text(align='center', size ='small' ),
                     style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2;")
+=======
+                    style.text(align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 ],
                 locations=loc.stub()
             )
@@ -775,15 +806,24 @@ def process_granting_data(
                 style=[
                     style.fill(color=BLUE),
                     style.text( align='left', size ='small' ),
+<<<<<<< HEAD
                     style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2;")
+=======
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 ],
                 locations=loc.stubhead()
             )
             .tab_style(
                 style=[
                     style.fill(color=LIGHT_BLUE),
+<<<<<<< HEAD
                     style.text( align='center', size ='small' ),
                     style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2;")
+=======
+                    style.text( align='center'),
+                    style.css("text-align: center; vertical-align: middle; max-width:200px; line-height:1.2; font-size: smaller;")
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 ],
                 locations=loc.stub()
             )
@@ -1221,11 +1261,19 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
                 rowname_col="PO Type",
                 groupname_col="Programme"
             )
+<<<<<<< HEAD
             # .tab_header(
             # title=html(
             #     f"<strong style='color: {DARK_BLUE}font-size: large;'>PO Purchase Orders exceeding the Final Date of Implementation</strong>  "
             # )
             # )
+=======
+            .tab_header(
+            title=html(
+                f"<strong style='color: {DARK_BLUE}font-size: large;'>PO Purchase Orders exceeding the Final Date of Implementation</strong>  "
+            )
+            )
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
              # Table Outline
             .tab_options(
                     table_font_size="12px",
@@ -1286,6 +1334,11 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
                 ],
                 locations=loc.row_groups()
             )
+<<<<<<< HEAD
+=======
+           
+           
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
             .tab_style(
                 style=[
                     #    style.borders(weight="1px", color=DARK_BLUE),
@@ -1529,7 +1582,17 @@ def build_signatures_table(
                 .tab_header(
                     title="Signatures and Under Preparation by Topic"
                 )
+<<<<<<< HEAD
     
+=======
+        
+                # .tab_style(
+                #     style.text(color=BLUE, weight="bold", align="center", font='Arial'),
+                #     locations=loc.header()
+                # )
+                 # Table Outline
+                # .opt_table_outline(style="solid", width=outline_b, color=DARK_BLUE) 
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                 .tab_options(
                     table_font_size="12px",
                     table_width="100%",
@@ -1928,12 +1991,24 @@ def build_commitments_table(
                            style.text(align="center", size='small')],
                     locations=loc.body()
                 )
+                # .tab_style(
+                #     style=style.borders(color=DARK_BLUE, weight="1px"),
+                #     locations=[loc.column_labels(), loc.stubhead()]
+                # )
                 .tab_style(
+<<<<<<< HEAD
                     style=[style.fill(color=SUB_TOTAL_BACKGROUND ), style.text( weight="bold")],
                     locations=loc.body(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
                 )
                 .tab_style(
                     style=[style.fill(color=SUB_TOTAL_BACKGROUND ), style.text( weight="bold")],
+=======
+                    style=[style.fill(color=SUB_TOTAL_BACKGROUND ), style.text(color="black", weight="bold")],
+                    locations=loc.body(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
+                )
+                .tab_style(
+                    style=[style.fill(color=SUB_TOTAL_BACKGROUND ), style.text(color="black", weight="bold")],
+>>>>>>> 41757a6fcb3a39ca074aad43aec69570dc56164f
                     locations=loc.stub(rows=final_agg_table.index[final_agg_table["Commitment Month"] == "Grand Total"].tolist())
                 )
                 .tab_source_note("Source: Compass")
