@@ -510,8 +510,6 @@ def process_granting_data(
                     label=html(f"<span style='color: white ; font-size: large; align-text: center; margin-left: 5px; margin-bottom: 80px;' >Call</span>")
                     )
             # GENERAL FORMATTING
-            # Table Outline
-            # .opt_table_outline(style = "solid", width = outline_b, color =  DARK_BLUE) 
             # Arial font
             .opt_table_font(font="Arial")
             .tab_options(

@@ -24,7 +24,7 @@ import numpy as np
 # ──────────────────────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────────────────────
-OUTLINE_B = '2px'
+OUTLINE_B = '1px'
 
 
 def _snapshot(
@@ -646,8 +646,14 @@ def _recovery_activity_df(ro_df: pd.DataFrame, epoch_year: int) -> pd.DataFrame:
     return tidy.reset_index()
 
 
+
+from typing import Dict, List, Optional
 from great_tables import GT, style, loc
-from typing import List, Dict, Optional
+import logging
+
+from typing import Dict, List, Optional
+from great_tables import GT, style, loc
+import logging
 
 def apply_table_styling(
     gt: GT,
@@ -667,6 +673,7 @@ def apply_table_styling(
     Returns:
         Styled great_tables object.
     """
+    logger = logging.getLogger(__name__)  # Add this line
     # Default colors if params is not provided or missing keys
     default_colors = {
         "BLUE": "#004A99",
@@ -682,7 +689,7 @@ def apply_table_styling(
     DARK_BLUE = colors.get("DARK_BLUE", default_colors["DARK_BLUE"])
     subtotal_background_color = colors.get("subtotal_background_color", default_colors["subtotal_background_color"])
 
-    OUTLINE_B = '2px'
+    OUTLINE_B = '1px'
 
     # Define column groups based on table type
     if table_type == "auri_overview":
@@ -715,18 +722,32 @@ def apply_table_styling(
     else:
         raise ValueError(f"Unknown table type: {table_type}")
 
-    # Apply styling
+    # Apply base styling
     gt = (
         gt
         .opt_table_font(font="Arial")
-        .opt_table_outline(style="solid", width=OUTLINE_B, color=DARK_BLUE)
+        .opt_table_outline(style = "solid", width = '1px', color ="#cccccc") 
+        .tab_options(
+                table_font_size="12px",
+                table_width="100%",
+                table_background_color="#ffffff",
+                table_font_color=DARK_BLUE
+            )
+        .tab_style(
+            style=style.borders(sides="all", color="#cccccc", weight="1px"),
+            locations=loc.body()
+        )
+        .tab_style(
+            style=style.borders(sides="all", color="#ffffff", weight="2px"),
+            locations=loc.column_labels()
+        )
 
         # Row group styling
         .tab_style(
             style=[
                 style.text(color=DARK_BLUE, weight="bold", font='Arial', size='small'),
                 style.fill(color=LIGHT_BLUE),
-                style.css(f"border: 1px solid {DARK_BLUE}; line-height:1.2; padding:5px;")
+                style.css(f"line-height:1.2; padding:5px;")
             ],
             locations=loc.row_groups()
         )
@@ -762,16 +783,14 @@ def apply_table_styling(
         # Body cell styling
         .tab_style(
             style=[
-                # style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                style.text(align="left", size='small', font='Arial'),
+                style.text(align="left", size='small'),
                 style.css("padding:5px")
             ],
             locations=loc.body(columns=first_col)
         )
         .tab_style(
             style=[
-                # style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                style.text(align="right", size='small', font='Arial'),
+                style.text(align="right", size='small'),
                 style.css("padding:5px")
             ],
             locations=loc.body(columns=other_cols)
@@ -780,36 +799,30 @@ def apply_table_styling(
         # Stub cell styling
         .tab_style(
             style=[
-                # style.borders(sides="all", color=DARK_BLUE, weight="1px"),
-                style.text(size='small', font='Arial'),
+                style.text(size='small'),
                 style.css("padding:5px")
             ],
             locations=loc.stub()
         )
-
-        .tab_style(
-            style=style.borders(sides="all", color="#cccccc", weight="1px"),
-            locations=loc.body()
-        )
-        .tab_style(
-            style=style.borders(sides="all", color="#ffffff", weight="2px"),
-            locations=loc.column_labels()
-        )
-
 
         # Footer styling
         .tab_source_note("Source: Compass")
         .tab_source_note("Report: Audit Result Implementation")
         .tab_style(
             style=[
-                style.text(size="small", font='Arial'),
+                style.text(size="small"),
+                style.fill(color="#f5f5f5"),  # Light gray background for footer
                 style.css("padding:5px; line-height:1.2")
             ],
             locations=loc.footer()
         )
     )
+    
+    # Apply spanner labels styling using the safe helper function
+    gt = style_spanners_safe(gt, fill_color=DARK_BLUE, text_color="white")
 
-    # Additional styling for specific table types
+  
+    # Apply table-specific styling
     if table_type == "tti_combined":
         gt = gt.tab_style(
             style=[
@@ -821,7 +834,9 @@ def apply_table_styling(
                 loc.body(rows=["Closed Projects", "On-going Projects", "Total"])
             ]
         )
+        
     elif table_type == "negative_adj":
+        # Apply styling to the Total row
         gt = gt.tab_style(
             style=[
                 style.fill(color=BLUE),
@@ -832,97 +847,217 @@ def apply_table_styling(
                 loc.body(rows=["Total"])
             ]
         )
-    elif table_type == "participation_impl":
+            
+    elif table_type == "auri_overview":
+        # Apply styling to the Total row
         gt = gt.tab_style(
             style=[
                 style.fill(color=BLUE),
                 style.text(color="white", weight="bold")
+            ],
+            locations=[
+                loc.stub(rows=["Total"]),
+                loc.body(rows=["Total"])
+            ]
+        )
+        
+    elif table_type == "participation_impl":
+        # Apply styling to the Total row
+        gt = gt.tab_style(
+            style=[
+                # style.fill(color=DARK_BLUE),
+                style.text(weight="bold", color=DARK_BLUE)
             ],
             locations=[
                 loc.stub(rows=["Total participation implemented"]),
                 loc.body(rows=["Total participation implemented"])
             ]
         )
+        
+        # Style spanner labels with DARK_BLUE
+        try:
+            gt = gt.tab_style(
+                style=[
+                    style.fill(color=DARK_BLUE),
+                    style.text(color='white', weight='bold')
+                ],
+                locations=loc.spanner_labels()
+            )
+        except Exception as e:
+            logger.debug(f"Could not style spanners for {table_type}: {e}")
+            
+    elif table_type == "ro_activity":
+        # Style spanner labels with DARK_BLUE
+        try:
+            gt = gt.tab_style(
+                style=[
+                    style.fill(color=DARK_BLUE),
+                    style.text(color='white', weight='bold')
+                ],
+                locations=loc.spanner_labels()
+            )
+        except Exception as e:
+            logger.debug(f"Could not style spanners for {table_type}: {e}")
+            
     elif table_type == "deviations":
-        # Style the "Total" row to match column headers (BLUE background, white bold text)
-        gt = gt.tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold")
-            ],
-            locations=[
-                loc.stub(rows=["TOTAL"]),
-                loc.body(rows=["TOTAL"])
-            ]
-        )
+        # Style the "Total" row
+        gt = (
+            gt
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold")
+                ],
+                locations=[
+                    loc.stub(rows=["TOTAL"]),
+                    loc.body(rows=["TOTAL"])
+                ]
+            )
+            .tab_style(
+                style=[
+                    style.fill(color=BLUE),
+                    style.text(color="white", weight="bold", align="center"),
+                    style.css("min-width:50px; padding:5px; line-height:1.2")
+                ],
+                locations=[
 
+                    loc.column_labels()
+                ]
+            )
+        )
         # Wrap content in "AURI Deviation Comment" column
         gt = gt.tab_style(
-            style=[
-                style.css("white-space: normal; word-wrap: break-word; min-width: 200px; max-width: 300px;")
-            ],
+            style=style.css("white-space: normal; word-wrap: break-word; min-width: 200px; max-width: 300px;"),
             locations=loc.body(columns=["AURI Deviation Comment"])
         )
 
-        # Set stub cells (Beneficiary column, excluding stubhead) to LIGHT_BLUE
+        # Set stub cells (Beneficiary column) to LIGHT_BLUE
         gt = gt.tab_style(
-            style=[
-                style.fill(color=LIGHT_BLUE)
-            ],
+            style=style.fill(color=LIGHT_BLUE),
             locations=loc.stub()
         )
-    elif table_type == "tti_combined":
+    
+    return gt
+
+# Helper function to check if a table has spanners
+def has_spanners(gt: GT) -> bool:
+    """
+    Check if a GT table has spanner labels.
+    
+    Args:
+        gt: The great_tables object
+        
+    Returns:
+        Boolean indicating if spanners exist
+    """
+    try:
+        # Try to access the spanners through various attributes
+        if hasattr(gt, '_build_data') and hasattr(gt._build_data, '_spanners'):
+            return len(gt._build_data._spanners) > 0
+        elif hasattr(gt, '_spanners'):
+            return len(gt._spanners) > 0
+        else:
+            return False
+    except:
+        return False
+
+
+# Safe spanner styling function
+def style_spanners_safe(gt: GT, fill_color: str, text_color: str = "white") -> GT:
+    """
+    Safely apply styling to spanner labels if they exist.
+    
+    Args:
+        gt: The great_tables object
+        fill_color: Background color for spanners
+        text_color: Text color for spanners
+        
+    Returns:
+        Styled GT object
+    """
+    if has_spanners(gt):
+        try:
             gt = gt.tab_style(
                 style=[
-                    style.fill(color=SUB_TOTAL_BACKGROUND),
-                    style.text(weight="bold")
+                    style.fill(color=fill_color),
+                    style.text(color=text_color, weight='bold', align="center", size='small'),
+                    style.css("padding:5px; line-height:1.2")
                 ],
-                locations=[
-                    loc.stub(rows=["Closed Projects", "On-going Projects", "Total"]),
-                    loc.body(rows=["Closed Projects", "On-going Projects", "Total"])
-                ]
+                locations=loc.spanner_labels()
             )
-
-    # Apply subtotal background color to specific rows in tti_combined table
-    elif table_type == "negative_adj":
-        # Apply styling to the Total row to match the column headers and spanners
-        gt = gt.tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold")
-            ],
-            locations=[
-                loc.stub(rows=["Total"]),
-                loc.body(rows=["Total"])
-            ]
-        )
-    elif table_type == "auri_overview":
-        # Apply styling to the Total row to match the column headers and spanners
-        gt = gt.tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold")
-            ],
-            locations=[
-                loc.stub(rows=["Total"]),
-                loc.body(rows=["Total"])
-            ]
-        )
-    elif table_type == "participation_impl":
-        # Apply styling to the Total row to match the column headers and spanners
-        gt = gt.tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold")
-            ],
-            locations=[
-                loc.stub(rows=["Total participation implemented"]),
-                loc.body(rows=["Total participation implemented"])
-            ]
-        )
+        except Exception as e:
+            logging.debug(f"Could not style spanners: {e}")
+    
     return gt
-    # Apply subtotal background color to specific rows in tti_combined table
 
+
+# Alternative approach: Create a complete styling function for tables with spanners
+def create_styled_table_with_spanners(df, table_type, spanner_config, report_params):
+    """
+    Create a GT table with spanners and apply styling in one go.
+    
+    Args:
+        df: DataFrame to convert to GT
+        table_type: Type of table for styling
+        spanner_config: Dict with configuration including:
+            - 'rowname_col': Column to use as row names (optional)
+            - 'groupname_col': Column to use for row groups (optional)
+            - 'spanners': List of dicts with spanner configuration
+            - 'format_config': List of formatting configurations
+        report_params: Styling parameters
+        
+    Returns:
+        Styled GT object
+        
+    Example usage:
+        spanner_config = {
+            'spanners': [
+                {'label': 'Group 1', 'columns': ['col1', 'col2']},
+                {'label': 'Group 2', 'columns': ['col3', 'col4']}
+            ],
+            'format_config': [
+                {'type': 'number', 'columns': ['col1', 'col3'], 'decimals': 0},
+                {'type': 'percent', 'columns': ['col2', 'col4'], 'decimals': 1}
+            ]
+        }
+        gt = create_styled_table_with_spanners(df, 'my_table', spanner_config, report_params)
+    """
+    # Create base GT table with optional parameters
+    gt_params = {}
+    if 'rowname_col' in spanner_config:
+        gt_params['rowname_col'] = spanner_config['rowname_col']
+    if 'groupname_col' in spanner_config:
+        gt_params['groupname_col'] = spanner_config['groupname_col']
+        
+    gt = GT(df, **gt_params)
+    
+    # Add spanners
+    for spanner in spanner_config.get('spanners', []):
+        gt = gt.tab_spanner(
+            label=spanner['label'],
+            columns=spanner['columns']
+        )
+    
+    # Apply formatting if specified
+    if 'format_config' in spanner_config:
+        for fmt in spanner_config['format_config']:
+            if fmt['type'] == 'number':
+                gt = gt.fmt_number(
+                    columns=fmt['columns'],
+                    decimals=fmt.get('decimals', 0),
+                    use_seps=fmt.get('use_seps', True)
+                )
+            elif fmt['type'] == 'percent':
+                gt = gt.fmt_percent(
+                    columns=fmt['columns'],
+                    decimals=fmt.get('decimals', 1),
+                    scale_values=fmt.get('scale_values', False)
+                )
+    
+    # Apply table styling
+    gt = apply_table_styling(gt, table_type=table_type, params=report_params)
+    
+    return gt
 
 def generate_auri_report(
     conn: sqlite3.Connection,
@@ -1006,39 +1141,90 @@ def generate_auri_report(
 
         # Table 3: Negative Adjustments
         negative_adj = negative_adjustments_df(auri_df)
-        tbl3 = (
-            GT(negative_adj)
-            .fmt_number(columns=[
-                'Total No. of AURIs', 'Processed No. of AURIs', 'Pending No. of AURIs'
-            ], decimals=0)
-            .fmt_number(columns=[
-                'Total Adjustment Amount (AUDEX)', 'Processed Adjustment Amount (AUDEX)', 'Pending Adjustment Amount (AUDEX)'
-            ], decimals=2, use_seps=True)
-            .tab_spanner(
-                label="Audit results processed",
-                columns=["Processed No. of AURIs", "Processed Adjustment Amount (AUDEX)"]
-            )
-            .tab_spanner(
-                label="Audit results pending implementation",
-                columns=["Pending No. of AURIs", "Pending Adjustment Amount (AUDEX)"]
-            )
-            .tab_spanner(
-                label="Total Negative Adjustments",
-                columns=["Total No. of AURIs", "Total Adjustment Amount (AUDEX)"]
-            )
-            .cols_label(
-                Source="Source",
-                **{
-                    "Processed No. of AURIs": "No. of AURIs",
-                    "Processed Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
-                    "Pending No. of AURIs": "No. of AURIs",
-                    "Pending Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
-                    "Total No. of AURIs": "No. of AURIs",
-                    "Total Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)"
-                }
-            )
+        # tbl3 = (
+        #     GT(negative_adj)
+        #     .fmt_number(columns=[
+        #         'Total No. of AURIs', 'Processed No. of AURIs', 'Pending No. of AURIs'
+        #     ], decimals=0)
+        #     .fmt_number(columns=[
+        #         'Total Adjustment Amount (AUDEX)', 'Processed Adjustment Amount (AUDEX)', 'Pending Adjustment Amount (AUDEX)'
+        #     ], decimals=2, use_seps=True)
+        #     .tab_spanner(
+        #         label="Audit results processed",
+        #         columns=["Processed No. of AURIs", "Processed Adjustment Amount (AUDEX)"]
+        #     )
+        #     .tab_spanner(
+        #         label="Audit results pending implementation",
+        #         columns=["Pending No. of AURIs", "Pending Adjustment Amount (AUDEX)"]
+        #     )
+        #     .tab_spanner(
+        #         label="Total Negative Adjustments",
+        #         columns=["Total No. of AURIs", "Total Adjustment Amount (AUDEX)"]
+        #     )
+        #     .cols_label(
+        #         Source="Source",
+        #         **{
+        #             "Processed No. of AURIs": "No. of AURIs",
+        #             "Processed Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
+        #             "Pending No. of AURIs": "No. of AURIs",
+        #             "Pending Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
+        #             "Total No. of AURIs": "No. of AURIs",
+        #             "Total Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)"
+        #         }
+        #     )
+        # )
+        def get_negative_adjustments_config():
+            """Get spanner configuration for negative adjustments table."""
+            return {
+                'spanners': [
+                    {
+                        'label': 'Audit results processed',
+                        'columns': ['Processed No. of AURIs', 'Processed Adjustment Amount (AUDEX)']
+                    },
+                    {
+                        'label': 'Audit results pending implementation',
+                        'columns': ['Pending No. of AURIs', 'Pending Adjustment Amount (AUDEX)']
+                    },
+                    {
+                        'label': 'Total Negative Adjustments',
+                        'columns': ['Total No. of AURIs', 'Total Adjustment Amount (AUDEX)']
+                    }
+                ],
+                'format_config': [
+                    {
+                        'type': 'number',
+                        'columns': ['Total No. of AURIs', 'Processed No. of AURIs', 'Pending No. of AURIs'],
+                        'decimals': 0
+                    },
+                    {
+                        'type': 'number',
+                        'columns': [
+                            'Total Adjustment Amount (AUDEX)', 
+                            'Processed Adjustment Amount (AUDEX)', 
+                            'Pending Adjustment Amount (AUDEX)'
+                        ],
+                        'decimals': 2,
+                        'use_seps': True
+                    }
+                ]
+            }
+
+        spanner_config = get_negative_adjustments_config()
+        tbl3 = create_styled_table_with_spanners(negative_adj, 'negative_adj', spanner_config, report_params)
+        # Then add the column labels
+        tbl3 = tbl3.cols_label(
+            Source="Source",
+            **{
+                "Processed No. of AURIs": "No. of AURIs",
+                "Processed Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
+                "Pending No. of AURIs": "No. of AURIs",
+                "Pending Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
+                "Total No. of AURIs": "No. of AURIs",
+                "Total Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)"
+            }
         )
-        tbl3 = apply_table_styling(tbl3, table_type="negative_adj", params=report_params)
+        # tbl3 = apply_table_styling(tbl3, table_type="negative_adj", params=report_params)
+        
 
         # Table 4: Deviations
         deviations = deviations_df(auri_df, current_year)
