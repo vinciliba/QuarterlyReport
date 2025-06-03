@@ -1573,7 +1573,25 @@ elif selected_section == "report_structure":
            "Budget_Impl" : {
                'row1_vacancy' : '1.09%' , 'row2_commit' :'100% (out of € 2.24 bln)', 'row3_L2/L1': '100 % (out of € 2.0  bln)', 'row4_paym': '100 % (out of € 2.174 bln)', 'row5_EARN': '94.21 % (out of € 0.984 bln)'
            },
-           "Vacancy_Rate" : {'current_year' : '2%', "previous_year" : "1.09%"} 
+           "Vacancy_Rate" : {'current_year' : '2%', "previous_year" : "1.09%"},
+           "TTP_NET_HISTORY" : { 
+                                 'H2020': {'IP' : 22.1, 'FP' : 48, 'Experts':41 , 'H2020': 30.8},
+                                 'HEU': {'PF': 5.4, 'IP' : 15, 'FP' : 42.7, 'Experts':9.8, 'HEU': 9.9},
+                                 'ALL' :{'TOTAL':15.1}
+                                  },
+            "TTP_GROSS_HISTORY" : { 
+                                 'H2020': {'IP' : 74.2, 'FP' : 78.2, 'Experts':148 , 'H2020': 75.6},
+                                 'HEU': {'PF': 5.4, 'IP' :17.7, 'FP' : 47.6, 'Experts':10, 'HEU': 10.3},
+                                 'ALL' :{'TOTAL':26.7}
+                                  },
+
+            "PAYMENTS_ON_TIME_HISTORY" : { 
+                                 'H2020': {'IP' : 1, 'FP' : 1, 'Experts':0 , 'H2020': 0.9996},
+                                 'HEU': {'PF': 0.9933, 'IP' :1, 'FP' : 1, 'Experts':0.9943, 'HEU': 0.9943},
+                                 'ALL' :{'TOTAL':0.996}
+                                  }
+                
+               
       }
     }
     params = load_report_params(chosen_report, DB_PATH) or DEFAULTS_BY_REPORT.get(chosen_report, {})
