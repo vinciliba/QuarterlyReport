@@ -753,9 +753,48 @@ import json
 from typing import Any
 
 
+# def altair_chart_to_path(chart: alt.TopLevelMixin, var_name: str, folder: str = "charts_out") -> str:
+#     """
+#     Save an Altair chart as PNG to disk and return its file path.
+
+#     Args:
+#         chart: Altair chart object (Chart or LayerChart) to render.
+#         var_name: Name for the output PNG file.
+#         folder: Directory to save the PNG (default: 'charts_out').
+
+#     Returns:
+#         File path of the saved PNG as a string.
+
+#     Raises:
+#         ValueError: If chart is not an Altair chart object.
+#         RuntimeError: If chart rendering fails.
+#     """
+  
+
+#     if not isinstance(chart, alt.TopLevelMixin):
+#         raise ValueError(f"Expected alt.TopLevelMixin (Chart or LayerChart), got {type(chart)}")
+
+#     # folder_path = Path(folder)
+#     # folder_path.mkdir(exist_ok=True)
+#     # out_path = folder_path / f"{var_name}.png"
+
+#     save_dir = "charts_out"
+#     os.makedirs(save_dir, exist_ok=True)
+#     out_path = os.path.join(save_dir, f"{var_name}_tta_chart.png")
+
+#     try:
+#         altair_saver.save(chart, out_path, method="selenium", webdriver="chrome")
+#         logging.debug(f"Saved Altair chart to {out_path}")
+#         return str(out_path)  # Store absolute path for consistency
+#     except Exception as e:
+#         logging.error(f"Failed to render Altair chart {var_name}: {str(e)}", exc_info=True)
+#         raise RuntimeError(f"Failed to render Altair chart {var_name}: {str(e)}")
+    
+
 def altair_chart_to_path(chart: alt.TopLevelMixin, var_name: str, folder: str = "charts_out") -> str:
     """
-    Save an Altair chart as PNG to disk and return its file path.
+    Save an Altair chart as PNG to disk using vl-convert-python directly.
+    Bypasses Altair's internal save method that might fall back to altair_saver.
 
     Args:
         chart: Altair chart object (Chart or LayerChart) to render.
@@ -769,28 +808,47 @@ def altair_chart_to_path(chart: alt.TopLevelMixin, var_name: str, folder: str = 
         ValueError: If chart is not an Altair chart object.
         RuntimeError: If chart rendering fails.
     """
-  
-
+    import os
+    import logging
+    
     if not isinstance(chart, alt.TopLevelMixin):
         raise ValueError(f"Expected alt.TopLevelMixin (Chart or LayerChart), got {type(chart)}")
 
-    # folder_path = Path(folder)
-    # folder_path.mkdir(exist_ok=True)
-    # out_path = folder_path / f"{var_name}.png"
-
+    # Create output directory
     save_dir = "charts_out"
     os.makedirs(save_dir, exist_ok=True)
     out_path = os.path.join(save_dir, f"{var_name}_tta_chart.png")
 
     try:
-        altair_saver.save(chart, out_path, method="selenium", webdriver="chrome")
-        logging.debug(f"Saved Altair chart to {out_path}")
-        return str(out_path)  # Store absolute path for consistency
+        # Use vl-convert-python directly to avoid altair_saver fallback
+        import vl_convert as vlc
+        
+        # Get the chart specification as a dictionary
+        chart_spec = chart.to_dict()
+        
+        # Convert to PNG using vl-convert directly
+        png_data = vlc.vegalite_to_png(
+            vl_spec=chart_spec,
+            scale=2.0,  # Higher resolution
+            ppi=150     # DPI for better quality
+        )
+        
+        # Write PNG data to file
+        with open(out_path, 'wb') as f:
+            f.write(png_data)
+        
+        logging.debug(f"Saved Altair chart using vl-convert-python directly to {out_path}")
+        return str(out_path)
+        
+    except ImportError:
+        logging.error("vl-convert-python is not installed. Install it with: pip install vl-convert-python")
+        raise RuntimeError(f"vl-convert-python is required but not installed")
+        
     except Exception as e:
-        logging.error(f"Failed to render Altair chart {var_name}: {str(e)}", exc_info=True)
+        logging.error(f"Failed to render Altair chart {var_name} using vl-convert: {str(e)}", exc_info=True)
         raise RuntimeError(f"Failed to render Altair chart {var_name}: {str(e)}")
     
-  
+    
 def save_gt_table_smart(gt_table, file_path, var_name):
     """
     Intelligently save GT table with optimal window size based on content and table type.

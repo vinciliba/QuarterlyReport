@@ -1589,7 +1589,29 @@ elif selected_section == "report_structure":
                                  'H2020': {'IP' : 1, 'FP' : 1, 'Experts':0 , 'H2020': 0.9996},
                                  'HEU': {'PF': 0.9933, 'IP' :1, 'FP' : 1, 'Experts':0.9943, 'HEU': 0.9943},
                                  'ALL' :{'TOTAL':0.996}
-                                  }
+                                  },
+
+            "Administrative_expenditure_Effectiveness" : { 
+                                 'Current': 0.985,
+                                 'Old': 0.975,
+                                 'Target' :"99% in 30 days"
+                                  },
+            "Expert_meetings_Effectiveness" : { 
+                                 'Current': 'na',
+                                 'Old':'na',
+                                 'Target' :'na'
+                                  },
+              "Administrative_expenditure_ttp" : { 
+                                 'Current': 7.8,
+                                 'Old': 7.6,
+                                 'Target' :"30 days"
+                                  },
+            "Expert_meetings_ttp" : { 
+                                 'Current': 'na',
+                                 'Old':'na',
+                                 'Target' : "30 days"
+                                  },
+                        
                 
                
       }
