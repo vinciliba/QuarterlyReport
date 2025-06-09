@@ -1101,6 +1101,128 @@ def save_gt_table_smart(gt_table, file_path, var_name):
             f"Failed to save GT table {var_name} - file not created")
 
     
+# def insert_variable(
+#     report: str,
+#     module: str,
+#     var: str,
+#     value: Any,
+#     db_path: str,
+#     anchor: str | None = None,
+#     gt_table: great_tables.GT | None = None,
+#     altair_chart: alt.TopLevelMixin | None = None,
+# ) -> None:
+#     """
+#     Overwrite the row (report_name, var_name) with a new value (and picture path).
+#     Enhanced with better timing and error handling.
+#     """
+#     import time
+#     import gc  # Garbage collection
+    
+#     if gt_table is not None and altair_chart is not None:
+#         raise ValueError("Cannot provide both gt_table and altair_chart")
+#     if gt_table is not None and not isinstance(gt_table, great_tables.GT):
+#         raise ValueError(f"Expected great_tables.GT, got {type(gt_table)}")
+#     if altair_chart is not None and not isinstance(altair_chart, alt.TopLevelMixin):
+#         raise ValueError(f"Expected alt.TopLevelMixin (Chart or LayerChart), got {type(altair_chart)}")
+
+#     con = sqlite3.connect(db_path)
+#     cur = con.cursor()
+#     try:
+#         # 1) Remove any previous copy of this variable
+#         cur.execute(
+#             "DELETE FROM report_variables WHERE report_name = ? AND var_name = ?",
+#             (report, var),
+#         )
+
+#         # 2) Serialize the Python value
+#         val_json = json.dumps(value, default=str)
+
+#         # 3) Optional: Render great-tables or Altair chart to PNG and store the path
+#         gt_image = None
+#         if gt_table is not None:
+#             logging.debug(f"Rendering gt_table for {var}")
+#             tmp = Path(f"charts_out/{var}_gt.png")
+#             tmp.parent.mkdir(exist_ok=True)
+
+#              # Smart GT table save with automatic size detection
+#             gt_image = save_gt_table_smart(gt_table, tmp, var)
+            
+#             # Post-render delay to ensure file is fully written and resources are freed
+#             time.sleep(0.5)
+#             logging.debug(f"Saved great_tables to {gt_image}")
+            
+#         elif altair_chart is not None:
+#             logging.debug(f"Rendering altair_chart for {var}")
+#             gt_image = altair_chart_to_path(altair_chart, var)
+#             time.sleep(0.3)  # Small delay after Altair render too
+#             logging.debug(f"Saved Altair chart path: {gt_image}")
+
+#         # 4) Insert the fresh row
+#         cur.execute(
+#             """
+#             INSERT INTO report_variables
+#                   (report_name, module_name, var_name,
+#                    anchor_name, value, gt_image, created_at)
+#             VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+#             """,
+#             (report, module, var, anchor or var, val_json, gt_image),
+#         )
+
+#         con.commit()
+#         logging.debug("Stored variable %s for report %s (rowid=%s)",
+#                       var, report, cur.lastrowid)
+
+#     except Exception as exc:
+#         con.rollback()
+#         logging.error("insert_variable failed for %s/%s: %s", report, var, exc, exc_info=True)
+#         raise
+#     finally:
+#         con.close()
+
+
+def save_gt_table_simple(gt_table, file_path, var_name):
+    """
+    Simple GT table save without complex retry logic
+    """
+    from pathlib import Path
+    import time
+    import logging
+    
+    file_path = Path(file_path)
+    file_path.parent.mkdir(exist_ok=True)
+    
+    # Delete existing file if it exists
+    if file_path.exists():
+        try:
+            file_path.unlink()
+            time.sleep(0.1)
+        except Exception as e:
+            logging.warning(f"Could not delete existing file {file_path}: {e}")
+    
+    try:
+        # Simple save with reasonable defaults - no complex retry logic
+        gt_table.save(
+            file=file_path,
+            web_driver='chrome',
+            window_size=(1400, 800),  # Fixed reasonable size for TTP tables
+        )
+        
+        # Single delay
+        time.sleep(1.5)
+        
+        # Verify file exists
+        if file_path.exists() and file_path.stat().st_size > 1000:  # Basic size check
+            logging.debug(f"Saved GT table {var_name} to {file_path}")
+            return str(file_path)
+        else:
+            logging.warning(f"GT table {var_name} save failed - file too small or missing")
+            return None
+            
+    except Exception as e:
+        logging.error(f"Failed to save GT table {var_name}: {e}")
+        return None
+
+
 def insert_variable(
     report: str,
     module: str,
@@ -1110,10 +1232,14 @@ def insert_variable(
     anchor: str | None = None,
     gt_table: great_tables.GT | None = None,
     altair_chart: alt.TopLevelMixin | None = None,
+    simple_gt_save: bool = False,  # NEW PARAMETER - when True, uses simple save
 ) -> None:
     """
     Overwrite the row (report_name, var_name) with a new value (and picture path).
     Enhanced with better timing and error handling.
+    
+    Args:
+        simple_gt_save: If True, uses simple GT save instead of complex smart save
     """
     import time
     import gc  # Garbage collection
@@ -1144,8 +1270,13 @@ def insert_variable(
             tmp = Path(f"charts_out/{var}_gt.png")
             tmp.parent.mkdir(exist_ok=True)
 
-             # Smart GT table save with automatic size detection
-            gt_image = save_gt_table_smart(gt_table, tmp, var)
+            # Choose saving method based on parameter
+            if simple_gt_save:
+                # Use simple GT table save (no complex retry logic)
+                gt_image = save_gt_table_simple(gt_table,tmp, var)
+            else:
+                # Use smart GT table save with automatic size detection (original behavior)
+                gt_image = save_gt_table_smart(gt_table, tmp, var)
             
             # Post-render delay to ensure file is fully written and resources are freed
             time.sleep(0.5)
@@ -1178,7 +1309,6 @@ def insert_variable(
         raise
     finally:
         con.close()
-
 
 def fetch_vars_for_report(report_name, db_path):
     con = sqlite3.connect(db_path)
