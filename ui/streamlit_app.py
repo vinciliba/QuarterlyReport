@@ -2207,8 +2207,8 @@ elif selected_section == "report_structure":
             "EXCLUDE_TOPICS" : ["ERC-2023-SJI-1", "ERC-2023-SJI","ERC-2024-PERA","HORIZON-ERC-2022-VICECHAIRS-IBA","HORIZON-ERC-2023-VICECHAIRS-IBA",
             "HORIZON-ERC-2025-NCPS-IBA"
            ],
-           "TABLE_COLORS" :{ "BLUE" : "#004A99" , "LIGHT_BLUE" : "#d6e6f4" , "GRID_CLR" : "#004A99" , "DARK_BLUE" :"#01244B",  "DARK_GREY" : '#242425',
-           "heading_background_color": "#004A99","row_group_background_color": "#d6e6f4", "border_color": "#01244B", "stub_background_color": "#d6e6f4",
+           "TABLE_COLORS" :{ "BLUE" : "#2773C5" , "LIGHT_BLUE" : "#B9DBFF" , "GRID_CLR" : "#004A99" , "DARK_BLUE" :"#1B5390",  "DARK_GREY" : '#242425',
+           "heading_background_color": "#1B5390","row_group_background_color": "#d6e6f4", "border_color": "#01244B", "stub_background_color": "#d6e6f4",
            "body_background_color": "#ffffff", "subtotal_background_color": "#E6E6FA", "text_color": "#01244B"
            },
            "HEU_Calls" : ['ERC-2021-ADG','ERC-2021-COG','ERC-2021-STG','ERC-2022-ADG','ERC-2022-COG' , 'ERC-2022-POC1', 'ERC-2022-POC2 (02/22)', 'ERC-2022-POC2 (05/22)','ERC-2022-POC2 (09/22)',

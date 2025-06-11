@@ -1063,49 +1063,6 @@ def save_gt_table_smart(gt_table, file_path, var_name):
             f"Failed to save GT table {var_name} - file not created")
 
     
-
-# def save_gt_table_simple(gt_table, file_path, var_name):
-#     """
-#     Simple GT table save without complex retry logic
-#     """
-#     from pathlib import Path
-#     import time
-#     import logging
-    
-#     file_path = Path(file_path)
-#     file_path.parent.mkdir(exist_ok=True)
-    
-#     # Delete existing file if it exists
-#     if file_path.exists():
-#         try:
-#             file_path.unlink()
-#             time.sleep(0.1)
-#         except Exception as e:
-#             logging.warning(f"Could not delete existing file {file_path}: {e}")
-    
-#     try:
-#         # Simple save with reasonable defaults - no complex retry logic
-#         gt_table.save(
-#             file=file_path,
-#             web_driver='chrome',
-#             window_size=(1400, 800),  # Fixed reasonable size for TTP tables
-#         )
-        
-#         # Single delay
-#         time.sleep(1.5)
-        
-#         # Verify file exists
-#         if file_path.exists() and file_path.stat().st_size > 1000:  # Basic size check
-#             logging.debug(f"Saved GT table {var_name} to {file_path}")
-#             return str(file_path)
-#         else:
-#             logging.warning(f"GT table {var_name} save failed - file too small or missing")
-#             return None
-            
-#     except Exception as e:
-#         logging.error(f"Failed to save GT table {var_name}: {e}")
-#         return None
-
 def save_gt_table_simple(gt_table, file_path, var_name, width=1400, height=800):
     """
     Simple GT table save without complex retry logic
