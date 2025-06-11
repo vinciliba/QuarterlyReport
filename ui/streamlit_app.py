@@ -161,6 +161,12 @@ def _pretty_print_value(value: str | None) -> None:
     else:
         st.code(str(parsed))
 
+# Helper function to fetch raw value
+def _fetch_raw_value(report: str, var: str) -> str | None:
+    q = "SELECT value FROM report_variables WHERE report_name = ? AND var_name = ? ORDER BY created_at DESC LIMIT 1"
+    with sqlite3.connect(DB_PATH) as con:
+        row = con.execute(q, (report, var)).fetchone()
+    return row[0] if row else None
 
 # ──────────────────────────────────────────────────
 # WORKFLOW – Launch & Validation (Refactored)
@@ -353,6 +359,387 @@ if selected_section == "workflow":
 ###############################################################################
 # EXPORT REPORT TAB                                                       #####
 ###############################################################################
+# if selected_section == "export_report":
+#     from PIL import Image
+#     from docxtpl import DocxTemplate, InlineImage
+#     from datetime import timedelta
+
+#     # helper that also fetches raw value (extra query)
+#     def _fetch_raw_value(report: str, var: str) -> str | None:
+#         q = "SELECT value FROM report_variables WHERE report_name = ? AND var_name = ? ORDER BY created_at DESC LIMIT 1"
+#         with sqlite3.connect(DB_PATH) as con:
+#             row = con.execute(q, (report, var)).fetchone()
+#         return row[0] if row else None
+
+#     st.title("📤 Export Final Report")
+#     reports_df = get_all_reports(DB_PATH)
+#     if reports_df.empty:
+#         st.info("No reports available.")
+#         st.stop()
+
+#     chosen_report = st.selectbox("Select Report", reports_df["report_name"].tolist())
+
+#     # ---------------- Variable snapshot ----------------
+#     snap_df = get_variable_status(chosen_report, DB_PATH)
+#     if "anchor_name" in snap_df.columns:
+#         snap_df = snap_df[["anchor_name"] + [c for c in snap_df.columns if c != "anchor_name"]]
+
+#     def _age_style(r):
+#         return ["background-color:#ffd6d6" if r.get("age_days", 0) > 5 else "" for _ in r]
+
+#     st.markdown("### 🧠 Variables Snapshot")
+#     st.dataframe(snap_df.style.hide(axis="index").apply(_age_style, axis=1), use_container_width=True)
+
+#     # ---------------- FILTERS SECTION ----------------
+#     st.markdown("### 🔍 Filters")
+    
+#     # Debug: Show available columns
+#     st.caption(f"Available columns: {', '.join(snap_df.columns.tolist())}")
+    
+#     # Create filter columns
+#     filter_col1, filter_col2 = st.columns(2)
+    
+#     # Initialize filter variables
+#     selected_modules = st.session_state.get("selected_modules", [])
+#     selected_datetime_combinations = st.session_state.get("selected_datetime_combinations", [])
+#     module_column = None
+#     created_column = None
+    
+#     with filter_col1:
+#         # Module Name Filter - Dynamic Picker based on module_name
+#         possible_module_columns = ['module_name', 'Module', 'module', 'Module_Name']
+        
+#         for col in possible_module_columns:
+#             if col in snap_df.columns:
+#                 module_column = col
+#                 break
+        
+#         if not module_column:
+#             st.warning("No module column (e.g., module_name) found in the data. Check get_variable_status function.")
+#         elif snap_df[module_column].dropna().empty:
+#             st.info(f"Module column '{module_column}' is empty.")
+#         else:
+#             # Filter snap_df by selected_datetime_combinations
+#             temp_df = snap_df.copy()
+#             if selected_datetime_combinations and created_column:
+#                 temp_df = temp_df[temp_df[created_column].isin(selected_datetime_combinations)]
+            
+#             # Get unique module names with counts from the filtered data
+#             module_counts = temp_df[module_column].value_counts().sort_index()
+#             module_options = [f"{module} ({count})" for module, count in module_counts.items() if pd.notna(module)]
+            
+#             # Update selected_modules based on available options
+#             selected_module_displays = [m for m in st.session_state.get("selected_module_displays", []) if m in module_options]
+#             selected_module_displays = st.multiselect(
+#                 f"📁 Filter by Module(s) - {module_column}",
+#                 options=module_options,
+#                 default=selected_module_displays,
+#                 key="module_select",
+#                 help="Select one or more modules to filter by"
+#             )
+            
+#             # Map display text back to module names and store in session state
+#             selected_modules = [display.split(" (")[0] for display in selected_module_displays]
+#             st.session_state.selected_modules = selected_modules
+#             st.session_state.selected_module_displays = selected_module_displays
+    
+#     with filter_col2:
+#         # Split Date/Time Filter with 10-minute intervals
+#         possible_date_columns = ['created_at', 'Created_At', 'created', 'timestamp', 'date']
+        
+#         for col in possible_date_columns:
+#             if col in snap_df.columns:
+#                 created_column = col
+#                 break
+        
+#         if created_column and not snap_df[created_column].dropna().empty:
+#             # Convert to datetime
+#             snap_df[created_column] = pd.to_datetime(snap_df[created_column])
+            
+#             # Create separate day and time interval columns
+#             snap_df['date_only'] = snap_df[created_column].dt.date
+#             snap_df['time_interval'] = snap_df[created_column].dt.floor('10min').dt.time
+            
+#             # Create sub-columns for day and time
+#             date_subcol1, date_subcol2 = st.columns(2)
+            
+#             with date_subcol1:
+#                 # Day Filter
+#                 date_counts = snap_df['date_only'].value_counts().sort_index(ascending=False)
+                
+#                 if not date_counts.empty:
+#                     date_options = []
+#                     date_mapping = {}
+                    
+#                     for date_val, count in date_counts.items():
+#                         if pd.notna(date_val):
+#                             display_text = f"{date_val} ({count})"
+#                             date_options.append(display_text)
+#                             date_mapping[display_text] = date_val
+                    
+#                     # Default to most recent date
+#                     default_date = [date_options[0]] if date_options else []
+#                     selected_date_displays = st.multiselect(
+#                         "📅 Day",
+#                         options=date_options,
+#                         default=default_date,
+#                         key="date_select",
+#                         help="Select day(s)"
+#                     )
+#                     selected_dates = [date_mapping[display] for display in selected_date_displays if display in date_mapping]
+#                 else:
+#                     selected_dates = []
+            
+#             with date_subcol2:
+#                 # Time Interval Filter (only show intervals for selected dates)
+#                 if selected_dates:
+#                     date_filtered_df = snap_df[snap_df['date_only'].isin(selected_dates)]
+#                     time_interval_counts = date_filtered_df['time_interval'].value_counts().sort_index()
+                    
+#                     if not time_interval_counts.empty:
+#                         time_options = []
+#                         time_mapping = {}
+                        
+#                         for time_val, count in time_interval_counts.items():
+#                             if pd.notna(time_val):
+#                                 display_text = f"{time_val.strftime('%H:%M')} - {(pd.Timestamp.combine(pd.Timestamp.today(), time_val) + timedelta(minutes=10)).time().strftime('%H:%M')} ({count})"
+#                                 time_options.append(display_text)
+#                                 time_mapping[display_text] = time_val
+                        
+#                         selected_time_interval_displays = st.multiselect(
+#                             "🕐 Time Intervals (10-min)",
+#                             options=time_options,
+#                             default=time_options if not st.session_state.get("selected_time_interval_displays") else st.session_state.get("selected_time_interval_displays"),
+#                             key="time_select",
+#                             help="Select 10-minute time intervals for chosen day(s)"
+#                         )
+#                         selected_times = [time_mapping[display] for display in selected_time_interval_displays if display in time_mapping]
+#                         st.session_state.selected_time_interval_displays = selected_time_interval_displays
+#                     else:
+#                         selected_times = []
+#                         st.info("No time intervals found for selected dates")
+#                 else:
+#                     selected_times = []
+#                     st.info("Select a date first")
+            
+#             # Combine date and time filters and store in session state
+#             if selected_dates and selected_times:
+#                 selected_datetime_combinations = []
+#                 for date_val in selected_dates:
+#                     for time_val in selected_times:
+#                         matching_rows = snap_df[
+#                             (snap_df['date_only'] == date_val) & 
+#                             (snap_df['time_interval'] == time_val)
+#                         ]
+#                         if not matching_rows.empty:
+#                             selected_datetime_combinations.extend(matching_rows[created_column].tolist())
+#                 st.session_state.selected_datetime_combinations = selected_datetime_combinations
+#             else:
+#                 st.session_state.selected_datetime_combinations = []
+#         else:
+#             available_cols = [col for col in snap_df.columns if any(term in col.lower() for term in ['date', 'time', 'created'])]
+#             if available_cols:
+#                 st.info(f"Date columns found but empty: {', '.join(available_cols)}")
+#             else:
+#                 st.info("No date column found in data")
+    
+#     # Apply filters to snap_df
+#     filtered_snap_df = snap_df.copy()
+    
+#     # Apply date/time filter first
+#     if selected_datetime_combinations and created_column:
+#         filtered_snap_df = filtered_snap_df[filtered_snap_df[created_column].isin(selected_datetime_combinations)]
+    
+#     # Apply module filter after date/time filter
+#     if selected_modules and module_column:
+#         filtered_snap_df = filtered_snap_df[filtered_snap_df[module_column].isin(selected_modules)]
+    
+#     # Show filter results
+#     total_modules = len(snap_df[module_column].dropna().unique()) if module_column else 0
+#     total_datetimes = len(snap_df[created_column].dropna().unique()) if created_column else 0
+    
+#     # Check if filters are active
+#     module_filter_active = len(selected_modules) < total_modules if total_modules > 0 else False
+#     datetime_filter_active = len(selected_datetime_combinations) < total_datetimes if total_datetimes > 0 else False
+    
+#     if len(filtered_snap_df) != len(snap_df) or module_filter_active or datetime_filter_active:
+#         filter_info_col1, filter_info_col2 = st.columns(2)
+#         with filter_info_col1:
+#             st.info(f"🔍 **Filter Results:** {len(filtered_snap_df)} of {len(snap_df)} variables")
+            
+#             # Show active filters
+#             active_filters = []
+#             if module_filter_active:
+#                 active_filters.append(f"📁 {len(selected_modules)} of {total_modules} modules")
+#             if datetime_filter_active:
+#                 active_filters.append(f"📅 {len(selected_datetime_combinations)} of {total_datetimes} records")
+            
+#             if active_filters:
+#                 st.caption("Active filters: " + " • ".join(active_filters))
+        
+#         with filter_info_col2:
+#             if st.button("🔄 Reset All Filters", help="Reset to show all variables"):
+#                 st.session_state.selected_modules = []
+#                 st.session_state.selected_module_displays = []
+#                 st.session_state.selected_datetime_combinations = []
+#                 st.session_state.selected_time_interval_displays = []
+#                 st.rerun()
+    
+#     # Display filtered summary if filters are applied
+#     if len(filtered_snap_df) < len(snap_df):
+#         with st.expander("📊 Filtered Variables Summary", expanded=False):
+#             st.dataframe(
+#                 filtered_snap_df.style.hide(axis="index").apply(_age_style, axis=1), 
+#                 use_container_width=True
+#             )
+
+#     # ---------------- Visualisation chooser -------------
+#     st.markdown("### 📊 Select Tables/Charts to Visualize")
+    
+#     # Use filtered data for available options
+#     available = filtered_snap_df.get("var_name", pd.Series(dtype=str)).tolist()
+    
+#     if not available:
+#         st.warning("⚠️ No variables available with current filters. Please adjust your filter criteria.")
+#     else:
+#         # Group options by module for better UX
+#         if module_column and module_column in filtered_snap_df.columns:
+#             # Create a dictionary of module -> variables
+#             module_vars = {}
+#             for _, row in filtered_snap_df.iterrows():
+#                 module = row.get(module_column, "Unknown")
+#                 var_name = row.get("var_name", "")
+#                 if module not in module_vars:
+#                     module_vars[module] = []
+#                 if var_name:
+#                     module_vars[module].append(var_name)
+            
+#             # Show module breakdown
+#             with st.expander(f"📁 Available Variables by Module ({len(available)} total)", expanded=False):
+#                 for module, vars_list in module_vars.items():
+#                     st.write(f"**{module}:** {len(vars_list)} variables")
+#                     st.write(", ".join(vars_list[:5]) + ("..." if len(vars_list) > 5 else ""))
+        
+#         selected_tables = st.multiselect(
+#             "Choose table(s)/chart(s) to visualize", 
+#             available, 
+#             placeholder="Start typing variable names..."
+#         )
+
+#         if selected_tables:
+#             st.markdown("### 📊 GreatTables Images & Raw Values")
+#             for var_name in selected_tables:
+#                 # Get variable info for better display
+#                 var_rows = filtered_snap_df[filtered_snap_df["var_name"] == var_name]
+#                 if not var_rows.empty:
+#                     var_info = var_rows.iloc[0]
+#                     module_name = var_info.get(module_column, "Unknown") if module_column else "Unknown"
+#                     created_at = var_info.get(created_column, "Unknown") if created_column else "Unknown"
+#                 else:
+#                     module_name = "Unknown"
+#                     created_at = "Unknown"
+                
+#                 # Display variable metadata
+#                 st.markdown(f"#### 📈 {var_name}")
+#                 meta_col1, meta_col2 = st.columns(2)
+#                 with meta_col1:
+#                     st.markdown(f"**Module:** `{module_name}`")
+#                 with meta_col2:
+#                     st.markdown(f"**Created:** `{created_at}`")
+                
+#                 # Fetch gt_image (bytes or path) and anchor_name
+#                 gt_image, anchor_name = fetch_gt_image(chosen_report, var_name, DB_PATH)
+#                 if gt_image:
+#                     st.write(f"🔍 Image length: {len(str(gt_image))} bytes")
+#                     try:
+#                         if isinstance(gt_image, str):  # If gt_image is a file path (for charts)
+#                             image_path = Path(gt_image)
+#                             if image_path.exists():
+#                                 image = Image.open(image_path)
+#                                 st.image(image, caption=f"Image for {anchor_name}", use_container_width=True)
+#                             else:
+#                                 st.warning(f"Image file not found at {gt_image} for {var_name}")
+#                         else:  # If gt_image is bytes (for great_tables)
+#                             image = Image.open(io.BytesIO(gt_image))
+#                             st.image(image, caption=f"Image for {anchor_name}", use_container_width=True)
+#                     except Exception as exc:
+#                         st.warning(f"Failed to display image for {var_name}: {exc}")
+#                 else:
+#                     st.warning(f"No image found for {var_name}")
+
+#                 st.markdown(f"**Anchor name:** `{anchor_name or '–'}`")
+#                 st.markdown(f"**Raw value for `{var_name}`:**")
+#                 _pretty_print_value(_fetch_raw_value(chosen_report, var_name))
+                
+#                 st.markdown("---")  # Separator between variables
+
+#     # ---------------- Template render block -------------
+#     st.markdown("### 📄 Select Template or Use Existing Partial")
+#     tmpl_dir = Path("reporting/templates/docx")
+#     tmpl_files = list(tmpl_dir.glob("*.docx"))
+#     if not tmpl_files:
+#         st.error("No .docx templates found in reporting/templates/docx")
+#         st.stop()
+
+#     tmpl_choice = st.selectbox("Choose a template:", [p.name for p in tmpl_files])
+#     tmpl_path = tmpl_dir / tmpl_choice
+
+#     def _build_context(report: str, tpl: DocxTemplate) -> dict:
+#         q = "SELECT anchor_name, value, gt_image FROM report_variables WHERE report_name = ? ORDER BY created_at"
+#         df = pd.read_sql_query(q, sqlite3.connect(DB_PATH), params=(report,))
+#         ctx: dict[str, object] = {}
+#         for _idx, row in df.iterrows():
+#             anchor = row["anchor_name"]
+#             if row["gt_image"]:
+#                 if isinstance(row["gt_image"], str):  # If gt_image is a file path (for charts)
+#                     image_path = Path(row["gt_image"])
+#                     if image_path.exists():
+#                         with open(image_path, "rb") as f:
+#                             image_bytes = f.read()
+#                         ctx[anchor] = InlineImage(tpl, io.BytesIO(image_bytes), width=docx.shared.Inches(5))
+#                     else:
+#                         st.warning(f"Image file not found at {row['gt_image']} for {anchor}")
+#                         ctx[anchor] = None  # Skip in template to avoid breaking
+#                 else:  # If gt_image is bytes (for great_tables)
+#                     ctx[anchor] = InlineImage(tpl, io.BytesIO(row["gt_image"]), width=docx.shared.Inches(5))
+#             else:
+#                 try:
+#                     ctx[anchor] = json.loads(row["value"])
+#                 except (TypeError, ValueError):
+#                     ctx[anchor] = row["value"]
+#         return ctx
+    
+#     if st.button("📄 Render Final Report"):
+#         tpl = DocxTemplate(str(tmpl_path))
+#         context = _build_context(chosen_report, tpl)
+
+#         missing = tpl.get_undeclared_template_variables() - set(context.keys())
+#         if missing:
+#             st.warning("⚠️ Missing anchors: " + ", ".join(missing))
+#         else:
+#             st.success("All template anchors matched!")
+
+#         tpl.render(context, jinja_env=Environment(undefined=DebugUndefined))
+#         out_dir = Path("app_files") / chosen_report / datetime.today().strftime("%Y-%m-%d")
+#         out_dir.mkdir(parents=True, exist_ok=True)
+#         out_path = out_dir / "Final_Report.docx"
+#         tpl.save(out_path)
+#         st.success(f"Report saved → {out_path.absolute()}")
+#         with open(out_path, "rb") as fh:
+#             st.download_button("📥 Download Final Report", fh.read(), file_name="Final_Report.docx")
+
+#     # staged_docx save (unchanged)
+#     if "staged_docx" in st.session_state:
+#         with st.expander("💾 Save or Preview Staged Report", expanded=True):
+#             fname = f"partial_{chosen_report}_{datetime.today().strftime('%Y-%m-%d')}.docx"
+#             if st.button("💾 Save to app_files"):
+#                 out = Path("app_files") / fname
+#                 st.session_state.staged_docx.save(out)
+#                 st.success(f"Saved partial report as {fname} in app_files/")
+
+###############################################################################
+# EXPORT REPORT TAB                                                       #####
+###############################################################################
 if selected_section == "export_report":
     from PIL import Image
     from docxtpl import DocxTemplate, InlineImage
@@ -383,38 +770,298 @@ if selected_section == "export_report":
     st.markdown("### 🧠 Variables Snapshot")
     st.dataframe(snap_df.style.hide(axis="index").apply(_age_style, axis=1), use_container_width=True)
 
-    # ---------------- Visualisation chooser -------------
-    st.markdown("### 📊 Select Tables to Visualize")
-    available = snap_df.get("var_name", pd.Series(dtype=str)).tolist()
-    selected_tables = st.multiselect("Choose table(s) to visualize", available, placeholder="Start typing…")
-
-    if selected_tables:
-        st.markdown("### 📊 GreatTables Images & Raw Values")
-        for var_name in selected_tables:
-            # Fetch gt_image (bytes or path) and anchor_name
-            gt_image, anchor_name = fetch_gt_image(chosen_report, var_name, DB_PATH)
-            if gt_image:
-                st.write(f"🔍 Image length: {len(str(gt_image))} bytes")  # Length of path or bytes as string
-                try:
-                    if isinstance(gt_image, str):  # If gt_image is a file path (for charts)
-                        image_path = Path(gt_image)
-                        if image_path.exists():
-                            image = Image.open(image_path)
-                            st.image(image, caption=f"Image for {anchor_name}", use_container_width=True)
-                        else:
-                            st.warning(f"Image file not found at {gt_image} for {var_name}")
-                    else:  # If gt_image is bytes (for great_tables)
-                        image = Image.open(io.BytesIO(gt_image))
-                        st.image(image, caption=f"Image for {anchor_name}", use_container_width=True)
-                except Exception as exc:
-                    st.warning(f"Failed to display image for {var_name}: {exc}")
+    # ---------------- FILTERS SECTION ----------------
+    st.markdown("### 🔍 Filters")
+    
+    # Debug: Show available columns
+    st.caption(f"Available columns: {', '.join(snap_df.columns.tolist())}")
+    
+    # Create filter columns
+    filter_col1, filter_col2 = st.columns(2)
+    
+    # Initialize filter variables
+    selected_modules = []
+    selected_datetime_combinations = []
+    module_column = None
+    created_column = None
+    
+    with filter_col1:
+        # Module Name Filter - Check multiple possible column names
+        possible_module_columns = ['module_name', 'Module', 'module', 'Module_Name']
+        
+        for col in possible_module_columns:
+            if col in snap_df.columns:
+                module_column = col
+                break
+        
+        if module_column and not snap_df[module_column].dropna().empty:
+            # CASCADING FILTER: Filter by selected dates first (if any dates are selected)
+            if 'selected_dates' in locals() and selected_dates and created_column:
+                # Only show modules that have variables on the selected dates
+                date_filtered_for_modules = snap_df[snap_df['date_only'].isin(selected_dates)]
+                module_counts = date_filtered_for_modules[module_column].value_counts().sort_index()
+                filter_note = f" (filtered by {len(selected_dates)} selected date(s))"
             else:
-                st.warning(f"No image found for {var_name}")
+                # Show all modules if no date filter is active
+                module_counts = snap_df[module_column].value_counts().sort_index()
+                filter_note = " (all dates)"
+            
+            if not module_counts.empty:
+                # Create formatted options for display
+                module_options = []
+                module_mapping = {}
+                
+                for module_name, count in module_counts.items():
+                    if pd.notna(module_name):
+                        display_text = f"{module_name} ({count} variables)"
+                        module_options.append(display_text)
+                        module_mapping[display_text] = module_name
+                
+                selected_module_displays = st.multiselect(
+                    f"📁 Filter by Module(s) - {module_column}{filter_note}",
+                    options=module_options,
+                    default=module_options,  # Default to all available modules selected
+                    help="Select one or more modules to view. Options are filtered by selected date(s)."
+                )
+                
+                # Convert back to actual module names
+                selected_modules = [module_mapping[display] for display in selected_module_displays]
+            else:
+                selected_modules = []
+                st.info("No modules found for the selected date(s)")
+        else:
+            available_cols = [col for col in snap_df.columns if 'module' in col.lower()]
+            if available_cols:
+                st.info(f"Module columns found but empty: {', '.join(available_cols)}")
+            else:
+                st.info("No module name column found in data")
+    
+    with filter_col2:
+        # Split Date/Time Filter Approach
+        possible_date_columns = ['created_at', 'Created_At', 'created', 'timestamp', 'date']
+        
+        for col in possible_date_columns:
+            if col in snap_df.columns:
+                created_column = col
+                break
+        
+        if created_column and not snap_df[created_column].dropna().empty:
+            # Convert to datetime
+            snap_df[created_column] = pd.to_datetime(snap_df[created_column])
+            
+            # Create separate day and time columns
+            snap_df['date_only'] = snap_df[created_column].dt.date
+            snap_df['time_only'] = snap_df[created_column].dt.time
+            
+            # Create sub-columns for day and time
+            date_subcol1, date_subcol2 = st.columns(2)
+            
+            with date_subcol1:
+                # Day Filter
+                date_counts = snap_df['date_only'].value_counts().sort_index(ascending=False)
+                
+                if not date_counts.empty:
+                    date_options = []
+                    date_mapping = {}
+                    
+                    for date_val, count in date_counts.items():
+                        if pd.notna(date_val):
+                            display_text = f"{date_val} ({count})"
+                            date_options.append(display_text)
+                            date_mapping[display_text] = date_val
+                    
+                    # Default to most recent date
+                    default_date = [date_options[0]] if date_options else []
+                    
+                    selected_date_displays = st.multiselect(
+                        "📅 Day",
+                        options=date_options,
+                        default=default_date,
+                        help="Select day(s)"
+                    )
+                    
+                    selected_dates = [date_mapping[display] for display in selected_date_displays if display in date_mapping]
+                else:
+                    selected_dates = []
+            
+            with date_subcol2:
+                # Time Filter (only show times for selected dates)
+                if selected_dates:
+                    # Filter data by selected dates first
+                    date_filtered_df = snap_df[snap_df['date_only'].isin(selected_dates)]
+                    time_counts = date_filtered_df['time_only'].value_counts().sort_index(ascending=False)
+                    
+                    if not time_counts.empty:
+                        time_options = []
+                        time_mapping = {}
+                        
+                        for time_val, count in time_counts.items():
+                            if pd.notna(time_val):
+                                display_text = f"{time_val.strftime('%H:%M:%S')} ({count})"
+                                time_options.append(display_text)
+                                time_mapping[display_text] = time_val
+                        
+                        # Default to all times for selected dates
+                        selected_time_displays = st.multiselect(
+                            "🕐 Time",
+                            options=time_options,
+                            default=time_options,  # All times by default
+                            help="Select time(s) for chosen day(s)"
+                        )
+                        
+                        selected_times = [time_mapping[display] for display in selected_time_displays if display in time_mapping]
+                    else:
+                        selected_times = []
+                        st.info("No times found for selected dates")
+                else:
+                    selected_times = []
+                    st.info("Select a date first")
+            
+            # Combine date and time filters
+            if selected_dates and selected_times:
+                # Create datetime combinations for filtering
+                selected_datetime_combinations = []
+                for date_val in selected_dates:
+                    for time_val in selected_times:
+                        # Find rows that match both date and time
+                        matching_rows = snap_df[
+                            (snap_df['date_only'] == date_val) & 
+                            (snap_df['time_only'] == time_val)
+                        ]
+                        if not matching_rows.empty:
+                            selected_datetime_combinations.extend(matching_rows[created_column].tolist())
+        else:
+            available_cols = [col for col in snap_df.columns if any(term in col.lower() for term in ['date', 'time', 'created'])]
+            if available_cols:
+                st.info(f"Date columns found but empty: {', '.join(available_cols)}")
+            else:
+                st.info("No date column found in data")
 
-            st.markdown(f"**Anchor name:** `{anchor_name or '–'}`")
-            st.markdown(f"**Raw value for `{var_name}`:**")
-            _pretty_print_value(_fetch_raw_value(chosen_report, var_name))
+    # Apply filters to snap_df
+    filtered_snap_df = snap_df.copy()
+    
+    # Apply module filter
+    if selected_modules and module_column:
+        filtered_snap_df = filtered_snap_df[filtered_snap_df[module_column].isin(selected_modules)]
+    
+    # Apply date/time filter
+    if selected_datetime_combinations and created_column:
+        filtered_snap_df = filtered_snap_df[filtered_snap_df[created_column].isin(selected_datetime_combinations)]
+    
+    # Show filter results
+    total_modules = len(snap_df[module_column].dropna().unique()) if module_column else 0
+    total_datetimes = len(snap_df[created_column].dropna().unique()) if created_column else 0
+    
+    # Check if filters are active
+    module_filter_active = len(selected_modules) < total_modules if total_modules > 0 else False
+    datetime_filter_active = len(selected_datetime_combinations) < total_datetimes if total_datetimes > 0 else False
+    
+    if len(filtered_snap_df) != len(snap_df) or module_filter_active or datetime_filter_active:
+        filter_info_col1, filter_info_col2 = st.columns(2)
+        with filter_info_col1:
+            st.info(f"🔍 **Filter Results:** {len(filtered_snap_df)} of {len(snap_df)} variables")
+            
+            # Show active filters
+            active_filters = []
+            if module_filter_active:
+                active_filters.append(f"📁 {len(selected_modules)} of {total_modules} modules")
+            if datetime_filter_active:
+                active_filters.append(f"📅 {len(selected_datetime_combinations)} of {total_datetimes} records")
+            
+            if active_filters:
+                st.caption("Active filters: " + " • ".join(active_filters))
+        
+        with filter_info_col2:
+            if st.button("🔄 Reset All Filters", help="Reset to show all variables"):
+                st.rerun()
+    
+    # Display filtered summary if filters are applied
+    if len(filtered_snap_df) < len(snap_df):
+        with st.expander("📊 Filtered Variables Summary", expanded=False):
+            st.dataframe(
+                filtered_snap_df.style.hide(axis="index").apply(_age_style, axis=1), 
+                use_container_width=True
+            )
 
+    # ---------------- Visualisation chooser -------------
+    st.markdown("### 📊 Select Tables/Charts to Visualize")
+    
+    # Use filtered data for available options
+    available = filtered_snap_df.get("var_name", pd.Series(dtype=str)).tolist()
+    
+    if not available:
+        st.warning("⚠️ No variables available with current filters. Please adjust your filter criteria.")
+    else:
+        # Group options by module for better UX
+        if module_column and module_column in filtered_snap_df.columns:
+            # Create a dictionary of module -> variables
+            module_vars = {}
+            for _, row in filtered_snap_df.iterrows():
+                module = row.get(module_column, "Unknown")
+                var_name = row.get("var_name", "")
+                if module not in module_vars:
+                    module_vars[module] = []
+                if var_name:
+                    module_vars[module].append(var_name)
+            
+            # Show module breakdown
+            with st.expander(f"📁 Available Variables by Module ({len(available)} total)", expanded=False):
+                for module, vars_list in module_vars.items():
+                    st.write(f"**{module}:** {len(vars_list)} variables")
+                    st.write(", ".join(vars_list[:5]) + ("..." if len(vars_list) > 5 else ""))
+        
+        selected_tables = st.multiselect(
+            "Choose table(s)/chart(s) to visualize", 
+            available, 
+            placeholder="Start typing variable names..."
+        )
+
+        if selected_tables:
+            st.markdown("### 📊 GreatTables Images & Raw Values")
+            for var_name in selected_tables:
+                # Get variable info for better display
+                var_rows = filtered_snap_df[filtered_snap_df["var_name"] == var_name]
+                if not var_rows.empty:
+                    var_info = var_rows.iloc[0]
+                    module_name = var_info.get(module_column, "Unknown") if module_column else "Unknown"
+                    created_at = var_info.get(created_column, "Unknown") if created_column else "Unknown"
+                else:
+                    module_name = "Unknown"
+                    created_at = "Unknown"
+                
+                # Display variable metadata
+                st.markdown(f"#### 📈 {var_name}")
+                meta_col1, meta_col2 = st.columns(2)
+                with meta_col1:
+                    st.markdown(f"**Module:** `{module_name}`")
+                with meta_col2:
+                    st.markdown(f"**Created:** `{created_at}`")
+                
+                # Fetch gt_image (bytes or path) and anchor_name
+                gt_image, anchor_name = fetch_gt_image(chosen_report, var_name, DB_PATH)
+                if gt_image:
+                    st.write(f"🔍 Image length: {len(str(gt_image))} bytes")
+                    try:
+                        if isinstance(gt_image, str):  # If gt_image is a file path (for charts)
+                            image_path = Path(gt_image)
+                            if image_path.exists():
+                                image = Image.open(image_path)
+                                st.image(image, caption=f"Image for {anchor_name}", use_container_width=True)
+                            else:
+                                st.warning(f"Image file not found at {gt_image} for {var_name}")
+                        else:  # If gt_image is bytes (for great_tables)
+                            image = Image.open(io.BytesIO(gt_image))
+                            st.image(image, caption=f"Image for {anchor_name}", use_container_width=True)
+                    except Exception as exc:
+                        st.warning(f"Failed to display image for {var_name}: {exc}")
+                else:
+                    st.warning(f"No image found for {var_name}")
+
+                st.markdown(f"**Anchor name:** `{anchor_name or '–'}`")
+                st.markdown(f"**Raw value for `{var_name}`:**")
+                _pretty_print_value(_fetch_raw_value(chosen_report, var_name))
+                
+                st.markdown("---")  # Separator between variables
 
     # ---------------- Template render block -------------
     st.markdown("### 📄 Select Template or Use Existing Partial")
@@ -467,7 +1114,7 @@ if selected_section == "export_report":
         out_dir.mkdir(parents=True, exist_ok=True)
         out_path = out_dir / "Final_Report.docx"
         tpl.save(out_path)
-        st.success(f"Report saved → {out_path.absolute()}")  # Use absolute path instead of relative_to
+        st.success(f"Report saved → {out_path.absolute()}")
         with open(out_path, "rb") as fh:
             st.download_button("📥 Download Final Report", fh.read(), file_name="Final_Report.docx")
 
@@ -479,8 +1126,7 @@ if selected_section == "export_report":
                 out = Path("app_files") / fname
                 st.session_state.staged_docx.save(out)
                 st.success(f"Saved partial report as {fname} in app_files/")
-
-
+                
 #--------------------------------------------------------------------------
 # --- SINGLE UPLOAD -----------------------------------
 #--------------------------------------------------------------------------
