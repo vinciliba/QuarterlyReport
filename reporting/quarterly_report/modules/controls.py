@@ -10,7 +10,7 @@ from ingestion.db_utils import (
 )
 from reporting.quarterly_report.utils import RenderContext, BaseModule
 from ingestion.db_utils import load_report_params
-
+from typing import Tuple
 # ──────────────────────────────────────────────────────────────
 # COSTANTS
 # ──────────────────────────────────────────────────────────────
