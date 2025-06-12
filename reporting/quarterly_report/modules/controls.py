@@ -187,7 +187,6 @@ class ControlsModule(BaseModule):
     description = "Reinfoced Monitoring Table"
 
     def run(self, ctx: RenderContext) -> RenderContext:
-        log = logging.getLogger(self.name)
         conn = ctx.db.conn
         cutoff = pd.to_datetime(ctx.cutoff)
         db_path = Path(conn.execute("PRAGMA database_list").fetchone()[2])
@@ -350,7 +349,6 @@ class ControlsModule(BaseModule):
                     print("STYLED TABLE CREATED SUCCESSFULLY!")
                     print("="*50)
                     # Display the styled table
-                    styled_table.show()
                     
                     # Save to database with GT table
                     var_name = 'reinforced_monitoring_table'
@@ -366,6 +364,7 @@ class ControlsModule(BaseModule):
                             table_height=600        # Specify height
                         )
                         logger.debug(f"Saved {var_name} to database")
+                        print(f'\n🎉 SUCCESSFULLY saved {var_name} to database ')
                         
                     except Exception as e:
                         logger.error(f"Failed to save {var_name}: {str(e)}")
@@ -374,21 +373,7 @@ class ControlsModule(BaseModule):
                     print(f"Styling failed: {e}")
                     print("Displaying basic pivot table instead:")
                     print(pivot_table)
-                    
-                    # Fallback: Save without styling
-                    var_name = 'reinforced_monitoring_table'
-                    try:
-                        logger.debug(f"Saving {var_name} to database (without styling)")
-                        insert_variable(
-                            report=report, module="ReinMonModule", var=var_name,
-                            value=pivot_table,
-                            db_path=db_path, anchor=var_name
-                        )
-                        logger.debug(f"Saved {var_name} to database")
-                        
-                    except Exception as e:
-                        logger.error(f"Failed to save {var_name}: {str(e)}")
-                
+                 
             else:
                 print("Cannot create styled table - pivot table is empty")
 
