@@ -6,7 +6,7 @@ from reporting.quarterly_report.modules.controls import ControlsModule
 from reporting.quarterly_report.modules.edes import EdesModule
 from reporting.quarterly_report.modules.gf import GFModule
 from reporting.quarterly_report.modules.invoices import InvoicesModule
-from reporting.quarterly_report.modules.kpis import KPIsModule
+from reporting.quarterly_report.modules.comments import CommentsModule
 from reporting.quarterly_report.modules.payments import PaymentsModule
 from reporting.quarterly_report.modules.amendments import AmendmentModule
 
@@ -19,7 +19,7 @@ MODULES = {
     "Edes": EdesModule,
     "GF": GFModule,
     "Invoices": InvoicesModule,
-    "KPIs": KPIsModule,
+    "Comments": CommentsModule,
     "Payments": PaymentsModule,
     "Amendments": AmendmentModule
 }
