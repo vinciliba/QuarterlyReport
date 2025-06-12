@@ -39,12 +39,6 @@ logger = logging.getLogger(__name__)
 # 🧪 TESTING AND UTILITIES
 # ================================================================
 
-
-
-# ================================================================
-# 🧪 TESTING AND UTILITIES
-# ================================================================
-
 def test_comments_module(
     report_name: str = "Quarterly_Report",
     db_path: str = "database/reporting.db",
@@ -179,17 +173,82 @@ class CommentsConfig:
     
     # 🔄 Loop Configuration
     LOOP_PROGRAMS = ['HEU', 'H2020']
-    LOOP_CALL_TYPES = ['STG', 'ADG', 'POC', 'COG', 'SYG', 'CSA']
+    LOOP_CALL_TYPES = ['STG', 'ADG', 'POC', 'COG', 'SYG']
     
     # 📋 Detailed Call Type Definitions
+        # 📋 Call Type Details (corrected - you'll fix the mappings)
     DETAILED_CALL_TYPES = [
-        {'code': 'A.1', 'description': 'Pre-financing and Interim Payments', 'abbreviation': 'STG'},
-        {'code': 'A.2', 'description': 'Final Payments', 'abbreviation': 'ADG'},
-        {'code': 'B.1', 'description': 'Coordination Support Actions', 'abbreviation': 'CSA'},
-        {'code': 'B.2', 'description': 'Research and Innovation Actions', 'abbreviation': 'RIA'},
-        {'code': 'C.1', 'description': 'Innovation Actions', 'abbreviation': 'IA'},
+        {'code': 'STG', 'description': 'Starting Grant - Early career researchers', 'abbreviation': 'STG'},
+        {'code': 'ADG', 'description': 'Advanced Grant - Established researchers', 'abbreviation': 'ADG'},
+        {'code': 'COG', 'description': 'Consolidator Grant - Mid-career researchers', 'abbreviation': 'COG'},
+        {'code': 'POC', 'description': 'Proof of Concept - Commercialization support', 'abbreviation': 'POC'},
+        {'code': 'SYG', 'description': 'Synergy Grant - Collaborative research teams', 'abbreviation': 'SYG'},
+        {'code': 'CSA', 'description': 'Coordination and Support Action', 'abbreviation': 'CSA'},
+        {'code': 'RIA', 'description': 'Research and Innovation Action', 'abbreviation': 'RIA'},
+        {'code': 'IA', 'description': 'Innovation Action', 'abbreviation': 'IA'},
     ]
 
+    ACRONYMS_DICTIONARY = {
+        # 🎯 Call Types (from your PaymentsModule CALLS_TYPES_LIST)
+        'STG': {'full_name': 'Starting Grant', 'category': 'call_type', 'description': 'ERC Starting Grants for early-career researchers'},
+        'ADG': {'full_name': 'Advanced Grant', 'category': 'call_type', 'description': 'ERC Advanced Grants for established researchers'},
+        'POC': {'full_name': 'Proof of Concept', 'category': 'call_type', 'description': 'ERC Proof of Concept grants for commercialization'},
+        'COG': {'full_name': 'Consolidator Grant', 'category': 'call_type', 'description': 'ERC Consolidator Grants for researchers 7-12 years post-PhD'},
+        'SYG': {'full_name': 'Synergy Grant', 'category': 'call_type', 'description': 'ERC Synergy Grants for collaborative research teams'},
+        'CSA': {'full_name': 'Coordination and Support Action', 'category': 'call_type', 'description': 'Supporting and coordination measures'},
+        'RIA': {'full_name': 'Research and Innovation Action', 'category': 'call_type', 'description': 'Primary research and innovation funding instrument'},
+        'IA': {'full_name': 'Innovation Action', 'category': 'call_type', 'description': 'Innovation activities closer to market'},
+        'EXPERTS': {'full_name': 'Expert Services', 'category': 'call_type', 'description': 'Expert evaluation and support services'},
+        
+        # 📊 Programs (from your financial_data mappings)
+        'H2020': {'full_name': 'Horizon 2020', 'category': 'program', 'description': 'EU Research and Innovation Framework Programme 2014-2020'},
+        'HEU': {'full_name': 'Horizon Europe', 'category': 'program', 'description': 'EU Research and Innovation Framework Programme 2021-2027'},
+        'HORIZON': {'full_name': 'Horizon Europe', 'category': 'program', 'description': 'Alternative reference to Horizon Europe programme'},
+        
+        # ⏱️ Time Metrics (from your PaymentsModule)
+        'TTP': {'full_name': 'Time to Pay', 'category': 'time_metric', 'description': 'Processing time from payment request to actual payment'},
+        'TTG': {'full_name': 'Time to Grant', 'category': 'time_metric', 'description': 'Processing time from proposal submission to grant decision'},
+        'TTS': {'full_name': 'Time to Sign', 'category': 'time_metric', 'description': 'Time from grant decision to grant agreement signature'},
+        'TTA': {'full_name': 'Time to Amend', 'category': 'time_metric', 'description': 'Processing time for grant agreement amendments'},
+        
+        # 💰 Payment Types (from your financial data)
+        'FP': {'full_name': 'Final Payment', 'category': 'payment_type', 'description': 'Final payment at project completion'},
+        'IP': {'full_name': 'Interim Payment', 'category': 'payment_type', 'description': 'Periodic payments during project implementation'},
+        'PF': {'full_name': 'Pre-financing', 'category': 'payment_type', 'description': 'Initial payment made upon grant agreement signature'},
+        
+        # 🏛️ Organizations (from your PaymentsModule)
+        'REA': {'full_name': 'Research Executive Agency', 'category': 'organization', 'description': 'EU executive agency managing research funding'},
+        'EACEA': {'full_name': 'European Education and Culture Executive Agency', 'category': 'organization', 'description': 'EU agency for education and culture programs'},
+        'ERC': {'full_name': 'European Research Council', 'category': 'organization', 'description': 'EU funding body for frontier research'},
+        'ERCEA': {'full_name': 'European Research Council Executive Agency', 'category': 'organization', 'description': 'Executive agency implementing ERC grants'},
+        
+        # 🔍 Audit and Recovery (from your financial_data)
+        'AURI': {'full_name': 'Audit and Recovery Implementation', 'category': 'audit', 'description': 'EU audit and financial recovery processes'},
+        'CFS': {'full_name': 'Certificate on Financial Statements', 'category': 'audit', 'description': 'Required audit certificate for large grants'},
+        
+        # 📋 Document Types
+        'MGA': {'full_name': 'Model Grant Agreement', 'category': 'document', 'description': 'Standard EU grant agreement template'},
+        'GA': {'full_name': 'Grant Agreement', 'category': 'document', 'description': 'Legal contract between EU and beneficiaries'},
+        'PTR': {'full_name': 'Periodic Technical Report', 'category': 'document', 'description': 'Regular technical progress reports'},
+        'ESR': {'full_name': 'Evaluation Summary Report', 'category': 'document', 'description': 'Summary of project evaluation results'},
+        
+        # 🏢 Administrative 
+        'PIC': {'full_name': 'Participant Identification Code', 'category': 'administrative', 'description': '9-digit unique identifier for organizations'},
+        'LEAR': {'full_name': 'Legal Entity Appointed Representative', 'category': 'administrative', 'description': 'Person authorized to represent organization legally'},
+        'PO': {'full_name': 'Purchase Order', 'category': 'administrative', 'description': 'Procurement order reference'},
+        'SAP': {'full_name': 'Systems, Applications, Products', 'category': 'system', 'description': 'Enterprise resource planning system'},
+        'ABAC': {'full_name': 'Accruals Based Accounting', 'category': 'system', 'description': 'Old EU Commission budgetary system'},
+        'SUMMA': {'full_name': "‘Summa de arithmetica, geometria, proportioni et proportionalita’ (Summary of Arithmetic, Geometry, Proportions and Proportionality) is a book on mathematics by Luca Pacioli, first published in 1494. It is the first printed work on algebra and contains the first published description of the double-entry bookkeeping system. It set a new standard for writing and argumentation about algebra, and its impact upon the subsequent development and standardisation of professional accounting methods was so great that Pacioli is sometimes called the 'father of accounting'.", 'category': 'system', 'description': "Current EU Commission budgetary system, SUMMA is a state-of-the-art system that us​​h​​ers in a new era in EU accounting, finance and budgeting, supporting key day-to-day activities in a more efficient and ​simplified way. SUMMA contributes to the rationalisation and modernisation of the EU administration and to a sound EC corporate IT landscape, in line with the EU's Digital Strategy. It is based on a commercial off-the-shelf software, namely S​​AP S/4HANA, adapted to the specific needs of the European Institutions. "},
+        'Project FDI':{'full_name':'Project final date for implementation', 'description':'max date for executing a payment for implementing a grant contract'},
+        
+        # 🌍 Geographical/Political
+        'EU': {'full_name': 'European Union', 'category': 'organization', 'description': 'Political and economic union of European countries'},
+        'EC': {'full_name': 'European Commission', 'category': 'organization', 'description': 'Executive branch of the European Union'},
+        
+        # 📊 Financial Terms
+        'FDI': {'full_name': 'Foreign Direct Investment', 'category': 'financial', 'description': 'Investment threshold for certain grants'},
+        'VAT': {'full_name': 'Value Added Tax', 'category': 'financial', 'description': 'European consumption tax'},
+    }
 # ================================================================
 # 🤖 COMMENTS MODULE
 # ================================================================
@@ -280,6 +339,10 @@ class CommentsModule(BaseModule):
                 
             # Log available tables
             print(f"📊 Available tables: {list(financial_data.keys())[:10]}{'...' if len(financial_data) > 10 else ''}")
+            # Detect acronyms in the data for AI context
+            detected_acronyms = self._detect_acronyms_in_data(financial_data)
+            acronym_context = self.create_acronym_context_for_ai(detected_acronyms)  # ✅ Fixed reference
+            print(f"📝 Detected {len(detected_acronyms)} acronyms for AI context")
 
         except Exception as e:
             error_msg = f"Financial data loading failed: {str(e)}"
@@ -288,9 +351,18 @@ class CommentsModule(BaseModule):
             return ctx
 
         # ══════════════════════════════════════════════════════════════════
-        # 3. SINGLE SECTIONS GENERATION
+        # 3. SINGLE SECTIONS GENERATION - WORKFLOW 1
         # ══════════════════════════════════════════════════════════════════
-        
+        """
+        SINGLE_SECTIONS = [
+            'intro_summary',         # → intro_summary_text
+            'budget_overview',       # → budget_overview_text  
+            'payments_workflow',     # → payments_workflow_text
+            'commitments_workflow',  # → commitments_workflow_text
+            'amendments_workflow',   # → amendments_workflow_text
+            'audit_workflow'         # → audit_workflow_text
+        ]
+        """
         print("📝 Starting single sections generation...")
         single_section_stats = {'successful': 0, 'failed': 0, 'variables_created': []}
         
@@ -369,9 +441,20 @@ class CommentsModule(BaseModule):
             print(f"❌ {error_msg}")
 
         # ══════════════════════════════════════════════════════════════════
-        # 4. PREDEFINED CALL TYPE LOOPS GENERATION
+        # 4. PREDEFINED CALL TYPE LOOPS GENERATION - WORKFLOW 2
         # ══════════════════════════════════════════════════════════════════
-        
+        """
+        LOOP_PROGRAMS = ['HEU', 'H2020']
+        LOOP_CALL_TYPES = ['STG', 'ADG', 'POC', 'COG', 'SYG']
+
+          SINGLE_SECTIONS = [
+            'payment_analysis', 
+            'call_type_payment_detail', 
+            'auto_call_type_detail'
+        ]
+
+        """
+
         print("🔄 Starting predefined call type loops generation...")
         loop_stats = {'successful': 0, 'failed': 0, 'variables_created': []}
         
@@ -435,9 +518,20 @@ class CommentsModule(BaseModule):
             print(f"❌ {error_msg}")
 
         # ══════════════════════════════════════════════════════════════════
-        # 5. DETAILED CALL TYPE GENERATION (Optional)
+        # 5. DETAILED CALL TYPE GENERATION - WORKFLOW 3 (Optional)
         # ══════════════════════════════════════════════════════════════════
         
+        """
+        # Only runs if enabled
+        if report_params.get('enable_detailed_call_types', False):
+            
+            DETAILED_CALL_TYPES = [
+                {'code': 'STG', 'description': 'Starting Grant - Early career researchers'},
+                {'code': 'ADG', 'description': 'Advanced Grant - Established researchers'},
+                {'code': 'COG', 'description': 'Consolidator Grant - Mid-career researchers'},
+                # ... more detailed definitions
+            ]
+        """
         # Only run detailed generation if enabled in report_params
         if report_params.get('enable_detailed_call_types', False):
             print("📊 Starting detailed call type generation...")
@@ -455,7 +549,7 @@ class CommentsModule(BaseModule):
                     verbose=True
                 )
                 
-                # Process and save detailed results
+                #💾 Process and save detailed results
                 if 'generated_details' in results:
                     for var_name, details in results['generated_details'].items():
                         try:
@@ -628,5 +722,21 @@ class CommentsModule(BaseModule):
         financial_data = {k: v for k, v in financial_data.items() if v is not None}
         
         return financial_data
+    
+    def _detect_acronyms_in_data(self, financial_data: Dict[str, Any]) -> List[str]:
+        """Detect which acronyms from our dictionary appear in the financial data"""
+        detected_acronyms = set()
+        
+        # Check data keys for acronyms
+        for key in financial_data.keys():
+            for acronym in CommentsConfig.ACRONYMS_DICTIONARY.keys():  # ✅ Fixed reference
+                if acronym in key.upper():
+                    detected_acronyms.add(acronym)
+        
+        # Add common acronyms that are always relevant
+        always_include = ['H2020', 'HEU', 'TTP', 'TTG', 'TTS', 'STG', 'ADG', 'COG', 'POC', 'SYG', 'CSA']
+        detected_acronyms.update(always_include)
+        
+        return sorted(list(detected_acronyms))
 
     

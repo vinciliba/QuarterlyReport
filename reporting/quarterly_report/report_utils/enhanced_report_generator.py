@@ -703,7 +703,7 @@ class TemplateSectionMatrix:
         }
 
 # ================================================================
-# ⚙️ SECTION 4: UTILITY PROCESSORS - Data Processing Logic
+# ⚙️ SECTION 3: UTILITY PROCESSORS - Data Processing Logic
 # ================================================================
 """📍 Location: Lines 655-864"""
 
@@ -918,7 +918,7 @@ class CallTypeProcessor:
         return stats
 
 # ================================================================
-# MATRIX VISUALIZATION
+# 🧪 SECTION 4. MATRIX VISUALIZATION
 # ================================================================
 
 class MatrixVisualization:
@@ -1042,7 +1042,7 @@ class MatrixVisualization:
         print("5. Add program → Update PROGRAM_MAPPING dictionary")
 
 # ================================================================
-# 🤖💻🧠 SECTION 4: GENERATION ENGINE - AI Generation Logic
+# 🤖💻🧠 SECTION 5: GENERATION ENGINE - AI Generation Logic
 # ================================================================
 """📍 Location: Lines 800-1200"""
 """
@@ -1168,9 +1168,9 @@ class EnhancedReportGenerator:
         )
         
         return commentary
-    ###########################################################
-    #🔄 3. LOOP GENERATION METHODS -> FOR PAYMENTS STATISTICS #
-    ###########################################################
+        ###########################################################
+        #🔄 3. LOOP GENERATION METHODS -> FOR PAYMENTS STATISTICS #
+        ###########################################################
     """A. Predefined Call Type Loops
     Purpose:
     Generates reports for all combinations of programs and call types automatically.
@@ -1365,9 +1365,9 @@ class EnhancedReportGenerator:
         
         return results
     
-    #########################################################
-    # 💎 4. GRANULAR CALL TYPE DETAILS - PAYMENTS ANALYSIS  #
-    #########################################################
+            #########################################################
+            # 💎 4. GRANULAR CALL TYPE DETAILS - PAYMENTS ANALYSIS  #
+            #########################################################
 
     """B. Detailed Call Type Generation
     Purpose:
@@ -1534,9 +1534,10 @@ class EnhancedReportGenerator:
         
         return results
     
-    ##########################
-    # 🛠️ 5. UTILITY METHODS  #
-    ##########################
+        ##########################
+        # 🛠️ 5. UTILITY METHODS  #
+        ##########################
+
     """A. Data Extraction
     Purpose:
     Finds and extracts relevant data for a specific program/call type combination.
@@ -1981,268 +1982,3 @@ Format for Word document integration.
             if verbose:
                 print(f"❌ Generation error: {e}")
             return None
-
-
-# ======================================================================
-# 🎶 SECTION 5: ORCHESTRATION LAYER - Report Control & Database Storage
-# ======================================================================
-"""📍 This is the missing piece that controls WHAT gets generated and WHERE it gets stored"""
-
-
-########  💥 LOCAL TESTING  ################# 
-
-def generate_enhanced_report(
-    sections: List[str] = None,
-    report: str = "Quarterly_Report",
-    db_path: str = "database/reporting.db",
-    model: str = "deepseek-r1:14b",
-    verbose: bool = True
-) -> Dict[str, Any]:
-    """Generate report using the enhanced template management system"""
-    
-    if verbose:
-        print("🚀 ENHANCED TEMPLATE-BASED REPORT GENERATION")
-        print("=" * 60)
-    
-    # Load data
-    try:
-        params = load_report_params(report, db_path)
-        current_year = params.get('current_year')
-        quarter_period = params.get('quarter_period')
-        
-        report_vars = fetch_vars_for_report(report, db_path)
-        financial_data = {
-            'commitments': report_vars.get('table_1a'),
-            'pay_credits_H2020': report_vars.get('table_2a_H2020'),
-            'pay_credits_HEU': report_vars.get('table_2a_HE'),
-            'summary_budget': report_vars.get('overview_budget_table'),
-            'completion_previous_year_calls': report_vars.get('table_1c'),
-            'current_year_global_commitment_activity': report_vars.get('table_1c'),
-            'grants_commitment_activity': report_vars.get('table_3b_commitments'),
-            'grants_signature_activity': report_vars.get('table_3_signatures'),
-            'grants_exceeding_fdi': report_vars.get('table_3c'),
-            'TTG': report_vars.get('table_ttg'),
-            'TTS': report_vars.get('table_tts'),
-            'amendment_activity_H2020': report_vars.get('H2020_overview'),
-            'amendment_activity_HEU': report_vars.get('HORIZON_overview'),
-            'amendment_cases_H2020': report_vars.get('H2020_cases'),
-            'amendment_cases_HEU': report_vars.get('HORIZON_cases'),
-            'amendment_TTA_HEU': report_vars.get('H2020_tta'),
-            'amendment_TTA_HEU': report_vars.get('HORIZON_tta'),
-            'auri_overview': report_vars.get('auri_overview'),
-            'auri_negative_adjustments_overview': report_vars.get('negative_adjustments'),
-            'auri_implementation_comparison': report_vars.get('implementation_comparison'),
-            'auri_time_to_implement_overview': report_vars.get('tti_combined'),
-            'recovery_activity': report_vars.get('recovery_activity'),
-            'external_audits_activity': report_vars.get('external_audits'),
-            'error_rates': report_vars.get('error_rates'),
-            'HEU_payments_all': report_vars.get('HEU_All_Payments'),
-            'HEU_payments_final_payments': report_vars.get('HEU_Final Payments'),
-            'HEU_payments_pre_financing_payments': report_vars.get('HEU_Pre-financing'),
-            'HEU_payments_EXPERTS': report_vars.get('HEU_Experts and Support'),
-            'H2020_payments_all': report_vars.get('H2020_All_Payments'),
-            'H2020_payments_final_payments': report_vars.get('H2020_Final Payments'),
-            'H2020_payments_interim_payments': report_vars.get('H2020_Interim Payments'),
-            'H2020_payments_analysis_ADG': report_vars.get('H2020_ADG_paym_analysis_table'),
-            'H2020_payments_analysis_COG': report_vars.get('H2020_COG_paym_analysis_table'),
-            'H2020_payments_analysis_STG': report_vars.get('H2020_STG_paym_analysis_table'),
-            'H2020_payments_analysis_SYG': report_vars.get('H2020_SYG_paym_analysis_table'),
-            'H2020_payments_analysis_ALL': report_vars.get('H2020_all_paym_analysis_table'),
-            'HEU_payments_analysis_ADG': report_vars.get('HEU_ADG_paym_analysis_table'),
-            'HEU_payments_analysis_COG': report_vars.get('HEU_COG_paym_analysis_table'),
-            'HEU_payments_analysis_EXPERTS': report_vars.get('HEU_EXPERTS_paym_analysis_table'),
-            'HEU_payments_analysis_POC': report_vars.get('HEU_POC_paym_analysis_table'),
-            'HEU_payments_analysis_STG': report_vars.get('HEU_STG_paym_analysis_table'),
-            'HEU_payments_analysis_SYG': report_vars.get('HEU_SYG_paym_analysis_table'),
-            'HEU_payments_analysis_ALL': report_vars.get('HEU_all_paym_analysis_table'),
-            'TTP_Overview': report_vars.get('TTP_performance_summary_table'),
-            'HEU_TTP_FP': report_vars.get('HEU_FP_ttp_chart'),
-            'HEU_TTP_IP': report_vars.get('HEU_IP_ttp_chart'),
-            'HEU_TTP_PF': report_vars.get('HEU_PF_ttp_chart'),
-            'HEU_TTP_EXPERTS': report_vars.get('HEU_EXPERTS_ttp_chart'),
-            'H2020_TTP_FP': report_vars.get('H2020_FP_ttp_chart'),
-            'H2020_TTP_IP': report_vars.get('H2020_IP_ttp_chart'),
-        }
-        
-        financial_data = {k: v for k, v in financial_data.items() if v is not None}
-        
-        if verbose:
-            print(f"✅ Loaded data for {quarter_period} {current_year}")
-        
-    except Exception as e:
-        print(f"❌ Error loading data: {e}")
-        return None
-    
-    # Initialize generator
-    generator = EnhancedReportGenerator()
-    
-    # Get sections to generate
-    if sections is None:
-        mapping = TemplateSectionMatrix.get_complete_mapping_matrix()
-        sections = [k for k in mapping.keys() if k != 'payment_analysis']  # Exclude dynamic sections
-    
-    results = {
-        'generated_commentaries': {},
-        'failed_sections': [],
-        'statistics': {
-            'total_sections': len(sections),
-            'successful': 0,
-            'failed': 0
-        }
-    }
-    
-    # Generate each section
-    for i, section_key in enumerate(sections, 1):
-        if verbose:
-            print(f"\n📝 [{i}/{len(sections)}] Processing: {section_key}")
-        
-        try:
-            commentary = generator.generate_section_commentary(
-                section_key=section_key,
-                quarter_period=quarter_period,
-                current_year=current_year,
-                financial_data=financial_data,
-                model=model,
-                verbose=verbose
-            )
-            
-            if commentary:
-                mapping = TemplateSectionMatrix.get_complete_mapping_matrix()
-                section_config = mapping[section_key]
-                
-                results['generated_commentaries'][section_key] = {
-                    'commentary': commentary,
-                    'section_name': section_config['section_info']['name'],
-                    'template_used': section_config['template_mapping']['template_name'],
-                    'word_count': len(commentary.split()),
-                    'target_words': section_config['output_configuration']['word_limit'],
-                    'output_variable': section_config['output_configuration']['variable_name']
-                }
-                
-                results['statistics']['successful'] += 1
-                
-                if verbose:
-                    word_count = len(commentary.split())
-                    target = section_config['output_configuration']['word_limit']
-                    print(f"✅ Generated {word_count} words (target: {target})")
-            else:
-                results['failed_sections'].append(section_key)
-                results['statistics']['failed'] += 1
-                if verbose:
-                    print(f"❌ Generation failed")
-                    
-        except Exception as e:
-            results['failed_sections'].append(section_key)
-            results['statistics']['failed'] += 1
-            if verbose:
-                print(f"❌ Error: {e}")
-    
-    if verbose:
-        print(f"\n🎉 GENERATION COMPLETE!")
-        print(f"✅ Success: {results['statistics']['successful']}/{results['statistics']['total_sections']}")
-        if results['failed_sections']:
-            print(f"❌ Failed: {', '.join(results['failed_sections'])}")
-    
-    return results
-
-def generate_all_predefined_combinations(
-    report: str = "Quarterly_Report",
-    db_path: str = "database/reporting.db",
-    model: str = "deepseek-r1:14b",
-    verbose: bool = True
-) -> Dict[str, Any]:
-    """Generate all predefined program and call type combinations"""
-    
-    if verbose:
-        print("🔄 GENERATING ALL PREDEFINED COMBINATIONS")
-        print("=" * 60)
-    
-    # Load data
-    try:
-        params = load_report_params(report, db_path)
-        current_year = params.get('current_year')
-        quarter_period = params.get('quarter_period')
-        
-        report_vars = fetch_vars_for_report(report, db_path)
-        financial_data = {k: v for k, v in {
-            'pay_credits_H2020': report_vars.get('table_2a_H2020'),
-            'pay_credits_HEU': report_vars.get('table_2a_HE'),
-            'summary_budget': report_vars.get('overview_budget_table'),
-        }.items() if v is not None}
-        
-    except Exception as e:
-        print(f"❌ Error loading data: {e}")
-        return None
-    
-    # Initialize generator
-    generator = EnhancedReportGenerator()
-    
-    # Generate using predefined lists
-    results = generator.generate_predefined_call_type_loops(
-        quarter_period=quarter_period,
-        current_year=current_year,
-        financial_data=financial_data,
-        programs=None,  # Use predefined PROGRAMS_LIST
-        call_types=None,  # Use predefined CALL_TYPES_LIST
-        model=model,
-        verbose=verbose
-    )
-    
-    return results
-
-def test_call_type_data_extraction(program: str, call_type: str, report: str = "Quarterly_Report", db_path: str = "database/reporting.db"):
-    """Test data extraction for a specific program and call type combination"""
-    
-    print(f"🧪 TESTING DATA EXTRACTION: {program} - {call_type}")
-    print("=" * 50)
-    
-    try:
-        # Load test data
-        report_vars = fetch_vars_for_report(report, db_path)
-        financial_data = {
-            'pay_credits_H2020': report_vars.get('table_2a_H2020'),
-            'pay_credits_HEU': report_vars.get('table_2a_HE'),
-            'summary_budget': report_vars.get('overview_budget_table'),
-        }
-        
-        # Test extraction
-        result = CallTypeProcessor.extract_call_type_data_from_tables(
-            financial_data, program, call_type, verbose=True
-        )
-        
-        if result:
-            print(f"\n✅ SUCCESS! Found {result['total_records']} records")
-            print(f"📝 Derived description: {result['derived_description']}")
-            print(f"📊 Data source: {result['data_source']}")
-            
-            # Calculate stats
-            stats = CallTypeProcessor.calculate_payment_statistics(result['records'])
-            print(f"💰 Total payments: {stats['total_payments']}")
-            print(f"💰 Total amount: €{stats['total_amount']:.2f} {stats['currency']}")
-            
-        else:
-            print("❌ No data found!")
-    
-    except Exception as e:
-        print(f"❌ Error: {e}")
-
-def show_predefined_constants():
-    """Display all predefined constants and mappings"""
-    
-    print("📋 PREDEFINED CONSTANTS OVERVIEW")
-    print("=" * 60)
-    
-    print(f"\n🏢 PROGRAMS_LIST: {PROGRAMS_LIST}")
-    print(f"📞 CALL_TYPES_LIST: {CALL_TYPES_LIST}")
-    print(f"🔄 Total combinations: {len(PROGRAMS_LIST) * len(CALL_TYPES_LIST)}")
-    
-    print(f"\n🎯 CALL TYPE NORMALIZATION:")
-    for standard, variants in CALL_TYPE_NORMALIZATION.items():
-        print(f"  {standard}: {variants}")
-    
-    print(f"\n🏢 ENHANCED PROGRAM MAPPING:")
-    for program, config in PROGRAM_MAPPING.items():
-        print(f"  {program}:")
-        print(f"    Official: {config['official_name']}")
-        print(f"    Data Key: {config['data_key']}")
-        print(f"    Aliases: {', '.join(config['aliases'])}")
