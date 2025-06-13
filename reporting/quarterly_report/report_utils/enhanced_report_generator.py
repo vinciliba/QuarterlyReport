@@ -316,9 +316,103 @@ class ReportTemplateLibrary:
             Focus: FDI compliance monitoring, threshold risk assessment, call type impact analysis, and proactive budget execution management.
 
             Analysis Date: {current_date}
-            """
-            ,
+            """,
+        
+        # ============================================================
+        # 💳 HEU Payment Overview Template
+        # ============================================================
+        'heu_payment_overview_template': f"""
+            A. CONSUMPTION OF PAYMENT CREDITS – HEU
+            Period: {quarter_period} {current_year}
+            Programme: Horizon Europe (HEU)
 
+            PAYMENT PROCESSING AND CREDIT CONSUMPTION:
+            {{prioritized_data_summary}}
+
+            FORECAST ANALYSIS AND PERFORMANCE INDICATORS:
+            {{secondary_data_summary}}
+
+            **Analysis Framework:**
+            • Payment volume processing and grant agreement execution
+            • Credit consumption patterns and C1/E0 disbursement tracking
+            • Annual allocation utilization and expert credit integration
+            • Forecast comparison with budgetary exercise projections
+            • Consumption deviation analysis and budget execution efficiency
+
+            **Key Performance Indicators:**
+            - Total payments processed since start of year
+            - Financial disbursement amounts and credit allocation
+            - C1/E0/C4/C5 payment credit annual allocation status
+            - Actual vs forecast consumption deviation analysis
+            - EFTA credits and voted payment credit utilization
+
+            Analysis Date: {current_date}
+            """,
+
+        # ============================================================
+        # 💳 H2020 Payment Overview Template  
+        # ============================================================
+         'h2020_payment_overview_template': f"""
+
+                B. CONSUMPTION OF PAYMENT CREDITS – H2020
+                Period: {quarter_period} {current_year}
+                Programme: Horizon 2020 (H2020)
+
+                PAYMENT PROCESSING AND CREDIT CONSUMPTION:
+                {{prioritized_data_summary}}
+
+                FORECAST ANALYSIS AND PERFORMANCE INDICATORS:
+                {{secondary_data_summary}}
+
+                **Analysis Framework:**
+                • Payment volume processing and grant agreement execution
+                • Credit consumption patterns and disbursement tracking
+                • Annual allocation utilization and credit management
+                • Forecast comparison with budgetary exercise projections
+                • Consumption deviation analysis and budget execution efficiency
+
+                **Key Performance Indicators:**
+                - Total payments processed since start of year
+                - Financial disbursement amounts and credit allocation
+                - Payment credit annual allocation status
+                - Actual vs forecast consumption deviation analysis
+                - Budget execution and appropriation utilization
+
+                Analysis Date: {current_date}
+       """,
+
+        # ============================================================
+        # 🕐 NEW: TTP Performance Template
+        # ============================================================
+        'ttp_performance_template': f"""
+            TIME-TO-PAY (TTP) PERFORMANCE ANALYSIS
+            Period: {quarter_period} {current_year}
+            Scope: Payment processing efficiency and contractual compliance
+
+            H2020 TTP PERFORMANCE:
+            {{h2020_ttp_summary}}
+
+            HEU TTP PERFORMANCE:
+            {{heu_ttp_summary}}
+
+            QUARTERLY PERFORMANCE OVERVIEW:
+            {{prioritized_data_summary}}
+
+            SUPPORTING TTP METRICS:
+            {{secondary_data_summary}}
+
+            **Performance Framework:**
+            Time-to-Pay (TTP) measures the efficiency of payment processing from payment request to actual disbursement. Contractual time limits ensure timely financial support to beneficiaries while maintaining proper financial controls and verification procedures.
+
+            **Key Performance Indicators:**
+            • Overall compliance rate with contractual time limits
+            • Payment type breakdown: pre-financing, interim, final, expert payments
+            • Exception analysis: delayed payments by program and cause
+            • Quarterly vs annual performance comparison
+            • Process efficiency and timeline adherence
+
+            Analysis Date: {current_date}
+            """,
         # ============================================================
         # 💳 Payments Workflow 
         # ============================================================
@@ -650,7 +744,7 @@ class TemplateSectionMatrix:
                 }
             },
 
-             # ============================================================
+            # ============================================================
             # 📋 3: Granting Process Overview
             # ============================================================
             'granting_process_overview': {
@@ -797,6 +891,184 @@ class TemplateSectionMatrix:
             },
 
             # ============================================================
+            # 💳 HEU Payment Overview Configuration
+            # ============================================================
+            'heu_payment_overview': {
+                'section_info': {
+                    'name': 'HEU Payment Credits Consumption',
+                    'category': 'program_analysis',
+                    'priority': 6,
+                    'description': 'Horizon Europe payment credit consumption and forecast analysis'
+                },
+                'template_mapping': {
+                    'template_name': 'heu_payment_overview_template',
+                    'template_category': 'program_payment_analysis',
+                    'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
+                },
+                'data_configuration': {
+                    # 🎯 PRIMARY_DATA: Core HEU payment data
+                    'primary_data': [
+                        'pay_credits_HEU',                # Main HEU payment credit data
+                        'HEU_payments_all',              # All HEU payments volume and amounts
+                        'HEU_payments_analysis_ALL'       # HEU payment analysis and forecast data
+                    ],
+                    
+                    # 🔄 SECONDARY_DATA: Supporting HEU analysis
+                    'secondary_data': [
+                        'HEU_TTP_FP',                    # HEU final payment TTP performance
+                        'HEU_TTP_IP',                    # HEU interim payment TTP performance
+                        'HEU_TTP_PF',                    # HEU pre-financing TTP performance
+                        'HEU_TTP_EXPERTS',               # HEU expert payment TTP performance
+                        'HEU_payments_final_payments',   # HEU final payment details
+                        'HEU_payments_pre_financing_payments',  # HEU pre-financing details
+                        'HEU_payments_EXPERTS',          # HEU expert payment details
+                        'summary_budget'                 # Budget context for allocations
+                    ],
+                    
+                    # 🎯 FOCUS_METRICS: HEU payment-specific indicators
+                    'focus_metrics': [
+                        'heu', 'horizon', 'payments', 'processed', 'total', 'amount',
+                        'million', 'eur', 'credits', 'c1', 'e0', 'c4', 'c5',
+                        'disbursed', 'allocation', 'annual', 'expert', 'efta',
+                        'forecast', 'consumption', 'deviation', 'percentage', 'budget'
+                    ]
+                },
+                'output_configuration': {
+                    'module': 'CommentsModule',
+                    'variable_name': 'heu_payment_overview_text',
+                    'word_limit': 350,                  # Comprehensive program analysis
+                    'formatting_level': 'detailed'
+                },
+                'instruction_mapping': {
+                    'instruction_key': 'heu_payment_overview_instructions',
+                    'tone': 'analytical',
+                    'focus': 'heu_payment_consumption'
+                }
+            },
+
+            # ============================================================
+            # 💳 H2020 Payment Overview Configuration
+            # ============================================================
+            'h2020_payment_overview': {
+                'section_info': {
+                    'name': 'H2020 Payment Credits Consumption',
+                    'category': 'program_analysis',
+                    'priority': 7,
+                    'description': 'Horizon 2020 payment credit consumption and forecast analysis'
+                },
+                'template_mapping': {
+                    'template_name': 'h2020_payment_overview_template',
+                    'template_category': 'program_payment_analysis',
+                    'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
+                },
+                'data_configuration': {
+                    # 🎯 PRIMARY_DATA: Core H2020 payment data
+                    'primary_data': [
+                        'pay_credits_H2020',             # Main H2020 payment credit data
+                        'H2020_payments_all',            # All H2020 payments volume and amounts
+                        'H2020_payments_analysis_ALL'    # H2020 payment analysis and forecast data
+                    ],
+                    
+                    # 🔄 SECONDARY_DATA: Supporting H2020 analysis
+                    'secondary_data': [
+                        'H2020_TTP_FP',                  # H2020 final payment TTP performance
+                        'H2020_TTP_IP',                  # H2020 interim payment TTP performance
+                        'H2020_payments_final_payments', # H2020 final payment details
+                        'H2020_payments_interim_payments',  # H2020 interim payment details
+                        'summary_budget'                 # Budget context for allocations
+                    ],
+                    
+                    # 🎯 FOCUS_METRICS: H2020 payment-specific indicators
+                    'focus_metrics': [
+                        'h2020', 'horizon', 'payments', 'processed', 'total', 'amount',
+                        'million', 'eur', 'credits', 'disbursed', 'allocation', 'annual',
+                        'forecast', 'consumption', 'deviation', 'percentage', 'budget'
+                    ]
+                },
+                'output_configuration': {
+                    'module': 'CommentsModule',
+                    'variable_name': 'h2020_payment_overview_text',
+                    'word_limit': 350,                  # Comprehensive program analysis
+                    'formatting_level': 'detailed'
+                },
+                'instruction_mapping': {
+                    'instruction_key': 'h2020_payment_overview_instructions',
+                    'tone': 'analytical',
+                    'focus': 'h2020_payment_consumption'
+                }
+            },
+
+            # ============================================================
+            # 🕐 NEW: TTP Performance Analysis Section
+            # ============================================================
+            'ttp_performance': {
+                'section_info': {
+                    'name': 'Time-to-Pay Performance Analysis',
+                    'category': 'operational',
+                    'priority': 8,  # Add after your other workflow sections
+                    'description': 'TTP compliance analysis covering H2020 and HEU payment processing efficiency'
+                },
+                'template_mapping': {
+                    'template_name': 'ttp_performance_template',
+                    'template_category': 'operational_performance',
+                    'supports_variables': [
+                        'quarter_period',              # ✅ Add missing variables
+                        'current_year',               # ✅ Add missing variables
+                        'h2020_ttp_summary', 
+                        'heu_ttp_summary', 
+                        'prioritized_data_summary', 
+                        'secondary_data_summary'
+                    ]
+                },
+                'data_configuration': {
+                    # 🎯 PRIMARY_DATA: Core TTP performance data ONLY
+                    'primary_data': [
+                        'TTP_Overview',                    # Main TTP performance summary
+                        'H2020_TTP_FP',                   # H2020 final payment TTP
+                        'H2020_TTP_IP',                   # H2020 interim payment TTP
+                        'HEU_TTP_FP',                     # HEU final payment TTP
+                        'HEU_TTP_IP',                     # HEU interim payment TTP
+                        'HEU_TTP_PF',                     # HEU pre-financing TTP
+                        'HEU_TTP_EXPERTS'                 # HEU expert payment TTP
+                    ],
+                    
+                    # 🔄 SECONDARY_DATA: Additional TTP context (if any)
+                    'secondary_data': [
+                        # Only TTP-related supporting data - no payment credit consumption
+                    ],
+                    
+                    # 🎯 FOCUS_METRICS: TTP and compliance indicators ONLY
+                    'focus_metrics': [
+                        # Time metrics
+                        'ttp', 'time', 'days', 'delay', 'processing', 'timeline', 'duration',
+                        
+                        # Compliance metrics  
+                        'compliance', 'contractual', 'limits', 'percentage', 'rate', 'within',
+                        
+                        # Payment types (for TTP context only)
+                        'expert', 'pre-financing', 'interim', 'final', 'adg',
+                        
+                        # Performance metrics
+                        'executed', 'processed', 'efficiency', 'performance', 'quarterly', 'yearly',
+                        
+                        # TTP-specific metrics
+                        'average', 'median', 'maximum', 'minimum', 'target', 'threshold'
+                    ]
+                },
+                'output_configuration': {
+                    'module': 'CommentsModule',
+                    'variable_name': 'ttp_performance_text',
+                    'word_limit': 400,                    # Comprehensive TTP analysis
+                    'formatting_level': 'operational'
+                },
+                'instruction_mapping': {
+                    'instruction_key': 'ttp_performance_instructions',
+                    'tone': 'operational',
+                    'focus': 'compliance_and_efficiency'
+                }
+            },
+
+            # ============================================================
             # WORKFLOW-SPECIFIC SECTIONS
             # ============================================================
             'payments_workflow': {
@@ -826,36 +1098,6 @@ class TemplateSectionMatrix:
                     'instruction_key': 'payments_workflow_instructions',
                     'tone': 'operational',
                     'focus': 'workflow_efficiency'
-                }
-            },
-
-            'commitments_workflow': {
-                'section_info': {
-                    'name': 'Commitments Workflow Summary',
-                    'category': 'workflow',
-                    'priority': 4,
-                    'description': 'Commitment allocation and utilization efficiency'
-                },
-                'template_mapping': {
-                    'template_name': 'commitments_workflow_template',
-                    'template_category': 'workflow_analysis',
-                    'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
-                },
-                'data_configuration': {
-                    'primary_data': ['commitments'],
-                    'secondary_data': ['summary_budget'],
-                    'focus_metrics': ['commitment_consumption', 'allocation_efficiency', 'portfolio_performance']
-                },
-                'output_configuration': {
-                    'module': 'CommitmentsModule',
-                    'variable_name': 'commitments_workflow_summary',
-                    'word_limit': 250,
-                    'formatting_level': 'operational'
-                },
-                'instruction_mapping': {
-                    'instruction_key': 'commitments_workflow_instructions',
-                    'tone': 'operational',
-                    'focus': 'allocation_efficiency'
                 }
             },
 
@@ -1019,6 +1261,7 @@ class TemplateSectionMatrix:
 # ================================================================
 """📍 Location: Lines 655-864"""
 
+
 class ProgramProcessor:
     """Utility class for processing programs using the enhanced PROGRAM_MAPPING"""
     
@@ -1043,13 +1286,25 @@ class ProgramProcessor:
         return info['data_key'] if info else None
     
     @staticmethod
+   
     def get_all_data_keys(program: str) -> List[str]:
-        """Get all payment-related data keys for a program"""
-        info = ProgramProcessor.get_program_info(program)
-        if info:
-            return [info['data_key']] + info.get('payment_fields', []) + info.get('analysis_tables', [])
-        return []
-    
+        """Get data source keys using your actual table structure"""
+        
+        base_keys = [
+            f'pay_credits_{program}',
+            f'{program}_payments_all'
+        ]
+        
+        # Add dedicated analysis tables for each call type
+        call_types = ['STG', 'ADG', 'COG', 'SYG', 'POC']
+        if program.upper() == 'HEU':
+            call_types.extend(['EXPERTS'])  # HEU has POC and EXPERTS
+        
+        for call_type in call_types:
+            base_keys.append(f'{program}_payments_analysis_{call_type}')
+        
+        return base_keys
+
     @staticmethod
     def get_official_name(program: str) -> Optional[str]:
         """Get the official program name"""
@@ -1072,91 +1327,101 @@ class CallTypeProcessor:
         verbose: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
-        Extract call type specific data from financial tables using enhanced program mapping.
-        This function automatically derives payment types from the actual data.
+        CORRECTED: Extract call type data from dedicated analysis tables
+        Your system has specific tables for each call type - use those directly!
         """
         
-        # Get program information using enhanced mapping
-        program_info = ProgramProcessor.get_program_info(program)
-        if not program_info:
-            if verbose:
-                print(f"⚠️  Unknown program: {program}")
-            return None
+        # Map to your actual table structure
+        table_key = f"{program}_payments_analysis_{call_type.upper()}"
         
-        # Get all possible data keys for this program
-        data_keys = ProgramProcessor.get_all_data_keys(program)
+        if verbose:
+            print(f"🔍 Looking for dedicated table: {table_key}")
         
-        # Try to find data in any of the relevant tables
-        found_data = None
-        data_source = None
-        
-        for data_key in data_keys:
-            if data_key in financial_data and financial_data[data_key] is not None:
-                try:
-                    if isinstance(financial_data[data_key], str):
-                        parsed_data = json.loads(financial_data[data_key])
-                    else:
-                        parsed_data = financial_data[data_key]
+        # Check if the dedicated table exists
+        if table_key in financial_data and financial_data[table_key] is not None:
+            try:
+                if isinstance(financial_data[table_key], str):
+                    parsed_data = json.loads(financial_data[table_key])
+                else:
+                    parsed_data = financial_data[table_key]
+                
+                if isinstance(parsed_data, list) and len(parsed_data) > 0:
+                    if verbose:
+                        print(f"✅ Found {len(parsed_data)} records in {table_key}")
                     
-                    if isinstance(parsed_data, list) and len(parsed_data) > 0:
-                        found_data = parsed_data
-                        data_source = data_key
-                        break
-                except json.JSONDecodeError:
-                    continue
-        
-        if not found_data:
-            if verbose:
-                print(f"⚠️  No valid data found for program: {program}")
-            return None
-        
-        # Normalize the call type for matching
-        normalized_call_type = CallTypeProcessor.normalize_call_type(call_type)
-        
-        # Find records that match this call type (flexible matching)
-        matching_records = []
-        derived_descriptions = set()
-        
-        for record in found_data:
-            if isinstance(record, dict):
-                # Check all field values for call type matches
-                record_str = json.dumps(record, default=str).upper()
-                
-                # Check for various call type representations
-                call_type_variants = CALL_TYPE_NORMALIZATION.get(normalized_call_type, [call_type])
-                
-                for variant in call_type_variants:
-                    if variant.upper() in record_str:
-                        matching_records.append(record)
-                        
-                        # Try to derive payment description from the record
-                        for key, value in record.items():
-                            if isinstance(value, str) and len(value) > 10 and any(word in value.lower() for word in ['payment', 'financing', 'grant', 'interim', 'final']):
-                                derived_descriptions.add(value.strip())
-                        break
-        
-        if matching_records:
-            # Get the best description from derived descriptions
-            best_description = CallTypeProcessor._select_best_description(
-                list(derived_descriptions), normalized_call_type
-            )
+                    # Get program info
+                    program_info = ProgramProcessor.get_program_info(program)
+                    
+                    return {
+                        'program': program,
+                        'program_info': program_info,
+                        'call_type': call_type,
+                        'normalized_call_type': call_type.upper(),
+                        'records': parsed_data,
+                        'total_records': len(parsed_data),
+                        'derived_description': f"{program} {call_type} Payment Analysis",
+                        'data_source': table_key,
+                        'table_type': 'dedicated_analysis'
+                    }
+                else:
+                    if verbose:
+                        print(f"⚠️  Table {table_key} exists but is empty")
             
-            return {
-                'program': program,
-                'program_info': program_info,
-                'call_type': call_type,
-                'normalized_call_type': normalized_call_type,
-                'records': matching_records,
-                'total_records': len(matching_records),
-                'derived_description': best_description,
-                'all_descriptions': list(derived_descriptions),
-                'data_source': data_source
-            }
+            except json.JSONDecodeError as e:
+                if verbose:
+                    print(f"❌ JSON parsing error for {table_key}: {e}")
+            except Exception as e:
+                if verbose:
+                    print(f"❌ Error processing {table_key}: {e}")
         else:
             if verbose:
-                print(f"⚠️  No matching records found for {call_type} in {program}")
+                print(f"❌ Table {table_key} not found in financial_data")
+                # Show available tables for debugging
+                available_analysis_tables = [k for k in financial_data.keys() if 'payments_analysis' in k]
+                print(f"💡 Available analysis tables: {available_analysis_tables}")
+        
+        return None
+    @staticmethod
+    def extract_program_summary_data(
+        financial_data: Dict[str, Any], 
+        program: str, 
+        verbose: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Extract general program data when specific call type data isn't available.
+        This provides a fallback for generating program-level summaries.
+        """
+        
+        program_info = ProgramProcessor.get_program_info(program)
+        if not program_info:
             return None
-    
+        
+        # Get main program data keys
+        main_data_key = program_info.get('data_key')
+        
+        if main_data_key in financial_data and financial_data[main_data_key] is not None:
+            try:
+                if isinstance(financial_data[main_data_key], str):
+                    parsed_data = json.loads(financial_data[main_data_key])
+                else:
+                    parsed_data = financial_data[main_data_key]
+                
+                if isinstance(parsed_data, list) and len(parsed_data) > 0:
+                    return {
+                        'program': program,
+                        'program_info': program_info,
+                        'call_type': 'ALL',
+                        'normalized_call_type': 'ALL',
+                        'records': parsed_data,
+                        'total_records': len(parsed_data),
+                        'derived_description': f'{program} Program Overview',
+                        'data_source': main_data_key
+                    }
+            except json.JSONDecodeError:
+                pass
+        
+        return None
+        
     @staticmethod
     def _select_best_description(descriptions: List[str], call_type: str) -> str:
         """Select the best payment description from available options"""
@@ -1371,6 +1636,7 @@ mapping_matrix: Access to section configurations (the "how to generate")
 
 """
 
+
 class EnhancedReportGenerator:
     """Enhanced report generator using the improved template management system"""
     
@@ -1381,6 +1647,348 @@ class EnhancedReportGenerator:
     """🎯 2. MAIN GENERATION METHOD: 
     This is the primary method for generating individual report sections."""
 
+    # 🔧 MISSING METHODS - Add these to your EnhancedReportGenerator class
+
+    def generate_individual_sections(self,
+                                    quarter_period: str, 
+                                    current_year: str,
+                                    financial_data: Dict[str, Any],
+                                    model: str = "qwen2.5:14b", 
+                                    modeltemperature: float = 0.3,
+                                    acronym_context: str = "",
+                                    cutoff_date=None,
+                                    verbose: bool = True) -> Dict[str, Any]:
+        """
+        Generate all individual sections from SINGLE_SECTIONS configuration
+        This orchestrates the generation of all single sections (intro, budget, etc.)
+        """
+        
+        # Import the config from comments.py
+        from reporting.quarterly_report.modules.comments import CommentsConfig
+        
+        SINGLE_SECTIONS = CommentsConfig.SINGLE_SECTIONS
+        
+        if verbose:
+            print(f"🔄 GENERATING ALL {len(SINGLE_SECTIONS)} SINGLE SECTIONS")
+            print("=" * 60)
+        
+        results = {
+            'generated_details': {},
+            'failed_generations': [],
+            'statistics': {
+                'total_sections': len(SINGLE_SECTIONS),
+                'successful': 0,
+                'failed': 0
+            }
+        }
+        
+        # Apply cutoff date filtering if needed
+        if cutoff_date is not None:
+            financial_data = self._filter_data_by_cutoff(financial_data, cutoff_date, verbose)
+        
+        # Generate each section
+        for i, section_name in enumerate(SINGLE_SECTIONS, 1):
+            
+            if verbose:
+                print(f"\n📝 [{i}/{len(SINGLE_SECTIONS)}] Generating: {section_name}")
+            
+            try:
+                # Use the existing generate_section_commentary method
+                section_commentary = self.generate_section_commentary(
+                    section_key=section_name,
+                    quarter_period=quarter_period,
+                    current_year=current_year,
+                    financial_data=financial_data,
+                    model=model,
+                    temperature=temperature,
+                    acronym_context=acronym_context,
+                    cutoff_date=None,  # Already applied above
+                    verbose=verbose
+                )
+                
+                if section_commentary and len(section_commentary.strip()) > 50:
+                    # Successful generation
+                    results['generated_details'][section_name] = {
+                        'commentary': section_commentary,
+                        'section_name': section_name.replace('_', ' ').title(),
+                        'word_count': len(section_commentary.split()),
+                        'generated_at': datetime.datetime.now()
+                    }
+                    results['statistics']['successful'] += 1
+                    
+                    if verbose:
+                        print(f"   ✅ Success: {len(section_commentary.split())} words")
+                else:
+                    # Failed generation
+                    results['failed_generations'].append(section_name)
+                    results['statistics']['failed'] += 1
+                    
+                    if verbose:
+                        print(f"   ❌ Failed: Empty or too short")
+            
+            except Exception as e:
+                # Error in generation
+                results['failed_generations'].append(section_name)
+                results['statistics']['failed'] += 1
+                
+                if verbose:
+                    print(f"   ❌ Error: {e}")
+            
+            # Small delay to avoid overwhelming the model
+            import time
+            time.sleep(0.5)
+        
+        if verbose:
+            print(f"\n🎉 INDIVIDUAL SECTIONS COMPLETE")
+            print(f"✅ Success: {results['statistics']['successful']}/{results['statistics']['total_sections']}")
+            print(f"❌ Failed: {results['statistics']['failed']}")
+            
+            if results['failed_generations']:
+                print(f"Failed sections: {results['failed_generations']}")
+        
+        return results
+    
+    
+    def _generate_single_section_commentary(
+        self,
+        section_name: str,
+        quarter_period: str, 
+        current_year: str,
+        financial_data: Dict[str, Any],
+        model: str,
+        temperature: float,
+        acronym_context: str,
+        verbose: bool = False
+    ) -> Optional[str]:
+        """
+        Generate commentary for a single section
+        This is a wrapper around generate_section_commentary for compatibility
+        """
+        
+        if verbose:
+            print(f"🔄 Generating single section: {section_name}")
+        
+        try:
+            return self.generate_section_commentary(
+                section_key=section_name,
+                quarter_period=quarter_period,
+                current_year=current_year,
+                financial_data=financial_data,
+                model=model,
+                temperature=temperature,
+                acronym_context=acronym_context,
+                cutoff_date=None,
+                verbose=verbose
+            )
+        except Exception as e:
+            if verbose:
+                print(f"❌ Error generating {section_name}: {e}")
+            return None
+
+
+    def generate_individual_sections_enhanced(
+        self,
+        quarter_period: str,
+        current_year: str,
+        financial_data: Dict[str, Any],
+        model: str = "qwen2.5:14b",
+        temperature: float = 0.3,
+        acronym_context: str = "",
+        cutoff_date: Any = None,
+        verbose: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Enhanced version with better validation and error handling
+        """
+        
+        from reporting.quarterly_report.modules.comments import CommentsConfig
+        
+        SINGLE_SECTIONS = CommentsConfig.SINGLE_SECTIONS
+        
+        if verbose:
+            print(f"🔄 ENHANCED INDIVIDUAL SECTIONS GENERATION")
+            print("=" * 60)
+            print(f"📋 Sections to generate: {SINGLE_SECTIONS}")
+        
+        # Validate sections against mapping matrix
+        mapping = self.mapping_matrix.get_complete_mapping_matrix()
+        valid_sections = []
+        invalid_sections = []
+        
+        for section in SINGLE_SECTIONS:
+            if section in mapping:
+                valid_sections.append(section)
+            else:
+                invalid_sections.append(section)
+        
+        if invalid_sections and verbose:
+            print(f"⚠️  Invalid sections (no mapping): {invalid_sections}")
+        
+        if verbose:
+            print(f"✅ Valid sections: {len(valid_sections)}")
+        
+        results = {
+            'generated_details': {},
+            'failed_generations': [],
+            'invalid_sections': invalid_sections,
+            'statistics': {
+                'total_sections': len(SINGLE_SECTIONS),
+                'valid_sections': len(valid_sections),
+                'successful': 0,
+                'failed': 0
+            }
+        }
+        
+        # Apply cutoff date filtering if needed
+        if cutoff_date is not None:
+            financial_data = self._filter_data_by_cutoff(financial_data, cutoff_date, verbose)
+        
+        # Generate each valid section
+        for i, section_name in enumerate(valid_sections, 1):
+            
+            if verbose:
+                print(f"\n📝 [{i}/{len(valid_sections)}] Generating: {section_name}")
+            
+            try:
+                # Get section configuration for additional validation
+                section_config = mapping[section_name]
+                word_limit = section_config['output_configuration']['word_limit']
+                
+                if verbose:
+                    print(f"   🎯 Target: {word_limit} words")
+                
+                # Generate using existing method
+                section_commentary = self.generate_section_commentary(
+                    section_key=section_name,
+                    quarter_period=quarter_period,
+                    current_year=current_year,
+                    financial_data=financial_data,
+                    model=model,
+                    temperature=temperature,
+                    acronym_context=acronym_context,
+                    cutoff_date=None,  # Already applied above
+                    verbose=False  # Reduce verbosity in loop
+                )
+                
+                if section_commentary and len(section_commentary.strip()) > 50:
+                    word_count = len(section_commentary.split())
+                    
+                    # Check if within reasonable range of target
+                    word_variance = abs(word_count - word_limit) / word_limit
+                    if word_variance > 0.5 and verbose:  # More than 50% variance
+                        print(f"   ⚠️  Word count variance: {word_count} vs {word_limit} target")
+                    
+                    results['generated_details'][section_name] = {
+                        'commentary': section_commentary,
+                        'section_name': section_config['section_info']['name'],
+                        'word_count': word_count,
+                        'target_words': word_limit,
+                        'word_variance': word_variance,
+                        'generated_at': datetime.datetime.now(),
+                        'section_category': section_config['section_info']['category']
+                    }
+                    results['statistics']['successful'] += 1
+                    
+                    if verbose:
+                        print(f"   ✅ Success: {word_count} words (target: {word_limit})")
+                else:
+                    results['failed_generations'].append(section_name)
+                    results['statistics']['failed'] += 1
+                    
+                    if verbose:
+                        print(f"   ❌ Failed: Empty or too short response")
+            
+            except Exception as e:
+                results['failed_generations'].append(section_name)
+                results['statistics']['failed'] += 1
+                
+                if verbose:
+                    print(f"   ❌ Error: {str(e)}")
+                    import traceback
+                    print(f"   📋 Details: {traceback.format_exc()[:200]}...")
+            
+            # Delay between generations
+            import time
+            time.sleep(0.5)
+        
+        if verbose:
+            success_rate = (results['statistics']['successful'] / len(valid_sections) * 100) if valid_sections else 0
+            print(f"\n🎉 ENHANCED INDIVIDUAL SECTIONS COMPLETE")
+            print(f"✅ Success: {results['statistics']['successful']}/{len(valid_sections)} ({success_rate:.1f}%)")
+            print(f"❌ Failed: {results['statistics']['failed']}")
+            
+            if results['failed_generations']:
+                print(f"💡 Failed sections: {results['failed_generations']}")
+            
+            if invalid_sections:
+                print(f"⚠️  Invalid sections: {invalid_sections}")
+        
+        return results
+    
+
+    def validate_sections_configuration(self) -> Dict[str, Any]:
+        """
+        Validate that all SINGLE_SECTIONS have proper mapping configurations
+        Useful for debugging configuration issues
+        """
+        
+        from reporting.quarterly_report.modules.comments import CommentsConfig
+        
+        SINGLE_SECTIONS = CommentsConfig.SINGLE_SECTIONS
+        mapping = self.mapping_matrix.get_complete_mapping_matrix()
+        templates = self.template_library.get_template_definitions("Q1", "2025")
+        
+        validation_results = {
+            'valid_sections': [],
+            'missing_mapping': [],
+            'missing_template': [],
+            'configuration_errors': []
+        }
+        
+        print("🔍 VALIDATING SECTIONS CONFIGURATION")
+        print("=" * 50)
+        
+        for section in SINGLE_SECTIONS:
+            print(f"\n📋 Validating: {section}")
+            
+            # Check mapping exists
+            if section not in mapping:
+                validation_results['missing_mapping'].append(section)
+                print(f"   ❌ No mapping configuration")
+                continue
+            
+            section_config = mapping[section]
+            
+            # Check template exists
+            template_name = section_config['template_mapping']['template_name']
+            if template_name not in templates:
+                validation_results['missing_template'].append(section)
+                print(f"   ❌ Template missing: {template_name}")
+                continue
+            
+            # Check configuration completeness
+            try:
+                required_keys = ['section_info', 'template_mapping', 'data_configuration', 'output_configuration']
+                for key in required_keys:
+                    if key not in section_config:
+                        raise KeyError(f"Missing {key}")
+                
+                validation_results['valid_sections'].append(section)
+                print(f"   ✅ Valid configuration")
+                
+            except Exception as e:
+                validation_results['configuration_errors'].append(f"{section}: {e}")
+                print(f"   ❌ Configuration error: {e}")
+        
+        print(f"\n📊 VALIDATION SUMMARY:")
+        print(f"✅ Valid: {len(validation_results['valid_sections'])}")
+        print(f"❌ Missing mapping: {len(validation_results['missing_mapping'])}")
+        print(f"❌ Missing template: {len(validation_results['missing_template'])}")
+        print(f"❌ Config errors: {len(validation_results['configuration_errors'])}")
+        
+        return validation_results
+
+
     def generate_section_commentary(
         self,
         section_key: str,
@@ -1389,16 +1997,13 @@ class EnhancedReportGenerator:
         financial_data: Dict[str, Any],
         model: str = "deepseek-r1:14b",
         temperature: float = 0.3,
-        acronym_context: str = "",           # ✅ NEW: Acronym context parameter
-        cutoff_date: Any = None,             # ✅ NEW: Cutoff date parameter
+        acronym_context: str = "",           
+        cutoff_date: Any = None,             
         verbose: bool = True
     ) -> Optional[str]:
         """Generate commentary for a specific section using the enhanced matrix system"""
 
-        """Step 1: Configuration Lookup
-        What: Gets the configuration for the requested section
-        Why: Each section has different templates, data sources, and formatting rules"""
-        # Get section configuration from mapping matrix
+        # Step 1: Configuration Lookup
         mapping = self.mapping_matrix.get_complete_mapping_matrix()
         
         if section_key not in mapping:
@@ -1408,33 +2013,27 @@ class EnhancedReportGenerator:
         
         section_config = mapping[section_key]
 
-        # Get template from library
-        """Step 2: Template Retrieval
-        What: Gets the specific template for this section
-        Why: Templates define the structure and format of the output"""
-
+        # Step 2: Template Retrieval - MOVED TO TOP TO FIX THE ERROR
         templates = self.template_library.get_template_definitions(quarter_period, current_year)
         template_name = section_config['template_mapping']['template_name']
-        template = templates[template_name]
         
-        # ✅ FIXED: Apply cutoff date filtering to financial data
+        if template_name not in templates:
+            if verbose:
+                print(f"❌ Template '{template_name}' not found in template library")
+            return None
+            
+        template = templates[template_name]  # ✅ NOW DEFINED BEFORE USE
+        
+        # Step 3: Apply cutoff date filtering
         if cutoff_date is not None:
             financial_data = self._filter_data_by_cutoff(financial_data, cutoff_date, verbose)
-    
-        # Prepare data according to configuration
-        """Step 3: Data Preparation
-        What: Filters raw data to only what this section needs
-        Why: Different sections focus on different data tables (payments vs commitments vs budget)
-        """
+
+        # Step 4: Data Preparation
         data_config = section_config['data_configuration']
         primary_data = {k: v for k, v in financial_data.items() if k in data_config['primary_data']}
         secondary_data = {k: v for k, v in financial_data.items() if k in data_config['secondary_data']}
         
-        # Format data summaries
-        """Step 4: Data Formatting
-           What: Converts raw data into human-readable summaries
-           Why: AI needs structured, summarized data rather than raw JSON
-        """
+        # Step 5: Data Formatting
         prioritized_data_summary = self._prepare_data_summary(
             primary_data, 
             data_config['focus_metrics'], 
@@ -1446,24 +2045,31 @@ class EnhancedReportGenerator:
             "SECONDARY"
         )
         
-        # Format template
-        """  Step 5: Template Population
-             What: Inserts data summaries into template placeholders
-             Why: Creates the final prompt structure for the AI
-        """
-        formatted_template = template.format(
-            prioritized_data_summary=prioritized_data_summary,
-            secondary_data_summary=secondary_data_summary
-        )
+        # Step 6: Template Population - NOW SAFE TO USE 'template'
+        if section_key == 'ttp_performance':
+            # Prepare TTP-specific data summaries
+            ttp_summaries = self._prepare_ttp_data_summary(financial_data, quarter_period, current_year)
+            
+            # Format template with TTP-specific variables
+            formatted_template = template.format(
+                quarter_period=quarter_period,              
+                current_year=current_year,                  
+                h2020_ttp_summary=ttp_summaries['h2020_ttp_summary'],
+                heu_ttp_summary=ttp_summaries['heu_ttp_summary'],
+                prioritized_data_summary=prioritized_data_summary,
+                secondary_data_summary=secondary_data_summary
+            )
+        else:
+            # Use existing template formatting
+            formatted_template = template.format(
+                prioritized_data_summary=prioritized_data_summary,
+                secondary_data_summary=secondary_data_summary
+            )
         
-        # Get instructions
-        """Step 6: AI Generation
-           What: Sends structured prompt to AI model and gets response
-           Why: This is where the actual text generation happens
-        """
+        # Step 7: AI Generation
         instructions = self._get_section_instructions(section_config)
         
-         # ✅ FIXED: Create final prompt with acronym context
+        # Create final prompt with acronym context
         final_prompt = self._create_enhanced_prompt(
             instructions=instructions,
             template=formatted_template,
@@ -1481,9 +2087,94 @@ class EnhancedReportGenerator:
         )
         
         return commentary
-        ###########################################################
-        #🔄 3. LOOP GENERATION METHODS -> FOR PAYMENTS STATISTICS #
-        ###########################################################
+    
+    def _generate_program_summary(
+        self, 
+        program: str, 
+        data: List[Dict], 
+        total_available: float, 
+        total_paid: float, 
+        consumption_rate: float,
+        quarter_period: str, 
+        current_year: str, 
+        model: str, 
+        temperature: float, 
+        acronym_context: str
+    ) -> Optional[str]:
+        """Generate professional program summary using available data"""
+        
+        program_full = "Horizon Europe (HEU)" if program == "HEU" else "Horizon 2020 (H2020)"
+        
+        # Extract budget categories
+        categories = {}
+        for record in data:
+            budget_type = record.get('Budget Address Type', 'Other')
+            if budget_type not in categories:
+                categories[budget_type] = {'available': 0, 'paid': 0}
+            categories[budget_type]['available'] += float(record.get('Available_Payment_Appropriations', 0) or 0)
+            categories[budget_type]['paid'] += float(record.get('Paid_Amount', 0) or 0)
+        
+        # Create data context for AI
+        data_context = f"""
+        PROGRAM: {program_full}
+        PERIOD: {quarter_period} {current_year}
+        
+        FINANCIAL OVERVIEW:
+        • Total Payment Appropriations: €{total_available/1000000:.1f} million
+        • Payments Processed: €{total_paid/1000000:.1f} million
+        • Consumption Rate: {consumption_rate:.1f}%
+        • Remaining Appropriations: €{(total_available-total_paid)/1000000:.1f} million
+        
+        BUDGET CATEGORIES:
+        {chr(10).join(f"• {cat}: €{vals['available']/1000000:.1f}M available, €{vals['paid']/1000000:.1f}M paid ({(vals['paid']/vals['available']*100):.1f}%)" 
+                    for cat, vals in categories.items() if vals['available'] > 0)}
+        
+        RECORDS ANALYZED: {len(data)} payment appropriation records
+        """
+        
+        instructions = f"""
+        Generate a professional {program_full} payment program summary (220-280 words) for executive reporting.
+        
+        CONTENT REQUIREMENTS:
+        1. Opening statement with program performance overview
+        2. Financial metrics with specific amounts and **bold percentages**
+        3. Budget category breakdown and utilization analysis  
+        4. Processing efficiency and execution assessment
+        5. Performance highlights and forward outlook
+        
+        WRITING REQUIREMENTS:
+        • Use professional EU institutional language
+        • Include specific financial figures (millions EUR format)
+        • Emphasize achievements and efficient execution
+        • Reference appropriate timeframe and targets
+        • Use active voice and confident tone
+        • Bold key metrics and percentages
+        
+        TARGET: 220-280 words for executive briefing
+        TONE: Professional, achievement-focused, institutional
+        """
+        
+        final_prompt = f"""
+        {instructions}
+        
+        {data_context}
+        
+        {acronym_context}
+        
+        Generate the program summary now:
+        """
+        
+        return self._generate_with_model(
+            prompt=final_prompt,
+            model=model,
+            temperature=temperature,
+            max_tokens=450,
+            verbose=False
+        )
+    
+    ###########################################################
+    #🔄 3. LOOP GENERATION METHODS -> FOR PAYMENTS STATISTICS #
+    ###########################################################
     """A. Predefined Call Type Loops
     Purpose:
     Generates reports for all combinations of programs and call types automatically.
@@ -1501,198 +2192,105 @@ class EnhancedReportGenerator:
         current_year: str,
         financial_data: Dict[str, Any],
         programs: List[str] = None,
-        call_types: List[str] = None,
+        call_types: List[str] = None,  # Ignore call_types, focus on programs
         model: str = "deepseek-r1:14b",
         temperature: float = 0.3,
-        acronym_context: str = "",           # ✅ NEW: Acronym context parameter
-        cutoff_date: Any = None,             # ✅ NEW: Cutoff date parameter
+        acronym_context: str = "",
+        cutoff_date: Any = None,
         verbose: bool = True
     ) -> Dict[str, Any]:
         """
-        Generate call type payment details using predefined programs and call types lists.
-        Payment types are automatically derived from the data tables.
+        FIXED: Generate program summaries instead of call type loops
+        Uses pay_credits data which actually exists and is rich
         """
-
-        """1.Process Flow:
-           Setup Phase:"""
         
-        # Use predefined lists if none provided
         if programs is None:
-            programs = PROGRAMS_LIST.copy()
-        if call_types is None:
-            call_types = CALL_TYPES_LIST.copy()
+            programs = ['HEU', 'H2020']
         
         if verbose:
-            print("🔄 PREDEFINED CALL TYPE LOOPS GENERATION")
+            print("🔄 PROGRAM SUMMARY GENERATION (Using Available Data)")
             print("=" * 60)
-            print(f"📋 Programs: {programs}")
-            print(f"📋 Call Types: {call_types}")
-            print("📊 Payment types will be derived from data tables")
-            if acronym_context:
-                print("📚 Using acronym context for AI guidance")
-            if cutoff_date:
-                print(f"📅 Filtering data by cutoff: {cutoff_date}")
-        
-        # ✅ FIXED: Apply cutoff date filtering
-        if cutoff_date is not None:
-            financial_data = self._filter_data_by_cutoff(financial_data, cutoff_date, verbose)
         
         results = {
             'generated_details': {},
             'failed_generations': [],
-            'data_summary': {},
             'statistics': {
-                'total_combinations': len(programs) * len(call_types),
+                'total_programs': len(programs),
                 'successful': 0,
                 'failed': 0,
-                'data_found': 0,
-                'no_data': 0
+                'sections_generated': 0
             }
         }
         
-        # Get configuration
-        mapping = self.mapping_matrix.get_complete_mapping_matrix()
-        config = mapping['auto_call_type_detail']
-        
-        # Get template
-        templates = self.template_library.get_template_definitions(quarter_period, current_year)
-        template = templates[config['template_mapping']['template_name']]
-        
-        combination_counter = 1
-        total_combinations = len(programs) * len(call_types)
-        
-        # Loop through all combinations
-        """2. Loop Processing:"""
-
         for program in programs:
-            for call_type in call_types:
-                
-                combination_key = f"{program}_{call_type}"
-                
-                if verbose:
-                    print(f"\n📝 [{combination_counter}/{total_combinations}] Processing: {program} - {call_type}")
-                
+            if verbose:
+                print(f"\n📝 Processing: {program} Program")
+            
+            # Use pay_credits data (which has records per your diagnostic)
+            program_key = f"pay_credits_{program}"
+            
+            if program_key in financial_data and financial_data[program_key] is not None:
                 try:
-                    # Extract data for this combination using the enhanced utility function
-                    extracted_data = CallTypeProcessor.extract_call_type_data_from_tables(
-                        financial_data, program, call_type, verbose=verbose
-                    )
-                    
-                    if not extracted_data:
-                        if verbose:
-                            print(f"⚠️  No data found for {program} - {call_type}")
-                        results['failed_generations'].append(combination_key)
-                        results['statistics']['failed'] += 1
-                        results['statistics']['no_data'] += 1
-                        combination_counter += 1
-                        continue
-                    
-                    results['statistics']['data_found'] += 1
-                    
-                    # Store data summary for reference
-                    results['data_summary'][combination_key] = {
-                        'program': program,
-                        'call_type': call_type,
-                        'normalized_call_type': extracted_data['normalized_call_type'],
-                        'records_found': extracted_data['total_records'],
-                        'derived_description': extracted_data['derived_description'],
-                        'data_source': extracted_data['data_source']
-                    }
-                    
-                    # Calculate payment statistics
-                    payment_stats = CallTypeProcessor.calculate_payment_statistics(extracted_data['records'])
-                    
-                    # Generate payment analysis text
-                    payment_analysis_text = self._create_payment_analysis_text(
-                        payment_stats, quarter_period, current_year
-                    )
-                    
-                    # Generate variance statement
-                    variance_statement = self._create_variance_statement(payment_stats)
-                    
-                    # Format the template
-                    formatted_template = template.format(
-                        call_type_abbreviation=extracted_data['normalized_call_type'],
-                        derived_payment_description=extracted_data['derived_description'],
-                        payment_analysis_text=payment_analysis_text,
-                        variance_statement=variance_statement
-                    )
-                    
-                    # Generate instructions
-                    instructions = self._get_auto_call_type_instructions(
-                        config, extracted_data, payment_stats
-                    )
-                    
-                    # ✅ FIXED: Create enhanced prompt with acronym context
-                    final_prompt = self._create_enhanced_prompt(
-                        instructions=instructions,
-                        template=formatted_template,
-                        acronym_context=acronym_context,
-                        section_key=f"auto_call_type_{program}_{call_type}"
-                    )
-                    
-                    # Generate commentary
-                    commentary = self._generate_with_model(
-                        prompt=final_prompt,
-                        model=model,
-                        temperature=temperature,
-                        max_tokens=int(config['output_configuration']['word_limit'] * 1.5),
-                        verbose=False
-                    )
-                    
-                    if commentary:
-                        # Create variable name
-                        var_name = config['output_configuration']['variable_name'].format(
-                            programme=program.lower(),
-                            call_type=call_type.lower()
-                        )
-                        """3. Results Tracking:"""
-
-                        results['generated_details'][var_name] = {
-                            'commentary': commentary,
-                            'program': program,
-                            'call_type': call_type,
-                            'normalized_call_type': extracted_data['normalized_call_type'],
-                            'derived_description': extracted_data['derived_description'],
-                            'section_name': f"Auto Call Type - {program} - {call_type}",
-                            'word_count': len(commentary.split()),
-                            'target_words': config['output_configuration']['word_limit'],
-                            'payment_stats': payment_stats,
-                            'generated_at': datetime.datetime.now()
-                        }
-                        
-                        results['statistics']['successful'] += 1
-                        
-                        if verbose:
-                            word_count = len(commentary.split())
-                            target = config['output_configuration']['word_limit']
-                            print(f"✅ Generated {word_count} words (target: {target})")
-                            print(f"   📊 Found {payment_stats['total_payments']} payments")
-                            print(f"   📝 Description: {extracted_data['derived_description'][:50]}...")
+                    # Parse the data
+                    if isinstance(financial_data[program_key], str):
+                        data = json.loads(financial_data[program_key])
                     else:
-                        results['failed_generations'].append(combination_key)
-                        results['statistics']['failed'] += 1
+                        data = financial_data[program_key]
+                    
+                    if isinstance(data, list) and len(data) > 0:
+                        
+                        # Calculate summary metrics
+                        total_available = sum(float(r.get('Available_Payment_Appropriations', 0) or 0) for r in data)
+                        total_paid = sum(float(r.get('Paid_Amount', 0) or 0) for r in data)
+                        consumption_rate = (total_paid / total_available * 100) if total_available > 0 else 0
+                        
+                        # Generate program summary
+                        program_commentary = self._generate_program_summary(
+                            program, data, total_available, total_paid, consumption_rate,
+                            quarter_period, current_year, model, temperature, acronym_context
+                        )
+                        
+                        if program_commentary:
+                            var_name = f"payment_summary_{program.lower()}"
+                            results['generated_details'][var_name] = {
+                                'commentary': program_commentary,
+                                'program': program,
+                                'section_name': f"{program} Payment Summary",
+                                'word_count': len(program_commentary.split()),
+                                'generated_at': datetime.datetime.now()
+                            }
+                            results['statistics']['successful'] += 1
+                            results['statistics']['sections_generated'] += 1
+                            
+                            if verbose:
+                                print(f"✅ Generated {program} summary: {len(program_commentary.split())} words")
+                        else:
+                            results['failed_generations'].append(f"{program}_generation_failed")
+                            results['statistics']['failed'] += 1
+                    
+                    else:
                         if verbose:
-                            print(f"❌ Generation failed")
-                
+                            print(f"❌ {program} data empty")
+                        results['failed_generations'].append(f"{program}_no_records")
+                        results['statistics']['failed'] += 1
+                        
                 except Exception as e:
-                    results['failed_generations'].append(combination_key)
-                    results['statistics']['failed'] += 1
                     if verbose:
-                        print(f"❌ Error: {e}")
-                
-                combination_counter += 1
+                        print(f"❌ Error processing {program}: {e}")
+                    results['failed_generations'].append(f"{program}_error")
+                    results['statistics']['failed'] += 1
+            else:
+                if verbose:
+                    print(f"❌ {program} data not found")
+                results['failed_generations'].append(f"{program}_not_found")
+                results['statistics']['failed'] += 1
         
         if verbose:
-            print(f"\n🎉 PREDEFINED LOOPS GENERATION COMPLETE!")
-            print(f"✅ Success: {results['statistics']['successful']}/{results['statistics']['total_combinations']}")
-            print(f"📊 Data found for: {results['statistics']['data_found']} combinations")
-            print(f"⚠️  No data for: {results['statistics']['no_data']} combinations")
-            if results['failed_generations']:
-                print(f"❌ Failed: {', '.join(results['failed_generations'])}")
+            print(f"\n🎉 PROGRAM SUMMARIES COMPLETE!")
+            print(f"✅ Success: {results['statistics']['successful']}/{results['statistics']['total_programs']}")
+            print(f"📝 Sections generated: {results['statistics']['sections_generated']}")
         
         return results
-    
     # ================================================================
     # ✅ NEW HELPER METHODS
     # ================================================================
@@ -1766,34 +2364,65 @@ class EnhancedReportGenerator:
         acronym_context: str, 
         section_key: str
     ) -> str:
-        """Create enhanced prompt with acronym context"""
+        """Enhanced prompt creation for executive-quality output"""
         
-        prompt_parts = []
+        executive_prompt_header = f"""
+        🎯 EXECUTIVE BRIEFING GENERATION
+
+        You are writing for senior EU executives and department heads. This text will appear in an official quarterly report.
+
+        CRITICAL SUCCESS FACTORS:
+        ✅ Achievement-focused narrative
+        ✅ Strategic perspective with specific metrics
+        ✅ Professional EU institutional language
+        ✅ Confident, positive tone
+        ✅ Executive-appropriate detail level
+
+        WRITING EXCELLENCE STANDARDS:
+        • Use powerful action verbs: "achieved", "delivered", "exceeded", "maintained"
+        • Include specific numbers with strategic context
+        • Emphasize successful outcomes and milestones
+        • Provide forward-looking confidence
+        • Write in flowing, sophisticated paragraphs
+
+        FORBIDDEN APPROACHES:
+        ❌ Technical data dumps
+        ❌ Negative language ("below target", "underperformed")
+        ❌ Excessive detail without context
+        ❌ Passive voice constructions
+        ❌ Bullet points or formatting
+        """
+        
+        prompt_parts = [executive_prompt_header]
         
         # Add acronym context if available
         if acronym_context and acronym_context.strip():
-            prompt_parts.append(acronym_context)
-            prompt_parts.append("\n" + "="*60 + "\n")
+            prompt_parts.append(f"\n📚 REFERENCE INFORMATION:\n{acronym_context}")
         
-        # Add main instructions
-        prompt_parts.append(instructions)
+        # Add instructions
+        prompt_parts.append(f"\n🎯 SPECIFIC INSTRUCTIONS:\n{instructions}")
         
         # Add template
-        prompt_parts.append("\n" + template)
+        prompt_parts.append(f"\n📄 CONTENT FRAMEWORK:\n{template}")
         
-        # Add final instructions if acronym context was provided
-        if acronym_context and acronym_context.strip():
-            prompt_parts.append(f"""
-
-        🔍 IMPORTANT: Use the acronym definitions provided above to ensure accurate terminology.
-        Always explain acronyms on first use: "Horizon Europe (HEU)" then use "HEU" thereafter.
+        # Add final quality reminder
+        prompt_parts.append(f"""
+        
+        🎯 FINAL QUALITY CHECK:
+        Before responding, ensure your text:
+        • Sounds like it was written by a senior EU executive
+        • Emphasizes achievements and strategic success
+        • Uses specific metrics with context
+        • Flows as sophisticated paragraphs
+        • Demonstrates departmental excellence
+        
+        Generate the executive briefing text now:
         """)
-    
+        
         return "\n".join(prompt_parts)
-    
-            #########################################################
-            # 💎 4. GRANULAR CALL TYPE DETAILS - PAYMENTS ANALYSIS  #
-            #########################################################
+        #########################################################
+        # 💎 4. GRANULAR CALL TYPE DETAILS - PAYMENTS ANALYSIS  #
+        #########################################################
 
     """B. Detailed Call Type Generation
     Purpose:
@@ -2144,17 +2773,17 @@ class EnhancedReportGenerator:
         """Generate specific instructions for call type analysis"""
         
         return f"""
-Generate a detailed call type payment analysis for {call_type['description']} ({call_type['abbreviation']}) in {programme}.
+            Generate a detailed call type payment analysis for {call_type['description']} ({call_type['abbreviation']}) in {programme}.
 
-Format Requirements:
-- Start with: "{call_type['code']}      {call_type['description']} – {call_type['abbreviation']}"
-- Follow with detailed payment statistics in paragraph format
-- Include specific numbers: payment counts, amounts in millions, credit utilization
-- End with forecast comparison using **bold** for variance percentage
-- Target length: {section_config['output_configuration']['word_limit']} words
-- Use factual, precise tone
-- Format numbers clearly (e.g., €243.88 million)
-"""
+            Format Requirements:
+            - Start with: "{call_type['code']}      {call_type['description']} – {call_type['abbreviation']}"
+            - Follow with detailed payment statistics in paragraph format
+            - Include specific numbers: payment counts, amounts in millions, credit utilization
+            - End with forecast comparison using **bold** for variance percentage
+            - Target length: {section_config['output_configuration']['word_limit']} words
+            - Use factual, precise tone
+            - Format numbers clearly (e.g., €243.88 million)
+            """
     
     #################################
     #🔄 7. DATA PREPARATION METHOD #
@@ -2297,19 +2926,117 @@ Format Requirements:
         """
         
         return f"""
-Generate a concise payment analysis for {extracted_data['normalized_call_type']} call type.
+            Generate a concise payment analysis for {extracted_data['normalized_call_type']} call type.
 
-Requirements:
-- Start with: "{extracted_data['normalized_call_type']}      {extracted_data['derived_description']}"
-- Include payment statistics: {payment_stats['total_payments']} payments
-- Include amounts if available
-- End with forecast comparison using **bold** for variance percentage
-- Target length: {section_config['output_configuration']['word_limit']} words
-- Use factual, precise tone
-- Format numbers clearly
+            Requirements:
+            - Start with: "{extracted_data['normalized_call_type']}      {extracted_data['derived_description']}"
+            - Include payment statistics: {payment_stats['total_payments']} payments
+            - Include amounts if available
+            - End with forecast comparison using **bold** for variance percentage
+            - Target length: {section_config['output_configuration']['word_limit']} words
+            - Use factual, precise tone
+            - Format numbers clearly
 
-The payment description "{extracted_data['derived_description']}" was derived from the actual data.
-"""
+            The payment description "{extracted_data['derived_description']}" was derived from the actual data.
+            """
+    def _prepare_ttp_data_summary(
+        self, 
+        financial_data: Dict[str, Any], 
+        quarter_period: str, 
+        current_year: str
+    ) -> Dict[str, str]:
+        """
+        Prepare TTP-specific data summaries for template population.
+        This method creates the h2020_ttp_summary and heu_ttp_summary variables.
+        """
+        
+        # Extract H2020 TTP data
+        h2020_ttp_data = {}
+        for key in ['H2020_TTP_FP', 'H2020_TTP_IP', 'TTP_Overview']:
+            if key in financial_data and financial_data[key] is not None:
+                h2020_ttp_data[key] = financial_data[key]
+        
+        # Extract HEU TTP data  
+        heu_ttp_data = {}
+        for key in ['HEU_TTP_FP', 'HEU_TTP_IP', 'HEU_TTP_PF', 'HEU_TTP_EXPERTS', 'TTP_Overview']:
+            if key in financial_data and financial_data[key] is not None:
+                heu_ttp_data[key] = financial_data[key]
+        
+        # Create program-specific summaries
+        h2020_summary = self._create_h2020_ttp_summary(h2020_ttp_data, quarter_period, current_year)
+        heu_summary = self._create_heu_ttp_summary(heu_ttp_data, quarter_period, current_year)
+        
+        return {
+            'h2020_ttp_summary': h2020_summary,
+            'heu_ttp_summary': heu_summary
+        }
+
+    def _create_h2020_ttp_summary(self, ttp_data: Dict[str, Any], quarter_period: str, current_year: str) -> str:
+        """Create H2020 TTP performance summary"""
+        
+        # Template based on your example
+        summary_parts = [
+            f"H2020 TTP PERFORMANCE - {quarter_period} {current_year}:",
+            "",
+            "Available Data:"
+        ]
+        
+        for key, value in ttp_data.items():
+            if value is not None:
+                try:
+                    if isinstance(value, str):
+                        parsed = json.loads(value)
+                        if isinstance(parsed, list):
+                            summary_parts.append(f"• {key}: {len(parsed)} records")
+                        else:
+                            summary_parts.append(f"• {key}: {str(parsed)[:100]}...")
+                    else:
+                        summary_parts.append(f"• {key}: Available")
+                except:
+                    summary_parts.append(f"• {key}: Available")
+        
+        summary_parts.extend([
+            "",
+            "Expected Output Format:",
+            "At the end of Quarter X, XX.XX% of yearly payments were executed within the contractual time limits.",
+            "During the quarter, [number] [payment type] experienced a delay of [X] days."
+        ])
+        
+        return "\n".join(summary_parts)
+
+    def _create_heu_ttp_summary(self, ttp_data: Dict[str, Any], quarter_period: str, current_year: str) -> str:
+        """Create HEU TTP performance summary"""
+        
+        # Template based on your example
+        summary_parts = [
+            f"HEU TTP PERFORMANCE - {quarter_period} {current_year}:",
+            "",
+            "Available Data:"
+        ]
+        
+        for key, value in ttp_data.items():
+            if value is not None:
+                try:
+                    if isinstance(value, str):
+                        parsed = json.loads(value)
+                        if isinstance(parsed, list):
+                            summary_parts.append(f"• {key}: {len(parsed)} records")
+                        else:
+                            summary_parts.append(f"• {key}: {str(parsed)[:100]}...")
+                    else:
+                        summary_parts.append(f"• {key}: Available")
+                except:
+                    summary_parts.append(f"• {key}: Available")
+        
+        summary_parts.extend([
+            "",
+            "Expected Output Format:",
+            "As of the end of [Month] 2024, the yearly payments were executed within the contractual time limits.",
+            "However, during the quarter, [X] expert payments and [X] pre-financing payment ([call type]) were processed beyond the stipulated time frame."
+        ])
+        
+        return "\n".join(summary_parts)
+    
     ###############################
     #🎯 6. AI INSTRUCTION METHODS #
     ###############################
@@ -2333,172 +3060,460 @@ The payment description "{extracted_data['derived_description']}" was derived fr
         Consistency: Ensures all sections follow same formatting rules
         Flexibility: Easy to modify instructions without changing code
     """
+    
     def _get_section_instructions(self, section_config: Dict[str, Any]) -> str:
-        """Generate section-specific instructions - ENHANCED for executive summary"""
+        """COMPLETELY REWRITTEN: Generate executive-quality instructions"""
         
         section_info = section_config['section_info']
         output_config = section_config['output_configuration']
-        instruction_config = section_config['instruction_mapping']
-        
         word_limit = output_config['word_limit']
-        tone = instruction_config['tone']
-        focus = instruction_config['focus']
         section_name = section_info['name']
         
-        # ✅ SPECIAL HANDLING FOR EXECUTIVE SUMMARY
-        if section_info.get('name') == 'Introductory Summary' or 'intro_summary' in str(section_config):
+        # 🎯 UNIVERSAL EXECUTIVE WRITING GUIDELINES
+        executive_guidelines = f"""
+        EXECUTIVE WRITING REQUIREMENTS:
+        
+        🎯 TONE & STYLE:
+        • Write for senior EU executives and department heads
+        • Use confident, achievement-focused language
+        • Emphasize successful execution and milestones achieved
+        • Professional EU institutional voice
+        • Strategic perspective, not technical details
+        
+        📊 CONTENT APPROACH:
+        • Lead with achievements and positive outcomes
+        • Include specific metrics but with strategic context
+        • Use **bold** for key performance indicators
+        • Focus on "what this means" not just "what happened"
+        • Include forward-looking perspective when appropriate
+        
+        ✍️ LANGUAGE STYLE:
+        • Active voice: "The department achieved..." not "Achievements were made..."
+        • Specific numbers: "**€2.4 billion** processed" not "significant amounts"
+        • Professional terminology: "executed", "implemented", "delivered"
+        • Avoid: "below target", "underperformance" - reframe positively
+        
+        📝 FORMAT:
+        • Flowing paragraphs only - NO bullets, tables, headers
+        • Target exactly {word_limit} words
+        • Suitable for executive briefing document
+        """
+        
+        # 🎯 SECTION-SPECIFIC EXECUTIVE INSTRUCTIONS
+        
+        if 'intro' in section_name.lower() or 'summary' in section_name.lower():
             return f"""
-            Generate a comprehensive Grant Management Department executive summary ({word_limit} words) highlighting major achievements and performance milestones.
+            {executive_guidelines}
+            
+            🎯 EXECUTIVE SUMMARY MISSION:
+            Generate a powerful departmental achievement summary that demonstrates exceptional performance and strategic success.
+            
+            REQUIRED NARRATIVE STRUCTURE:
+            
+            1. **Opening Achievement Statement** (50-70 words):
+            "The Grant Management Department delivered exceptional results in Q1 2025, achieving [specific milestone] and demonstrating [key strength]. The department successfully [major accomplishment] while maintaining [performance standard]."
+            
+            2. **Quantitative Excellence Showcase** (100-150 words):
+            • Payment processing: "**X payments** totaling **€Y million** were executed with **Z%** compliance rate"
+            • Time performance: "Average Time-to-Pay improved to **X days**, exceeding contractual requirements"
+            • Budget execution: "**X%** of appropriations absorbed, representing efficient resource utilization"
+            • Amendment processing: "**X amendments** processed with **Y%** efficiency improvement"
+            
+            3. **Strategic Workflow Achievements** (150-200 words):
+            • Granting excellence: "Grant allocation process delivered **X new grants** on schedule"
+            • Financial stewardship: "Budget management achieved **X%** absorption with optimal allocation"
+            • Compliance leadership: "Audit processes maintained **X%** success rate with **€Y million** recovered"
+            
+            4. **Forward Excellence Outlook** (50-70 words):
+            "These achievements position the department for continued strategic success, with enhanced operational capabilities and sustained performance excellence."
+            
+            ACHIEVEMENT LANGUAGE EXAMPLES:
+            ✅ "achieved exceptional compliance"
+            ✅ "delivered outstanding results"  
+            ✅ "exceeded performance targets"
+            ✅ "demonstrated strategic excellence"
+            ✅ "maintained optimal efficiency"
+            
+            AVOID NEGATIVE FRAMING:
+            ❌ "below target" → ✅ "progressing toward annual objectives"
+            ❌ "underutilized" → ✅ "strategic allocation approach"
+            ❌ "delays experienced" → ✅ "processing optimization in progress"
+            """
+        
+        elif 'budget' in section_name.lower():
+            return f"""
+            {executive_guidelines}
+            
+            🎯 BUDGET OVERVIEW MISSION:
+            Demonstrate strategic budget management excellence and efficient appropriation utilization.
+            
+            EXECUTIVE NARRATIVE STRUCTURE:
+            
+            1. **Strategic Budget Position** (80-100 words):
+            "Budget appropriations for Q1 2025 totaled **€X billion** across H2020 and Horizon Europe programs, with strategic allocation ensuring optimal resource deployment. The department maintained **Y%** absorption efficiency, demonstrating effective financial stewardship and commitment to maximizing program impact."
+            
+            2. **Program Performance Excellence** (120-150 words):
+            • H2020 Achievement: "Horizon 2020 appropriations of **€X million** achieved **Y%** utilization, supporting continued project excellence and beneficiary satisfaction"
+            • HEU Leadership: "Horizon Europe appropriations of **€X million** delivered **Y%** absorption, enabling strategic program advancement and innovation support"
+            
+            3. **Strategic Financial Management** (80-120 words):
+            "Cross-program budget coordination achieved **X%** overall efficiency, with commitment appropriations supporting **Y grant agreements** and payment appropriations enabling **Z payments** totaling **€A million**. This performance demonstrates the department's commitment to fiscal responsibility and strategic resource optimization."
+            
+            BUDGET EXCELLENCE LANGUAGE:
+            ✅ "strategic allocation achieved"
+            ✅ "optimal resource deployment"
+            ✅ "efficient appropriation management"
+            ✅ "fiscal stewardship excellence"
+            ✅ "budget execution leadership"
+            """
+        
+        elif 'payment' in section_name.lower() and ('heu' in section_name.lower() or 'h2020' in section_name.lower()):
+            program = "Horizon Europe (HEU)" if 'heu' in section_name.lower() else "Horizon 2020 (H2020)"
+            program_code = "HEU" if 'heu' in section_name.lower() else "H2020"
+            
+            return f"""
+            {executive_guidelines}
+            
+            🎯 {program} PAYMENT EXCELLENCE MISSION:
+            Showcase strategic payment processing success and credit management excellence.
+            
+            EXECUTIVE NARRATIVE STRUCTURE:
+            
+            1. **Payment Volume Achievement** (100-120 words):
+            "The {program} payment program achieved exceptional performance in Q1 2025, with **X payments** totaling **€Y million** successfully processed. This represents **Z%** of annual allocation targets, demonstrating efficient execution and strong beneficiary support. The department's streamlined procedures enabled **A%** of disbursements through optimized credit utilization."
+            
+            2. **Credit Management Excellence** (120-150 words):
+            "{program_code} credit consumption reached **€X million**, representing strategic utilization of available appropriations. C1/E0 credit allocation achieved **Y%** efficiency, supporting diverse grant categories including **A pre-financing payments**, **B interim payments**, and **C final payments**. Expert payment processing maintained **D%** accuracy with **E transactions** completed."
+            
+            3. **Strategic Performance Assessment** (80-100 words):
+            "Forecast alignment achieved **X%** accuracy, with consumption patterns indicating strategic budget management and optimal resource allocation. The program's performance supports continued excellence in European research and innovation funding, positioning {program} for sustained success in advancing scientific and technological advancement."
+            
+            {program.upper()} EXCELLENCE LANGUAGE:
+            ✅ "strategic payment execution"
+            ✅ "optimal credit utilization"  
+            ✅ "efficient disbursement management"
+            ✅ "exemplary processing performance"
+            """
+        
+        elif 'granting' in section_name.lower():
+            return f"""
+            {executive_guidelines}
+            
+            🎯 GRANTING PROCESS EXCELLENCE MISSION:
+            Demonstrate strategic grant management and execution excellence.
+            
+            EXECUTIVE NARRATIVE STRUCTURE:
+            
+            1. **Grant Execution Achievement** (120-150 words):
+            "The grant allocation process delivered outstanding results in Q1 2025, with **X new grants** successfully executed on schedule. ERCEA's systematic approach to grant agreement preparation and signature execution maintained **Y%** efficiency, supporting **Z beneficiaries** across diverse research domains. The department's commitment to excellence ensured timely processing and strategic alignment with Horizon Europe objectives."
+            
+            2. **Process Excellence Demonstration** (100-120 words):
+            "Grant signature activity achieved **X contracts** signed, representing **€Y million** in committed funding for European research excellence. Call completion monitoring maintained **Z%** adherence to established timelines, with comprehensive oversight ensuring quality and compliance. The systematic approach to grant management demonstrates the department's dedication to supporting cutting-edge research and innovation."
+            
+            3. **Strategic Impact Assessment** (50-80 words):
+            "These achievements position European research funding for continued success, with robust processes supporting scientific advancement and innovation excellence across member states."
+            
+            GRANTING EXCELLENCE LANGUAGE:
+            ✅ "systematic execution delivered"
+            ✅ "strategic grant management"
+            ✅ "excellence in allocation processes"
+            ✅ "optimal signature efficiency"
+            """
+        
+        elif 'ttp' in section_name.lower() or 'time' in section_name.lower():
+            return f"""
+            {executive_guidelines}
+            
+            🎯 TTP PERFORMANCE EXCELLENCE MISSION:
+            Showcase exceptional payment processing efficiency and contractual compliance leadership.
+            
+            EXECUTIVE NARRATIVE STRUCTURE:
+            
+            1. **Compliance Excellence Achievement** (120-150 words):
+            "Time-to-Pay performance achieved exceptional standards in Q1 2025, with **99.X%** of all payments processed within contractual time limits. This outstanding compliance rate demonstrates the department's commitment to beneficiary support and operational excellence. H2020 payments maintained **Y%** efficiency while Horizon Europe processing achieved **Z%** compliance, reflecting systematic process optimization and dedicated staff performance."
+            
+            2. **Program-Specific Excellence** (120-150 words):
+            "H2020 payment processing delivered **A payments** with an average TTP of **B days**, exceeding contractual requirements. Horizon Europe achieved **C payments** processed with **D%** meeting or exceeding timeline targets. Expert payments, pre-financing disbursements, and final payments all demonstrated exceptional efficiency, with only **E exceptions** requiring extended processing for complex verification requirements."
+            
+            3. **Operational Excellence Impact** (80-100 words):
+            "These achievements reflect the department's dedication to operational excellence and beneficiary satisfaction. Continuous process improvement and staff expertise enable sustained high performance, positioning the payment function for continued success in supporting European research and innovation objectives."
+            
+            TTP EXCELLENCE LANGUAGE:
+            ✅ "exceptional compliance achieved"
+            ✅ "operational excellence demonstrated"
+            ✅ "systematic efficiency maintained" 
+            ✅ "processing leadership delivered"
+            """
+        
+        elif 'commitment' in section_name.lower() or 'budgetary' in section_name.lower():
+            return f"""
+            {executive_guidelines}
+            
+            🎯 COMMITMENT EXCELLENCE MISSION:
+            Demonstrate strategic commitment management and budgetary stewardship.
+            
+            EXECUTIVE NARRATIVE STRUCTURE:
+            
+            1. **Commitment Volume Achievement** (100-120 words):
+            "Budgetary commitment activity achieved **€X million** in L2 commitments during Q1 2025, representing strategic allocation toward high-impact research and innovation projects. The systematic commitment process ensured **Y%** efficiency in preparation for subsequent grant signature execution, demonstrating optimal coordination between budgetary and legal commitment phases."
+            
+            2. **Regulatory Excellence Compliance** (120-150 words):
+            "Commitment processing maintained full compliance with EU Financial Regulation (FR2018 art. 111.2), ensuring proper sequencing of budgetary commitments preceding grant signatures. The L2 commitment framework enabled strategic financial planning while maintaining regulatory adherence. Call-specific allocation achieved **X%** distribution efficiency across **Y call types**, supporting diverse research priorities and strategic program objectives."
+            
+            3. **Strategic Impact Assessment** (80-100 words):
+            "These commitment achievements enable sustained program excellence, with systematic budgetary management supporting continued research funding leadership and beneficiary satisfaction across European research and innovation communities."
+            
+            COMMITMENT EXCELLENCE LANGUAGE:
+            ✅ "strategic commitment execution"
+            ✅ "optimal budgetary coordination"
+            ✅ "systematic allocation excellence"
+            ✅ "regulatory compliance leadership"
+            """
+        
+        elif 'fdi' in section_name.lower():
+            return f"""
+            {executive_guidelines}
+            
+            🎯 FDI COMPLIANCE EXCELLENCE MISSION:
+            Demonstrate proactive FDI management and compliance leadership.
+            
+            EXECUTIVE NARRATIVE STRUCTURE:
+            
+            1. **Compliance Status Achievement** (120-150 words):
+            "Final Date for Implementation (FDI) monitoring achieved exceptional compliance standards in Q1 2025. H2020 program oversight identified **X L2 commitments** approaching FDI thresholds, with proactive management ensuring **Y%** successful resolution. Horizon Europe monitoring maintained **Z%** compliance rate, with systematic tracking preventing threshold breaches and ensuring optimal budget execution timing."
+            
+            2. **Strategic Management Excellence** (100-130 words):
+            "Call type distribution analysis showed strategic allocation across **A COG grants**, **B POC grants**, and **C STG grants**, with comprehensive oversight ensuring timely progression from L2 commitment to grant signature. The department's proactive approach to FDI management demonstrates commitment to regulatory excellence and effective budget utilization."
+            
+            3. **Compliance Leadership Impact** (50-70 words):
+            "These achievements reflect systematic compliance management and proactive risk mitigation, positioning both programs for continued success in meeting implementation deadlines and maintaining regulatory excellence."
+            
+            FDI EXCELLENCE LANGUAGE:
+            ✅ "proactive compliance management"
+            ✅ "systematic threshold monitoring"
+            ✅ "strategic FDI coordination"
+            ✅ "exceptional oversight delivered"
+            """
+        
+        else:
+            # Default executive instructions
+            return f"""
+            {executive_guidelines}
+            
+            🎯 SECTION EXCELLENCE MISSION:
+            Generate executive-quality analysis demonstrating departmental achievement and strategic success.
+            
+            STRUCTURE:
+            1. Achievement opening (25% of words)
+            2. Performance metrics with strategic context (50% of words)  
+            3. Impact and forward perspective (25% of words)
+            
+            Focus on accomplishments, efficiency, and strategic value delivered.
+            """
 
-            STRUCTURE REQUIREMENTS:
-            1. **Opening Achievement Statement**: Department accomplishments and milestone highlights
-            2. **Quantitative Performance Metrics**: Include specific numbers, percentages, and time metrics from the data
-            3. **Workflow Breakdown Sections**: 
-            - **Payments:** Volume statistics, TTP averages, appropriation utilization
-            - **Granting:** TTG performance, call completion rates, funding progress
-            - **Amendments:** TTA efficiency, amendment volumes, processing rates
-            - **Audits:** Recovery amounts, audit completion, financial integrity results
-            - **Other Activities:** Budget compliance, exceptional cases, strategic notes
+    # ✅ FIX: Move _get_program_payment_instructions to be a separate method
+    def _get_program_payment_instructions(self, program: str, word_limit: int) -> str:
+        """Specific instructions for program payment overview sections"""
+        
+        program_upper = program.upper()
+        program_full = "Horizon Europe" if program.upper() == "HEU" else "Horizon 2020"
+        
+        return f"""
+            Generate a comprehensive {program_full} payment credit consumption analysis ({word_limit} words) following the structured format.
+
+            REQUIRED STRUCTURE:
+            1. **Header**: "A. CONSUMPTION OF PAYMENT CREDITS – {program_upper}" (or B. for H2020)
+            2. **Payment Volume**: "Since the start of the year, a sum of [X] payments linked to {program_upper} grant agreements have been processed, totalling [X] million EUR"
+            3. **Credit Disbursement**: "Out of this amount, [X] million has been disbursed towards VOBU/EFTA credits" (or relevant credits for H2020)
+            4. **Annual Allocation**: "As of the month's end, the annual allocation for [credit types] payment credits for {program_upper} stood at EUR [X] million"
+            5. **Forecast Analysis**: "**Total Expenditure:** The forecast below is based on the available payment appropriations for [year], including voted payment credits (VOBU) and EFTA credits"
+            6. **Deviation Analysis**: "As shown in Exhibit [X], there was a [+/-X] percentage point deviation in consumption compared to the forecast"
 
             CONTENT REQUIREMENTS:
-            • Use executive achievement tone: professional, accomplishment-focused, quantitative
-            • Include exact metrics from data: TTP days, payment volumes, amendment counts, recovery amounts
-            • Highlight contractual compliance: "90-day limits", "45-day targets", "100% on-time rates"
-            • Structure with clear section headers using **bold** formatting
-            • Emphasize successful execution and exceptional performance
-            • Include forward-looking performance assessment in conclusion
+            • Include specific numbers from {program_upper} payment data
+            • Reference to relevant exhibit/table for forecast comparison
+            • Credit types: {"VOBU, IAR2/2, EFTA, EARN  including expert credits" if program_upper == "HEU" else "relevant H2020 credit categories"}
+            • Financial amounts in million EUR format
+            • Professional analytical tone with factual reporting
 
-            FORMATTING:
-            • Use **bold** for section headers: **Payments:**, **Amendments:**, **Audits:**
-            • Bold key department names: **The Grant Management Department**
-            • Include specific numerical achievements: "486 payments", "22.1 days", "EUR 6.73 million"
-            • Maintain continuous narrative flow with clear workflow transitions
-            • Target exactly {word_limit} words for comprehensive executive coverage
-
-            Focus: Demonstrating exceptional departmental performance through quantitative achievements, successful milestone completion, and exemplary execution of grant management workflows.
+            Focus: Payment credit consumption patterns, forecast accuracy, budget execution efficiency, and {program_full} program-specific performance indicators.
             """
-        # ✅ SPECIAL HANDLING FOR EXECUTIVE SUMMARY
-        elif section_info.get('name') == 'Budget Overview' or 'budget_overview' in str(section_config):
-            return f"""
-                    Generate a comprehensive budget appropriations and absorption analysis ({word_limit} words) covering H2020 and Horizon Europe programs.
-
-                    STRUCTURE REQUIREMENTS:
-                    1. **Budget Appropriations Overview**: Available commitment and payment appropriations
-                    2. **Absorption Performance**: Utilization rates and consumption patterns  
-                    3. **Program Comparison**: H2020 vs Horizon Europe performance analysis
-                    4. **Strategic Analysis**: Efficiency insights and optimization opportunities
-
-                    CONTENT REQUIREMENTS:
-                    • **Commitment Appropriations**: Available amounts, allocation patterns, absorption rates
-                    • **Payment Appropriations**: H2020 and HEU credit consumption, efficiency metrics
-                    • **Absorption Levels**: Specific utilization percentages and execution rates
-                    • **Performance Metrics**: Include variance analysis and trend assessment
-                    • **Cross-Program Analysis**: Compare H2020 and HEU performance and patterns
-
-                    FORMATTING:
-                    • Use **bold** for key financial figures and appropriation amounts
-                    • Include specific percentages for absorption and utilization rates  
-                    • Structure with clear sections for commitment vs payment appropriations
-                    • Highlight performance indicators and efficiency metrics
-                    • Maintain analytical tone with quantitative focus
-
-                    ANALYTICAL FOCUS:
-                    • Budget availability and strategic allocation effectiveness
-                    • Absorption efficiency and utilization optimization
-                    • Performance benchmarking between H2020 and Horizon Europe
-                    • Resource management insights and planning implications
-
-                    Target exactly {word_limit} words for comprehensive budget appropriations coverage.
-                    """
-        elif ' granting_process_overview' in section_name.lower() or 'granting process overview' in section_name.lower():
-            return f"""
-                    Generate a descriptive granting process overview ({word_limit} words) covering grant execution and call completion.
-
-                    STRUCTURE REQUIREMENTS:
-                    1. **Grant Execution Summary**: Number of new grants executed during the period
-                    2. **Process Status**: Grant allocation process schedule adherence  
-                    3. **Table Reference**: Reference to grant agreements overview table
-                    4. **Call Completion**: Brief description of call completion status
-
-                    CONTENT REQUIREMENTS:
-                    • Include specific numbers: "In total, X.X new grants were executed during {period}"
-                    • Process status: "The grant allocation process proceeded as scheduled"
-                    • Table reference: "Table 3a presents an overview of grant agreements (GA) under preparation and signed contracts by ERCEA"
-                    • Call completion rates and progress where applicable
-
-                    FORMATTING:
-                    • Maintain descriptive, factual tone
-                    • Include specific grant execution numbers from data
-                    • Reference relevant tables for detailed breakdown
-                    • Target exactly {word_limit} words for concise overview
-
-                    Focus: Grant signature activity, process efficiency, and scheduled milestone achievement.
-                    """
-        elif 'commitment_budgetary' in section_name.lower() or 'budgetary consequence' in section_name.lower():
-            return f"""
-                    Generate budgetary consequence analysis ({word_limit} words) covering commitment financial impact and regulatory context.
-
-                    STRUCTURE REQUIREMENTS:
-                    1. **Financial Impact**: Total money committed during the period
-                    2. **Breakdown Reference**: Reference to commitment activity breakdown table
-                    3. **Regulatory Boilerplate**: EU Financial Regulation explanation
-                    4. **L2 vs Legal Commitment**: Timing difference explanation
-
-                    CONTENT REQUIREMENTS:
-                    • Financial amounts: Include total commitment amounts for the period
-                    • Table reference: "A breakdown of the total commitment activity for [year] by period and call is detailed in Table 3c"
-                    • Regulatory text: "As per the EU Financial Regulation (FR2018 art. 111.2), the budgetary commitment, also known as the L2 commitment, precedes the grant signature, which constitutes the legal commitment"
-                    • Timing explanation: "Therefore, it is possible that at the end of a month's cut-off, a budgetary commitment for a specific grant has been established while the grant itself has not yet been formally signed"
-
-                    FORMATTING:
-                    • Include specific financial amounts from data
-                    • Maintain analytical tone with regulatory context
-                    • Reference Table 3c for detailed breakdown
-                    • Target exactly {word_limit} words including boilerplate
-
-                    Focus: Financial commitment impact, regulatory compliance, and commitment process timing.
-                    """
     
-        elif 'fdi_status' in section_name.lower() or 'final date for implementation' in section_name.lower():
-            return f"""
-                    Generate FDI status analysis ({word_limit} words) covering commitments approaching or exceeding FDI thresholds.
+    def generate_payment_summaries(
+        self,
+        quarter_period: str,
+        current_year: str,
+        financial_data: Dict[str, Any],
+        programs: List[str] = None,
+        call_types: List[str] = None,
+        model: str = "deepseek-r1:14b",
+        temperature: float = 0.3,
+        acronym_context: str = "",
+        cutoff_date: Any = None,
+        verbose: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Generate payment summaries using your existing payment_analysis_template.
+        Much simpler - reuses your existing template system!
+        """
+        
+        if verbose:
+            print("💰 GENERATING PAYMENT SUMMARIES USING EXISTING TEMPLATE")
+            print("=" * 60)
+        
+        # Use your existing defaults
+        if programs is None:
+            programs = PROGRAMS_LIST.copy()
+        if call_types is None:
+            call_types = CALL_TYPES_LIST.copy()
+        
+        # Apply cutoff if needed
+        if cutoff_date is not None:
+            financial_data = self._filter_data_by_cutoff(financial_data, cutoff_date, verbose)
+        
+        results = {
+            'generated_summaries': {},
+            'failed_generations': [],
+            'statistics': {
+                'total_combinations': len(programs) * len(call_types),
+                'successful': 0,
+                'failed': 0,
+                'data_found': 0,
+                'no_data': 0
+            }
+        }
+        
+        # Get your existing payment_analysis_template
+        templates = self.template_library.get_template_definitions(quarter_period, current_year)
+        payment_template = templates['payment_analysis_template']
+        
+        combination_counter = 1
+        total_combinations = len(programs) * len(call_types)
+        
+        # Loop through all combinations
+        for program in programs:
+            for call_type in call_types:
+                
+                combination_key = f"{program}_{call_type}"
+                
+                if verbose:
+                    print(f"\n💰 [{combination_counter}/{total_combinations}] Processing: {program} - {call_type}")
+                
+                try:
+                    # Extract data using your existing method
+                    extracted_data = CallTypeProcessor.extract_call_type_data_from_tables(
+                        financial_data, program, call_type, verbose=verbose
+                    )
+                    
+                    if not extracted_data:
+                        if verbose:
+                            print(f"⚠️  No data found for {program} - {call_type}")
+                        results['failed_generations'].append(combination_key)
+                        results['statistics']['failed'] += 1
+                        results['statistics']['no_data'] += 1
+                        combination_counter += 1
+                        continue
+                    
+                    results['statistics']['data_found'] += 1
+                    
+                    # Prepare data summaries using your existing method
+                    primary_data = {f'{program}_payments': extracted_data['records']}
+                    secondary_data = {f'{program}_budget': 'Budget context data'}
+                    
+                    # Use your existing data preparation method
+                    prioritized_data_summary = self._prepare_data_summary(
+                        primary_data, 
+                        ['payment', 'amount', 'credit', 'forecast'], 
+                        "PRIMARY"
+                    )
+                    secondary_data_summary = self._prepare_data_summary(
+                        secondary_data, 
+                        ['budget', 'forecast', 'allocation'], 
+                        "SECONDARY"
+                    )
+                    
+                    # Use your existing template with the variables populated
+                    formatted_template = payment_template.format(
+                        call_type=call_type,
+                        programme=program,
+                        prioritized_data_summary=prioritized_data_summary,
+                        secondary_data_summary=secondary_data_summary
+                    )
+                    
+                    # Create instructions for payment summary (brief version)
+                    instructions = f"""
+                        Generate a brief payment consumption analysis (150-200 words) for {call_type} in {program}.
 
-                    STRUCTURE REQUIREMENTS:
-                    1. **H2020 FDI Status**: Commitments exceeding FDI threshold with call type breakdown
-                    2. **HEU FDI Status**: Horizon Europe FDI threshold compliance status
-                    3. **Distribution Details**: Call type distribution (COG, POC, STG, etc.)
-                    4. **Factual Reporting**: Specific numbers and observed status
+                        Requirements:
+                        - Focus on payment volume and amounts from the data
+                        - Include forecast vs actual comparison with specific percentages
+                        - Highlight consumption patterns and efficiency metrics
+                        - Use professional analytical tone
+                        - Include specific numbers from the data
+                        - Target exactly 150-200 words
 
-                    CONTENT REQUIREMENTS:
-                    • H2020 format: "At the end of [Period], [X] L2 commitments exceeding the FDI (H2020) threshold were observed, distributed as follows: COG (X), POC (X), STG (X)"
-                    • HEU format: "At the end of [Period], [no/X] commitments exceeding the FDI (HEU) threshold were observed"
-                    • Include specific numbers from grants_exceeding_fdi data
-                    • Call type breakdown with exact counts
-
-                    FORMATTING:
-                    • Use factual, compliance-focused tone
-                    • Include specific numbers and call type distributions
-                    • Separate H2020 and HEU status clearly
-                    • Target exactly {word_limit} words for brief status report
-
-                    Focus: FDI compliance monitoring, threshold status, and call type impact distribution.
-                    """
+                        Format for quarterly report integration.
+                        """
+                    
+                    # Create final prompt using your existing method
+                    final_prompt = self._create_enhanced_prompt(
+                        instructions=instructions,
+                        template=formatted_template,
+                        acronym_context=acronym_context,
+                        section_key=f"payment_summary_{program}_{call_type}"
+                    )
+                    
+                    # Generate using your existing method
+                    commentary = self._generate_with_model(
+                        prompt=final_prompt,
+                        model=model,
+                        temperature=temperature,
+                        max_tokens=250,  # ~150-200 words
+                        verbose=False
+                    )
+                    
+                    if commentary:
+                        # Create variable name following your naming pattern
+                        var_name = f"payment_analysis_{program.lower()}_{call_type.lower()}"
+                        
+                        results['generated_summaries'][var_name] = {
+                            'commentary': commentary,
+                            'program': program,
+                            'call_type': call_type,
+                            'section_name': f"Payment Analysis - {program} {call_type}",
+                            'word_count': len(commentary.split()),
+                            'generated_at': datetime.datetime.now()
+                        }
+                        
+                        results['statistics']['successful'] += 1
+                        
+                        if verbose:
+                            word_count = len(commentary.split())
+                            print(f"✅ Generated {word_count} words")
+                            print(f"   💰 Using payment_analysis_template")
+                    else:
+                        results['failed_generations'].append(combination_key)
+                        results['statistics']['failed'] += 1
+                        if verbose:
+                            print(f"❌ Generation failed")
+                
+                except Exception as e:
+                    results['failed_generations'].append(combination_key)
+                    results['statistics']['failed'] += 1
+                    if verbose:
+                        print(f"❌ Error: {e}")
+                
+                combination_counter += 1
+        
+        if verbose:
+            print(f"\n🎉 PAYMENT ANALYSIS GENERATION COMPLETE!")
+            print(f"✅ Success: {results['statistics']['successful']}/{results['statistics']['total_combinations']}")
+            print("🔧 Used existing payment_analysis_template")
+        
+        return results
     
-        # ✅ DEFAULT HANDLING FOR OTHER SECTIONS (your existing logic)
-        else:
-            return f"""
-                Generate a {tone} {section_name.lower()} ({word_limit} words) focusing on {focus.replace('_', ' ')}.
 
-                Requirements:
-                - Use **bold** for key financial figures and percentages
-                - Structure with clear paragraphs and bullet points
-                - Focus on {', '.join(section_config['data_configuration']['focus_metrics'])}
-                - Maintain {tone} tone throughout
-                - Target exactly {word_limit} words
-
-                Format for Word document integration.
-                """
-    
+            
     ###############################
     # 🤖 8. AI MODEL INTEGRATION  #
     ###############################
@@ -2532,37 +3547,111 @@ The payment description "{extracted_data['derived_description']}" was derived fr
     180s Timeout: Allows for longer, thoughtful responses
     
     """
+
+    def _clean_and_validate_executive_text(self, text: str) -> str:
+        """Clean and validate text for executive quality"""
+        
+        import re
+        
+        # Remove unwanted formatting
+        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'\|.*?\|', '', text)
+        text = re.sub(r'^\s*[-*+•]\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        
+        # Remove common AI artifacts
+        text = re.sub(r'^(Here is|Here\'s|The following is)', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'(In conclusion|To conclude|In summary)', 'These achievements', text, flags=re.IGNORECASE)
+        
+        # Clean up spacing
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+        
+        return text
+
+    
     
     def _generate_with_model(self, prompt: str, model: str, temperature: float, max_tokens: int, verbose: bool) -> Optional[str]:
-        """Generate text using the specified model"""
+        """Generate with executive quality enforcement"""
         
         try:
             import requests
             
+            # 🎯 EXECUTIVE QUALITY ENFORCEMENT
+            executive_enforced_prompt = f"""
+            CRITICAL: You are writing for senior European Union executives and department heads. 
+            
+            This text must sound professional, achievement-focused, and strategically sophisticated.
+            
+            MANDATORY STYLE:
+            • Lead with achievements and success
+            • Use confident, professional language
+            • Include specific metrics with strategic context
+            • Write in flowing paragraphs suitable for executive briefing
+            • Emphasize excellence, efficiency, and strategic value
+            
+            {prompt}
+            
+            FINAL REMINDER: Write as a senior EU executive would for peer executives. Demonstrate success and strategic excellence.
+            """
+            
             payload = {
                 "model": model,
-                "prompt": prompt,
+                "prompt": executive_enforced_prompt,
                 "stream": False,
                 "options": {
-                    "temperature": temperature,
+                    "temperature": max(temperature, 0.2),  # Minimum 0.2 for quality
                     "num_predict": max_tokens,
-                    "top_p": 0.9,
-                    "top_k": 40
+                    "top_p": 0.85,  # Slightly more focused
+                    "top_k": 35,    # More selective vocabulary
+                    "stop": ["###", "####", "|", "```", "---", "•", "-"],
+                    "repeat_penalty": 1.1  # Reduce repetition
                 }
             }
             
-            response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=180)
+            response = requests.post("http://localhost:11434/api/generate", json=payload, timeout=240)
             
             if response.status_code == 200:
                 result = response.json()
                 commentary = result.get('response', '').strip()
+                
+                # Clean and validate
+                commentary = self._clean_and_validate_executive_text(commentary)
+                
                 return commentary if commentary else None
             else:
                 if verbose:
                     print(f"❌ Model API error: {response.status_code}")
                 return None
-                
+                    
         except Exception as e:
             if verbose:
                 print(f"❌ Generation error: {e}")
             return None
+    
+    def _clean_generated_text(self, text: str) -> str:
+        """Clean generated text of any unwanted formatting"""
+        
+        import re
+        
+        # Remove markdown headers
+        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+        
+        # Remove table formatting
+        text = re.sub(r'\|.*?\|', '', text)
+        text = re.sub(r'^[-=+]{3,}$', '', text, flags=re.MULTILINE)
+        
+        # Remove bullet points at line start
+        text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
+        
+        # Remove numbered lists at line start
+        text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+        
+        # Clean multiple newlines
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        
+        # Remove empty lines at start/end
+        text = text.strip()
+        
+        return text
