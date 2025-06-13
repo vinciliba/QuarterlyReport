@@ -76,6 +76,7 @@
 
 import logging
 import datetime
+import pandas as pd
 import json
 import re
 from typing import Dict, Any, Optional, List
@@ -164,249 +165,324 @@ class ReportTemplateLibrary:
         current_date = datetime.datetime.now().strftime('%Y-%m-%d')
         
         return {
-            # ============================================================
-            # 🛠️ POINT 6: Modify Existing Templates
-            #
-            # EXECUTIVE & OVERVIEW TEMPLATES
-            # ============================================================
+                            # ============================================================
+                            # 🛠️ POINT 6: Modify Existing Templates
+                            #
+                            # EXECUTIVE & OVERVIEW TEMPLATES
+                            # ============================================================
 
-            # ============================================================
-            # 🎯 Executive Summary -
-            # ============================================================
-            'executive_summary_template': f"""
-QUARTERLY FINANCIAL REPORT - EXECUTIVE SUMMARY
-Period: {quarter_period} {current_year}
-Generated: {current_date}
 
-PRIORITIZED FINANCIAL DATA ANALYSIS:
-{{prioritized_data_summary}}
+        # ============================================================
+        # 🎯 Executive Summary -
+        # ============================================================
+        'executive_summary_template': f"""
+            GRANT MANAGEMENT DEPARTMENT - EXECUTIVE ACHIEVEMENT SUMMARY
+            Period: {quarter_period} {current_year}
+            Generated: {current_date}
 
-SUPPORTING CONTEXT:
-{{secondary_data_summary}}
+            **----- Budget and Reporting Team -----**
 
-Report Coverage:
-• Payments workflow (consumption of payment credits)
-• Commitments workflow (consumption of commitment credits)
-• Grant amendments processing
-• Audit results implementation and recoveries
-• Budget overview and performance
+            **The Grant Management Department** achieved significant milestones in {quarter_period} {current_year}, successfully meeting and exceeding several key targets.
 
-Analysis Focus: Cross-workflow insights, strategic priorities, executive decision support
-""",
+            COMPREHENSIVE PERFORMANCE ANALYSIS:
+            {{prioritized_data_summary}}
 
-            'budget_overview_template': f"""
-BUDGET OVERVIEW ANALYSIS
-Reporting Period: {quarter_period} {current_year}
-Budget Scope: H2020 and Horizon Europe programs
+            DETAILED WORKFLOW BREAKDOWN AND SUPPORTING METRICS:
+            {{secondary_data_summary}}
 
-PRIMARY BUDGET DATA:
-{{prioritized_data_summary}}
+            **Detailed Breakdown of Activities**
 
-SUPPORTING COMMITMENT DATA:
-{{secondary_data_summary}}
+            The analysis covers:
+            • **Payments:** Volume execution, Time-to-Pay (TTP) performance, appropriation utilization
+            • **Granting:** Time-to-Grant (TTG) metrics, call completion rates, funding milestone achievements  
+            • **Amendments:** Processing efficiency, Time-to-Amend (TTA) performance, amendment volume analysis
+            • **Audits:** Recovery implementation, audit completion rates, financial integrity measures
+            • **Other Activities:** Budget compliance, contractual adherence, exceptional cases
 
-Overview Focus:
-• Overall budget execution and performance indicators
-• Resource allocation effectiveness across programs
-• Budget utilization trends and efficiency metrics
-• Strategic budget implications for program success
+            **Executive Focus:** Cross-workflow achievements, quantitative performance indicators, strategic accomplishments demonstrating departmental excellence in grant management operations and successful execution of contractual obligations.
 
-Analysis Date: {current_date}
-""",
+            Analysis Date: {current_date}
+        """,
+        # ============================================================
+        # 💰 BUDGET
+        # ============================================================
 
-            # ============================================================
-            # 💳 Payments Workflow 
-            # ============================================================
-            'payments_workflow_template': f"""
-PAYMENTS WORKFLOW ANALYSIS
-Period: {quarter_period} {current_year}
-Workflow Focus: Payment credit consumption and processing efficiency
+        'budget_overview_template': f"""
+            BUDGET APPROPRIATIONS AND ABSORPTION ANALYSIS
+            Reporting Period: {quarter_period} {current_year}
+            Scope: H2020 and Horizon Europe commitment and payment appropriations
 
-PRIMARY PAYMENT DATA ANALYSIS:
-{{prioritized_data_summary}}
+            BUDGET APPROPRIATIONS OVERVIEW:
+            {{prioritized_data_summary}}
 
-BUDGET CONTEXT:
-{{secondary_data_summary}}
+            ABSORPTION PERFORMANCE AND SUPPORTING ANALYSIS:
+            {{secondary_data_summary}}
 
-Key Performance Areas:
-• Payment credit consumption tracking
-• Processing efficiency and timeline performance
-• H2020 vs Horizon Europe payment patterns
-• Payment workflow optimization
+            **Analysis Framework:**
+            • **Commitment Appropriations:** Available budget, allocation patterns, absorption rates
+            • **Payment Appropriations:** H2020 and HEU payment credit consumption and efficiency
+            • **Absorption Analysis:** Utilization levels, execution rates, remaining available amounts
+            • **Cross-Program Comparison:** H2020 vs Horizon Europe performance and trends
+            • **Performance Indicators:** Budget execution efficiency, variance analysis, optimization opportunities
 
-Analysis Date: {current_date}
-""",
+            **Focus Areas:**
+            - Budget availability and allocation effectiveness across both programs
+            - Commitment and payment appropriation absorption levels and trends  
+            - Resource utilization efficiency and performance benchmarking
+            - Strategic budget implications for program continuation and planning
 
-            'commitments_workflow_template': f"""
-COMMITMENTS WORKFLOW ANALYSIS
-Period: {quarter_period} {current_year}
-Workflow Focus: Commitment credit consumption and allocation efficiency
+            Analysis Date: {current_date}
+            """,
 
-PRIMARY COMMITMENT DATA ANALYSIS:
-{{prioritized_data_summary}}
+        # ============================================================
+        # 📋 Template 1: Granting Process Overview
+        # ============================================================
+        'granting_process_template': f"""
+                GRANTING PROCESS OVERVIEW
+                Period: {quarter_period} {current_year}
+                Scope: Grant execution, signature activity, and call completion status
 
-BUDGET CONTEXT:
-{{secondary_data_summary}}
+                GRANT EXECUTION AND SIGNATURE ACTIVITY:
+                {{prioritized_data_summary}}
 
-Key Performance Areas:
-• Commitment credit consumption patterns
-• Allocation efficiency and portfolio performance
-• Grant commitment processing effectiveness
-• Resource utilization optimization
+                CALL COMPLETION AND PROCESS STATUS:
+                {{secondary_data_summary}}
 
-Analysis Date: {current_date}
-""",
+                **Process Overview:**
+                The granting process encompasses grant agreement preparation, signature execution, and call completion monitoring. This section provides an overview of grant agreements (GA) under preparation, signed contracts by ERCEA, and the current state of call completion activities.
 
-            'amendments_workflow_template': f"""
-AMENDMENTS WORKFLOW ANALYSIS
-Period: {quarter_period} {current_year}
-Workflow Focus: Grant amendment processing and administrative efficiency
+                **Key Performance Areas:**
+                • Grant signature execution volumes and timeline performance
+                • Call completion rates and progress tracking
+                • Grant allocation process adherence to scheduled timelines
+                • New grant execution and agreement preparation status
 
-PRIMARY DATA (COMMITMENT IMPACTS):
-{{prioritized_data_summary}}
+                Analysis Focus: Grant signature activity, call completion progress, process efficiency, and scheduled milestone achievement.
 
-SECONDARY DATA (PAYMENT IMPACTS):
-{{secondary_data_summary}}
+                Analysis Date: {current_date}
+                """,
 
-Key Performance Areas:
-• Grant amendment processing efficiency
-• Modification request handling and approval rates
-• Administrative workflow optimization
-• Impact on overall program performance
+        # ============================================================
+        # 💰 Template 2: Commitment Budgetary Impact  
+        # ============================================================
+        'commitment_budgetary_template': f"""
+        BUDGETARY CONSEQUENCE OF COMMITMENT PROCESS
+        Period: {quarter_period} {current_year}
+        Scope: L2 budgetary commitments and financial commitment activity
 
-Analysis Date: {current_date}
-""",
+        COMMITMENT FINANCIAL ACTIVITY:
+        {{prioritized_data_summary}}
 
-            'audit_workflow_template': f"""
-AUDIT RESULTS IMPLEMENTATION WORKFLOW
-Period: {quarter_period} {current_year}
-Workflow Focus: Audit result implementation and recovery processing
+        COMMITMENT BREAKDOWN AND REGULATORY CONTEXT:
+        {{secondary_data_summary}}
 
-PRIMARY DATA (BUDGET IMPACTS):
-{{prioritized_data_summary}}
+        **Regulatory Framework:**
+        As per the EU Financial Regulation (FR2018 art. 111.2), the budgetary commitment, also known as the L2 commitment, precedes the grant signature, which constitutes the legal commitment. Therefore, it is possible that at the end of a month's cut-off, a budgetary commitment for a specific grant has been established while the grant itself has not yet been formally signed.
 
-SUPPORTING DATA (ALL WORKFLOWS):
-{{secondary_data_summary}}
+        **Analysis Framework:**
+        • Total commitment activity financial impact for {current_year}
+        • Breakdown of commitment activity by period and call type
+        • L2 commitment volumes and financial allocation patterns
+        • Budgetary commitment timeline and processing efficiency
 
-Key Performance Areas:
-• Audit result implementation progress
-• Recovery processing and collection activities
-• Compliance status and corrective actions
-• Financial impact and risk mitigation
+        Focus: Financial commitment volumes, budgetary impact assessment, commitment processing efficiency, and regulatory compliance adherence.
 
-Analysis Date: {current_date}
-""",
+        Analysis Date: {current_date}
+        """,
 
-            # ============================================================
-            # 📊 Payment Analysis 
-            # ============================================================
+        # ============================================================
+        # ⏰ Template 3: Final Date for Implementation (FDI) Status
+        # ============================================================
+        'fdi_status_template': f"""
+            FINAL DATE FOR IMPLEMENTATION (FDI) STATUS ANALYSIS
+            Period: {quarter_period} {current_year}
+            Scope: L2 commitments approaching or exceeding FDI thresholds
+
+            FDI THRESHOLD ANALYSIS:
+            {{prioritized_data_summary}}
+
+            FDI PROGRAM BREAKDOWN AND CONTEXT:
+            {{secondary_data_summary}}
+
+            **FDI Monitoring Framework:**
+            The Final Date for Implementation (FDI) represents the deadline by which committed funds must be legally committed through grant agreements. Monitoring commitments approaching or exceeding FDI thresholds is crucial for budget execution compliance and financial planning.
+
+            **Analysis Components:**
+            • H2020 program FDI threshold status and distribution by call type
+            • Horizon Europe (HEU) program FDI compliance monitoring
+            • L2 commitment FDI risk assessment and mitigation measures
+            • Call type distribution of FDI-approaching or exceeding commitments
+
+            Focus: FDI compliance monitoring, threshold risk assessment, call type impact analysis, and proactive budget execution management.
+
+            Analysis Date: {current_date}
+            """
+            ,
+
+        # ============================================================
+        # 💳 Payments Workflow 
+        # ============================================================
+        'payments_workflow_template': f"""
+            PAYMENTS WORKFLOW ANALYSIS
+            Period: {quarter_period} {current_year}
+            Workflow Focus: Payment credit consumption and processing efficiency
+
+            PRIMARY PAYMENT DATA ANALYSIS:
+            {{prioritized_data_summary}}
+
+            BUDGET CONTEXT:
+            {{secondary_data_summary}}
+
+            Key Performance Areas:
+            • Payment credit consumption tracking
+            • Processing efficiency and timeline performance
+            • H2020 vs Horizon Europe payment patterns
+            • Payment workflow optimization
+
+            Analysis Date: {current_date}
+            """,
+
+                        'commitments_workflow_template': f"""
+            COMMITMENTS WORKFLOW ANALYSIS
+            Period: {quarter_period} {current_year}
+            Workflow Focus: Commitment credit consumption and allocation efficiency
+
+            PRIMARY COMMITMENT DATA ANALYSIS:
+            {{prioritized_data_summary}}
+
+            BUDGET CONTEXT:
+            {{secondary_data_summary}}
+
+            Key Performance Areas:
+            • Commitment credit consumption patterns
+            • Allocation efficiency and portfolio performance
+            • Grant commitment processing effectiveness
+            • Resource utilization optimization
+
+            Analysis Date: {current_date}
+            """,
+
+                        'amendments_workflow_template': f"""
+            AMENDMENTS WORKFLOW ANALYSIS
+            Period: {quarter_period} {current_year}
+            Workflow Focus: Grant amendment processing and administrative efficiency
+
+            PRIMARY DATA (COMMITMENT IMPACTS):
+            {{prioritized_data_summary}}
+
+            SECONDARY DATA (PAYMENT IMPACTS):
+            {{secondary_data_summary}}
+
+            Key Performance Areas:
+            • Grant amendment processing efficiency
+            • Modification request handling and approval rates
+            • Administrative workflow optimization
+            • Impact on overall program performance
+
+            Analysis Date: {current_date}
+            """,
+
+                        'audit_workflow_template': f"""
+            AUDIT RESULTS IMPLEMENTATION WORKFLOW
+            Period: {quarter_period} {current_year}
+            Workflow Focus: Audit result implementation and recovery processing
+
+            PRIMARY DATA (BUDGET IMPACTS):
+            {{prioritized_data_summary}}
+
+            SUPPORTING DATA (ALL WORKFLOWS):
+            {{secondary_data_summary}}
+
+            Key Performance Areas:
+            • Audit result implementation progress
+            • Recovery processing and collection activities
+            • Compliance status and corrective actions
+            • Financial impact and risk mitigation
+
+            Analysis Date: {current_date}
+            """,
+
+        # ============================================================
+        # 📊 Payment Analysis 
+        # ============================================================
             
-            'payment_analysis_template': f"""
-PAYMENT CONSUMPTION ANALYSIS
-Call Type: {{call_type}}
-Programme: {{programme}}
-Period: {quarter_period} {current_year}
+        'payment_analysis_template': f"""
+            PAYMENT CONSUMPTION ANALYSIS
+            Call Type: {{call_type}}
+            Programme: {{programme}}
+            Period: {quarter_period} {current_year}
 
-PRIMARY PAYMENT DATA FOR {{call_type}} in {{programme}}:
-{{prioritized_data_summary}}
+            PRIMARY PAYMENT DATA FOR {{call_type}} in {{programme}}:
+            {{prioritized_data_summary}}
 
-BUDGET FORECAST CONTEXT:
-{{secondary_data_summary}}
+            BUDGET FORECAST CONTEXT:
+            {{secondary_data_summary}}
 
-Analysis Parameters:
-• Consumption vs forecast comparison for {{call_type}}
-• Payment credit utilization in {{programme}}
-• Performance indicators and efficiency metrics
-• Variance analysis and trend assessment
+            Analysis Parameters:
+            • Consumption vs forecast comparison for {{call_type}}
+            • Payment credit utilization in {{programme}}
+            • Performance indicators and efficiency metrics
+            • Variance analysis and trend assessment
 
-Focus: Consumption patterns, forecast accuracy, performance optimization
-""",
+            Focus: Consumption patterns, forecast accuracy, performance optimization
+            """,
 
-            'call_type_payment_detail_template': f"""
-{{call_type_code}}      {{payment_type_description}} – {{call_type_abbreviation}}
+                        'call_type_payment_detail_template': f"""
+            {{call_type_code}}      {{payment_type_description}} – {{call_type_abbreviation}}
 
-{{payment_details_analysis}}
+            {{payment_details_analysis}}
 
-{{forecast_comparison_statement}}
-""",
+            {{forecast_comparison_statement}}
+            """,
 
-            'auto_call_type_detail_template': f"""
-{{call_type_abbreviation}}      {{derived_payment_description}}
+                        'auto_call_type_detail_template': f"""
+            {{call_type_abbreviation}}      {{derived_payment_description}}
 
-{{payment_analysis_text}}
+            {{payment_analysis_text}}
 
-{{variance_statement}}
-""",
+            {{variance_statement}}
+            """,
 
-            'variance_analysis_template': f"""
-FINANCIAL VARIANCE ANALYSIS
-Period: {quarter_period} {current_year}
-Analysis Type: Budget vs Actual Performance
+                        'variance_analysis_template': f"""
+            FINANCIAL VARIANCE ANALYSIS
+            Period: {quarter_period} {current_year}
+            Analysis Type: Budget vs Actual Performance
 
-PRIMARY VARIANCE DATA:
-{{prioritized_data_summary}}
+            PRIMARY VARIANCE DATA:
+            {{prioritized_data_summary}}
 
-SUPPORTING FINANCIAL CONTEXT:
-{{secondary_data_summary}}
+            SUPPORTING FINANCIAL CONTEXT:
+            {{secondary_data_summary}}
 
-Variance Focus Areas:
-• Budget execution variance by program
-• Payment vs commitment alignment
-• Forecast accuracy assessment
-• Resource allocation effectiveness
+            Variance Focus Areas:
+            • Budget execution variance by program
+            • Payment vs commitment alignment
+            • Forecast accuracy assessment
+            • Resource allocation effectiveness
 
-Analysis Date: {current_date}
-""",
+            Analysis Date: {current_date}
+            """,
 
-            'risk_assessment_template': f"""
-FINANCIAL RISK ASSESSMENT
-Assessment Period: {quarter_period} {current_year}
-Risk Scope: Cross-workflow financial exposure
+                        'risk_assessment_template': f"""
+            FINANCIAL RISK ASSESSMENT
+            Assessment Period: {quarter_period} {current_year}
+            Risk Scope: Cross-workflow financial exposure
 
-PRIMARY RISK INDICATORS:
-{{prioritized_data_summary}}
+            PRIMARY RISK INDICATORS:
+            {{prioritized_data_summary}}
 
-SUPPORTING RISK CONTEXT:
-{{secondary_data_summary}}
+            SUPPORTING RISK CONTEXT:
+            {{secondary_data_summary}}
 
-Risk Assessment Areas:
-• Budget execution risk exposure
-• Payment processing risk factors
-• Commitment allocation risks
-• Operational and compliance risks
+            Risk Assessment Areas:
+            • Budget execution risk exposure
+            • Payment processing risk factors
+            • Commitment allocation risks
+            • Operational and compliance risks
 
-Analysis Date: {current_date}
-"""
-        }
-
-# ================================================================
-# SECTION 2: ENHANCED TEMPLATE-SECTION MAPPING MATRIX 
-# ================================================================
-#🗺️ SECTION 2: MAPPING MATRIX - Section Configuration
-# 📍 Location: Lines 355-648
-
-"""
-🚀 How to Customize Section Mappings:
-
-Add New Section:
-
-Choose unique section key
-Link to your template
-Specify data sources
-Configure output settings
-
-
-Modify Existing Section:
-python# Change data sources for existing section
-'budget_overview': {
-    'data_configuration': {
-        'primary_data': ['your_budget_table'],  # ← Change data source
-        'secondary_data': ['your_forecast_table'],
-        'focus_metrics': ['your_budget_metrics']  # ← Add your metrics
-    },
-}
-
-"""
+            Analysis Date: {current_date}
+            """
+                    }
 
 class TemplateSectionMatrix:
     """Enhanced matrix for mapping templates to sections with clear relationships"""
@@ -420,45 +496,97 @@ class TemplateSectionMatrix:
         
         return {
             # ============================================================
-            # EXECUTIVE LEVEL SECTIONS
+            # 1. EXECUTIVE LEVEL SECTIONS
             # ============================================================
             
+           """
+            Target Text Analysis:
+            ✅ Covers: TTP metrics, TTA metrics, payment volumes, amendment statistics, audit results, grant progress
+            ✅ Tone: Executive, achievement-focused, specific numbers
+            ✅ Length: ~600 words (much longer than default 400)
+            ✅ Structure: Department achievements → Detailed breakdowns by workflow
+            """
             'intro_summary': {
                 'section_info': {
                     'name': 'Introductory Summary',
                     'category': 'executive',
                     'priority': 1,
-                    'description': 'High-level executive overview of all workflows'
+                    'description': 'Comprehensive executive overview covering all department workflows and achievements'
                 },
                 'template_mapping': {
-                    'template_name': 'executive_summary_template',
+                    'template_name': 'executive_summary_template',  # ✅ Uses your existing template
                     'template_category': 'executive_overview',
                     'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
                 },
                 'data_configuration': {
-                    'primary_data': ['summary_budget'],
-                    'secondary_data': ['commitments', 'pay_credits_H2020', 'pay_credits_HEU'],
-                    'focus_metrics': ['budget_execution', 'overall_performance', 'cross_workflow_trends']
+                    # 🎯 COMPREHENSIVE DATA for executive summary
+                    'primary_data': [
+                        'TTP_Overview',                    # Time-to-Pay performance data
+                        'pay_credits_H2020',              # H2020 payment volumes  
+                        'pay_credits_HEU',                # HEU payment volumes
+                        'amendment_activity_H2020',        # H2020 amendment data
+                        'amendment_activity_HEU',          # HEU amendment data
+                        'amendment_TTA_H2020',            # H2020 TTA performance
+                        'amendment_TTA_HEU',              # HEU TTA performance
+                        'auri_overview',                  # Audit overview
+                        'recovery_activity',              # Recovery amounts
+                        'TTG'                             # Time-to-Grant metrics
+                    ],
+                    'secondary_data': [
+                        'summary_budget',                 # Budget context
+                        'H2020_TTP_FP',                   # H2020 final payment TTP
+                        'H2020_TTP_IP',                   # H2020 interim payment TTP  
+                        'HEU_TTP_FP',                     # HEU final payment TTP
+                        'HEU_TTP_IP',                     # HEU interim payment TTP
+                        'grants_signature_activity',      # Grant progress
+                        'completion_previous_year_calls', # Call completion rates
+                        'grants_exceeding_fdi',          # FDI exceptions
+                        'amendment_cases_H2020',          # Amendment type breakdown
+                        'amendment_cases_HEU',            # Amendment type breakdown
+                        'external_audits_activity'        # Additional audit data
+                    ],
+                    'focus_metrics': [
+                        # Time metrics matching your target text
+                        'time', 'days', 'average', 'ttp', 'tta', 'ttg',
+                        # Volume metrics
+                        'payments', 'amendments', 'audits', 'grants', 'calls', 'total', 'count',
+                        # Financial metrics  
+                        'amount', 'million', 'eur', 'recovery', 'appropriations',
+                        # Performance metrics
+                        'rate', 'percentage', 'completion', 'efficiency', 'targets', 'milestones'
+                    ]
                 },
                 'output_configuration': {
-                    'module': 'IntroductionModule',
+                    'module': 'CommentsModule',           # ✅ Your module
                     'variable_name': 'intro_summary_text',
-                    'word_limit': 400,
+                    'word_limit': 800,                   # ✅ Increased for comprehensive coverage
                     'formatting_level': 'executive'
                 },
                 'instruction_mapping': {
                     'instruction_key': 'executive_summary_instructions',
                     'tone': 'executive',
-                    'focus': 'strategic_overview'
+                    'focus': 'comprehensive_achievements'
                 }
             },
+
+            # ================================================================
+            # 🏦 2. OPTIMIZED BUDGET OVERVIEW MATRIX CONFIGURATION
+            # ================================================================
+
+            """
+            🎯 Budget Commentary Requirements:
+            ✅ Budget available for commitment and payments (H2020 + HEU)
+            ✅ Level of absorption analysis
+            ✅ Commitment and payment appropriations overview
+            ✅ Cross-program performance comparison
+            """
 
             'budget_overview': {
                 'section_info': {
                     'name': 'Budget Overview',
                     'category': 'financial',
                     'priority': 2,
-                    'description': 'Comprehensive budget analysis and performance metrics'
+                    'description': 'Comprehensive budget analysis covering commitment and payment appropriations for H2020 and Horizon Europe programs'
                 },
                 'template_mapping': {
                     'template_name': 'budget_overview_template',
@@ -466,27 +594,211 @@ class TemplateSectionMatrix:
                     'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
                 },
                 'data_configuration': {
-                    'primary_data': ['summary_budget'],
-                    'secondary_data': ['commitments'],
-                    'focus_metrics': ['budget_execution', 'resource_allocation', 'variance_analysis']
+                    # 🎯 PRIMARY_DATA: Core budget and appropriations tables
+                    'primary_data': [
+                        'summary_budget',              # 📊 Main budget overview table
+                        'pay_credits_H2020',          # 💳 H2020 payment appropriations & consumption
+                        'pay_credits_HEU',            # 💳 HEU payment appropriations & consumption  
+                        'commitments'                 # 📋 Commitment appropriations & execution
+                    ],
+                    
+                    # 🔄 SECONDARY_DATA: Supporting absorption and performance analysis
+                    'secondary_data': [
+                        # Grant activity for absorption context
+                        'grants_commitment_activity',     # Commitment absorption patterns
+                        'current_year_global_commitment_activity',  # Current year execution
+                        'completion_previous_year_calls', # Previous year completion for trends
+                        
+                        # Payment performance context
+                        'TTP_Overview',                   # Payment processing efficiency
+                        'H2020_payments_all',            # H2020 payment execution details
+                        'HEU_payments_all',              # HEU payment execution details
+                        
+                        # Analysis tables for absorption insights
+                        'H2020_payments_analysis_ALL',   # H2020 overall payment analysis
+                        'HEU_payments_analysis_ALL'      # HEU overall payment analysis
+                    ],
+                    
+                    # 🎯 FOCUS_METRICS: Budget absorption and performance indicators
+                    'focus_metrics': [
+                        # Core budget metrics
+                        'budget', 'appropriation', 'allocation', 'available', 'remaining',
+                        
+                        # Absorption & utilization metrics  
+                        'absorption', 'utilization', 'consumption', 'execution', 'spent',
+                        
+                        # Performance metrics
+                        'efficiency', 'variance', 'performance', 'rate', 'percentage',
+                        
+                        # Financial amounts
+                        'amount', 'total', 'credit', 'million', 'eur',
+                        
+                        # Program comparison  
+                        'h2020', 'heu', 'horizon', 'programme', 'program'
+                    ]
                 },
                 'output_configuration': {
-                    'module': 'BudgetModule',
+                    'module': 'CommentsModule',           # ✅ Use CommentsModule like other sections
                     'variable_name': 'budget_overview_text',
-                    'word_limit': 300,
+                    'word_limit': 500,                   # ✅ Increased from 300 for comprehensive coverage
                     'formatting_level': 'detailed'
                 },
                 'instruction_mapping': {
                     'instruction_key': 'budget_overview_instructions',
                     'tone': 'analytical',
-                    'focus': 'financial_performance'
+                    'focus': 'appropriations_and_absorption'  # ✅ Updated focus
+                }
+            },
+
+             # ============================================================
+            # 📋 3: Granting Process Overview
+            # ============================================================
+            'granting_process_overview': {
+                'section_info': {
+                    'name': 'Granting Process Overview',
+                    'category': 'operational',
+                    'priority': 3,
+                    'description': 'Grant execution, signature activity, and call completion status analysis'
+                },
+                'template_mapping': {
+                    'template_name': 'granting_process_template',
+                    'template_category': 'granting_overview',
+                    'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
+                },
+                'data_configuration': {
+                    # 🎯 PRIMARY_DATA: Core granting and signature data
+                    'primary_data': [
+                        'grants_signature_activity',        # Grant signature volumes and activity
+                        'TTG',                             # Time-to-Grant performance
+                        'completion_previous_year_calls'    # Call completion status
+                    ],
+                    
+                    # 🔄 SECONDARY_DATA: Supporting process context
+                    'secondary_data': [
+                        'grants_commitment_activity',       # Grant commitment activity
+                        'current_year_global_commitment_activity',  # Current year activity
+                        'commitments'                      # Overall commitment context
+                    ],
+                    
+                    # 🎯 FOCUS_METRICS: Granting process indicators
+                    'focus_metrics': [
+                        'grants', 'signature', 'signed', 'executed', 'agreement',
+                        'calls', 'completion', 'progress', 'status', 'scheduled',
+                        'preparation', 'allocation', 'process', 'timeline'
+                    ]
+                },
+                'output_configuration': {
+                    'module': 'CommentsModule',
+                    'variable_name': 'granting_process_text',
+                    'word_limit': 200,                    # Brief overview as requested
+                    'formatting_level': 'standard'
+                },
+                'instruction_mapping': {
+                    'instruction_key': 'granting_process_instructions',
+                    'tone': 'descriptive',
+                    'focus': 'process_overview'
+                }
+            },
+
+            # ============================================================
+            # 💰 4: Commitment Budgetary Impact
+            # ============================================================
+            'commitment_budgetary_impact': {
+                'section_info': {
+                    'name': 'Budgetary Consequence of Commitment Process',
+                    'category': 'financial',
+                    'priority': 4,
+                    'description': 'Financial impact and budgetary consequences of L2 commitment activity'
+                },
+                'template_mapping': {
+                    'template_name': 'commitment_budgetary_template',
+                    'template_category': 'commitment_financial',
+                    'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
+                },
+                'data_configuration': {
+                    # 🎯 PRIMARY_DATA: Financial commitment data
+                    'primary_data': [
+                        'commitments',                           # Main commitment financial data
+                        'current_year_global_commitment_activity',  # Current year commitment activity
+                        'grants_commitment_activity'             # Grant-specific commitment activity
+                    ],
+                    
+                    # 🔄 SECONDARY_DATA: Breakdown and context
+                    'secondary_data': [
+                        'grants_signature_activity',            # Signature context for L2 vs legal timing
+                        'completion_previous_year_calls',       # Call completion for period context
+                        'summary_budget'                        # Budget context
+                    ],
+                    
+                    # 🎯 FOCUS_METRICS: Financial and commitment indicators
+                    'focus_metrics': [
+                        'commitment', 'committed', 'amount', 'total', 'million', 'eur',
+                        'budgetary', 'financial', 'l2', 'period', 'activity',
+                        'breakdown', 'call', 'allocation'
+                    ]
+                },
+                'output_configuration': {
+                    'module': 'CommentsModule',
+                    'variable_name': 'commitment_budgetary_text',
+                    'word_limit': 250,                          # Include boilerplate text
+                    'formatting_level': 'detailed'
+                },
+                'instruction_mapping': {
+                    'instruction_key': 'commitment_budgetary_instructions',
+                    'tone': 'analytical',
+                    'focus': 'financial_impact'
+                }
+            },
+
+            # ============================================================
+            # ⏰ 5: FDI Status Analysis
+            # ============================================================
+            'fdi_status_analysis': {
+                'section_info': {
+                    'name': 'Final Date for Implementation Status',
+                    'category': 'compliance',
+                    'priority': 5,
+                    'description': 'FDI threshold monitoring and compliance analysis for L2 commitments'
+                },
+                'template_mapping': {
+                    'template_name': 'fdi_status_template',
+                    'template_category': 'fdi_compliance',
+                    'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
+                },
+                'data_configuration': {
+                    # 🎯 PRIMARY_DATA: FDI-specific data
+                    'primary_data': [
+                        'grants_exceeding_fdi'                 # Main FDI analysis table
+                    ],
+                    
+                    # 🔄 SECONDARY_DATA: Supporting context
+                    'secondary_data': [
+                        'grants_exceeding_fdi'  
+                    ], 
+                    
+                    # 🎯 FOCUS_METRICS: FDI and compliance indicators
+                    'focus_metrics': [
+                        'fdi', 'threshold', 'exceeding', 'approaching', 'observed',
+                        'h2020', 'heu', 'horizon', 'commitment', 'l2',
+                        'cog', 'poc', 'stg', 'syg', 'adg', 'call'
+                    ]
+                },
+                'output_configuration': {
+                    'module': 'CommentsModule',
+                    'variable_name': 'fdi_status_text',
+                    'word_limit': 150,                         # Brief status as requested
+                    'formatting_level': 'standard'
+                },
+                'instruction_mapping': {
+                    'instruction_key': 'fdi_status_instructions',
+                    'tone': 'factual',
+                    'focus': 'compliance_status'
                 }
             },
 
             # ============================================================
             # WORKFLOW-SPECIFIC SECTIONS
             # ============================================================
-            
             'payments_workflow': {
                 'section_info': {
                     'name': 'Payments Workflow Summary',
@@ -917,6 +1229,7 @@ class CallTypeProcessor:
         
         return stats
 
+
 # ================================================================
 # 🧪 SECTION 4. MATRIX VISUALIZATION
 # ================================================================
@@ -1076,6 +1389,8 @@ class EnhancedReportGenerator:
         financial_data: Dict[str, Any],
         model: str = "deepseek-r1:14b",
         temperature: float = 0.3,
+        acronym_context: str = "",           # ✅ NEW: Acronym context parameter
+        cutoff_date: Any = None,             # ✅ NEW: Cutoff date parameter
         verbose: bool = True
     ) -> Optional[str]:
         """Generate commentary for a specific section using the enhanced matrix system"""
@@ -1092,12 +1407,7 @@ class EnhancedReportGenerator:
             return None
         
         section_config = mapping[section_key]
-        
-        if verbose:
-            print(f"📝 Generating: {section_config['section_info']['name']}")
-            print(f"   Template: {section_config['template_mapping']['template_name']}")
-            print(f"   Output: {section_config['output_configuration']['variable_name']}")
-        
+
         # Get template from library
         """Step 2: Template Retrieval
         What: Gets the specific template for this section
@@ -1105,14 +1415,12 @@ class EnhancedReportGenerator:
 
         templates = self.template_library.get_template_definitions(quarter_period, current_year)
         template_name = section_config['template_mapping']['template_name']
-        
-        if template_name not in templates:
-            if verbose:
-                print(f"❌ Template '{template_name}' not found in template library")
-            return None
-        
         template = templates[template_name]
         
+        # ✅ FIXED: Apply cutoff date filtering to financial data
+        if cutoff_date is not None:
+            financial_data = self._filter_data_by_cutoff(financial_data, cutoff_date, verbose)
+    
         # Prepare data according to configuration
         """Step 3: Data Preparation
         What: Filters raw data to only what this section needs
@@ -1155,8 +1463,13 @@ class EnhancedReportGenerator:
         """
         instructions = self._get_section_instructions(section_config)
         
-        # Create final prompt
-        final_prompt = f"{instructions}\n\n{formatted_template}"
+         # ✅ FIXED: Create final prompt with acronym context
+        final_prompt = self._create_enhanced_prompt(
+            instructions=instructions,
+            template=formatted_template,
+            acronym_context=acronym_context,
+            section_key=section_key
+        )
         
         # Generate commentary
         commentary = self._generate_with_model(
@@ -1191,6 +1504,8 @@ class EnhancedReportGenerator:
         call_types: List[str] = None,
         model: str = "deepseek-r1:14b",
         temperature: float = 0.3,
+        acronym_context: str = "",           # ✅ NEW: Acronym context parameter
+        cutoff_date: Any = None,             # ✅ NEW: Cutoff date parameter
         verbose: bool = True
     ) -> Dict[str, Any]:
         """
@@ -1213,6 +1528,14 @@ class EnhancedReportGenerator:
             print(f"📋 Programs: {programs}")
             print(f"📋 Call Types: {call_types}")
             print("📊 Payment types will be derived from data tables")
+            if acronym_context:
+                print("📚 Using acronym context for AI guidance")
+            if cutoff_date:
+                print(f"📅 Filtering data by cutoff: {cutoff_date}")
+        
+        # ✅ FIXED: Apply cutoff date filtering
+        if cutoff_date is not None:
+            financial_data = self._filter_data_by_cutoff(financial_data, cutoff_date, verbose)
         
         results = {
             'generated_details': {},
@@ -1300,8 +1623,13 @@ class EnhancedReportGenerator:
                         config, extracted_data, payment_stats
                     )
                     
-                    # Create final prompt
-                    final_prompt = f"{instructions}\n\n{formatted_template}"
+                    # ✅ FIXED: Create enhanced prompt with acronym context
+                    final_prompt = self._create_enhanced_prompt(
+                        instructions=instructions,
+                        template=formatted_template,
+                        acronym_context=acronym_context,
+                        section_key=f"auto_call_type_{program}_{call_type}"
+                    )
                     
                     # Generate commentary
                     commentary = self._generate_with_model(
@@ -1365,6 +1693,104 @@ class EnhancedReportGenerator:
         
         return results
     
+    # ================================================================
+    # ✅ NEW HELPER METHODS
+    # ================================================================
+
+    def _filter_data_by_cutoff(self, financial_data: Dict[str, Any], cutoff_date: Any, verbose: bool = False) -> Dict[str, Any]:
+        """Filter financial data by cutoff date"""
+        
+        if verbose:
+            print(f"📅 Applying cutoff filter: {cutoff_date}")
+        
+        filtered_data = {}
+        
+        for key, value in financial_data.items():
+            if value is None:
+                continue
+                
+            try:
+                if isinstance(value, str):
+                    parsed_data = json.loads(value)
+                else:
+                    parsed_data = value
+                
+                if isinstance(parsed_data, list):
+                    # Filter records by date (look for date fields)
+                    filtered_records = []
+                    for record in parsed_data:
+                        if isinstance(record, dict):
+                            # Look for date fields in the record
+                            record_date = self._extract_record_date(record)
+                            if record_date is None or record_date <= cutoff_date:
+                                filtered_records.append(record)
+                    
+                    if filtered_records:
+                        filtered_data[key] = filtered_records
+                    elif verbose:
+                        print(f"⚠️  All records in {key} filtered out by cutoff date")
+                else:
+                    # Non-list data, keep as is
+                    filtered_data[key] = parsed_data
+                    
+            except (json.JSONDecodeError, Exception) as e:
+                # Keep original data if parsing fails
+                filtered_data[key] = value
+                if verbose:
+                    print(f"⚠️  Could not filter {key}: {e}")
+        
+        if verbose:
+            print(f"📊 Filtered: {len(financial_data)} → {len(filtered_data)} data tables")
+        
+        return filtered_data
+
+    def _extract_record_date(self, record: Dict[str, Any]) -> Any:
+        """Extract date from a record (look for common date field names)"""
+        
+        date_fields = ['date', 'created_date', 'payment_date', 'commit_date', 'timestamp', 'period_end']
+        
+        for field in date_fields:
+            if field in record:
+                try:
+                    return pd.to_datetime(record[field])
+                except Exception as e:
+                    print(f'Error: date field not found {e}')
+                    continue
+        
+        return None  # No date found
+
+    def _create_enhanced_prompt(
+        self, 
+        instructions: str, 
+        template: str, 
+        acronym_context: str, 
+        section_key: str
+    ) -> str:
+        """Create enhanced prompt with acronym context"""
+        
+        prompt_parts = []
+        
+        # Add acronym context if available
+        if acronym_context and acronym_context.strip():
+            prompt_parts.append(acronym_context)
+            prompt_parts.append("\n" + "="*60 + "\n")
+        
+        # Add main instructions
+        prompt_parts.append(instructions)
+        
+        # Add template
+        prompt_parts.append("\n" + template)
+        
+        # Add final instructions if acronym context was provided
+        if acronym_context and acronym_context.strip():
+            prompt_parts.append(f"""
+
+        🔍 IMPORTANT: Use the acronym definitions provided above to ensure accurate terminology.
+        Always explain acronyms on first use: "Horizon Europe (HEU)" then use "HEU" thereafter.
+        """)
+    
+        return "\n".join(prompt_parts)
+    
             #########################################################
             # 💎 4. GRANULAR CALL TYPE DETAILS - PAYMENTS ANALYSIS  #
             #########################################################
@@ -1400,6 +1826,8 @@ class EnhancedReportGenerator:
         financial_data: Dict[str, Any],
         model: str = "deepseek-r1:14b",
         temperature: float = 0.3,
+        acronym_context: str = "",           # ✅ NEW: Acronym context parameter
+        cutoff_date: Any = None,             # ✅ NEW: Cutoff date parameter
         verbose: bool = True
     ) -> Dict[str, Any]:
         """
@@ -1412,6 +1840,14 @@ class EnhancedReportGenerator:
             print("=" * 60)
             print(f"📋 Programmes: {programmes}")
             print(f"📋 Call Types: {len(call_types)} types")
+            if acronym_context:
+                print("📚 Using acronym context for AI guidance")
+            if cutoff_date:
+                print(f"📅 Filtering data by cutoff: {cutoff_date}")
+        
+        # ✅ Apply cutoff date filtering if available
+        if cutoff_date is not None:
+            financial_data = self._filter_data_by_cutoff(financial_data, cutoff_date, verbose)
         
         results = {
             'generated_details': {},
@@ -1477,8 +1913,13 @@ class EnhancedReportGenerator:
                     # Generate instructions for this specific call type
                     instructions = self._get_call_type_instructions(call_type_config, call_type, programme)
                     
-                    # Create final prompt
-                    final_prompt = f"{instructions}\n\n{formatted_template}"
+                    # ✅ FIXED: Create enhanced prompt with acronym context
+                    final_prompt = self._create_enhanced_prompt(
+                        instructions=instructions,
+                        template=formatted_template,
+                        acronym_context=acronym_context,
+                        section_key=f"call_type_detail_{programme}_{call_type['code']}"
+                    )
                     
                     # Generate the commentary
                     commentary = self._generate_with_model(
@@ -1893,7 +2334,7 @@ The payment description "{extracted_data['derived_description']}" was derived fr
         Flexibility: Easy to modify instructions without changing code
     """
     def _get_section_instructions(self, section_config: Dict[str, Any]) -> str:
-        # 🎯 CUSTOMIZATION POINT 10: Modify AI Instructions
+        """Generate section-specific instructions - ENHANCED for executive summary"""
         
         section_info = section_config['section_info']
         output_config = section_config['output_configuration']
@@ -1902,19 +2343,162 @@ The payment description "{extracted_data['derived_description']}" was derived fr
         word_limit = output_config['word_limit']
         tone = instruction_config['tone']
         focus = instruction_config['focus']
+        section_name = section_info['name']
         
-        return f"""
-Generate a {tone} {section_info['name'].lower()} ({word_limit} words) focusing on {focus.replace('_', ' ')}.
+        # ✅ SPECIAL HANDLING FOR EXECUTIVE SUMMARY
+        if section_info.get('name') == 'Introductory Summary' or 'intro_summary' in str(section_config):
+            return f"""
+            Generate a comprehensive Grant Management Department executive summary ({word_limit} words) highlighting major achievements and performance milestones.
 
-Requirements:
-- Use **bold** for key financial figures and percentages
-- Structure with clear paragraphs and bullet points
-- Focus on {', '.join(section_config['data_configuration']['focus_metrics'])}
-- Maintain {tone} tone throughout
-- Target exactly {word_limit} words
+            STRUCTURE REQUIREMENTS:
+            1. **Opening Achievement Statement**: Department accomplishments and milestone highlights
+            2. **Quantitative Performance Metrics**: Include specific numbers, percentages, and time metrics from the data
+            3. **Workflow Breakdown Sections**: 
+            - **Payments:** Volume statistics, TTP averages, appropriation utilization
+            - **Granting:** TTG performance, call completion rates, funding progress
+            - **Amendments:** TTA efficiency, amendment volumes, processing rates
+            - **Audits:** Recovery amounts, audit completion, financial integrity results
+            - **Other Activities:** Budget compliance, exceptional cases, strategic notes
 
-Format for Word document integration.
-"""
+            CONTENT REQUIREMENTS:
+            • Use executive achievement tone: professional, accomplishment-focused, quantitative
+            • Include exact metrics from data: TTP days, payment volumes, amendment counts, recovery amounts
+            • Highlight contractual compliance: "90-day limits", "45-day targets", "100% on-time rates"
+            • Structure with clear section headers using **bold** formatting
+            • Emphasize successful execution and exceptional performance
+            • Include forward-looking performance assessment in conclusion
+
+            FORMATTING:
+            • Use **bold** for section headers: **Payments:**, **Amendments:**, **Audits:**
+            • Bold key department names: **The Grant Management Department**
+            • Include specific numerical achievements: "486 payments", "22.1 days", "EUR 6.73 million"
+            • Maintain continuous narrative flow with clear workflow transitions
+            • Target exactly {word_limit} words for comprehensive executive coverage
+
+            Focus: Demonstrating exceptional departmental performance through quantitative achievements, successful milestone completion, and exemplary execution of grant management workflows.
+            """
+        # ✅ SPECIAL HANDLING FOR EXECUTIVE SUMMARY
+        elif section_info.get('name') == 'Budget Overview' or 'budget_overview' in str(section_config):
+            return f"""
+                    Generate a comprehensive budget appropriations and absorption analysis ({word_limit} words) covering H2020 and Horizon Europe programs.
+
+                    STRUCTURE REQUIREMENTS:
+                    1. **Budget Appropriations Overview**: Available commitment and payment appropriations
+                    2. **Absorption Performance**: Utilization rates and consumption patterns  
+                    3. **Program Comparison**: H2020 vs Horizon Europe performance analysis
+                    4. **Strategic Analysis**: Efficiency insights and optimization opportunities
+
+                    CONTENT REQUIREMENTS:
+                    • **Commitment Appropriations**: Available amounts, allocation patterns, absorption rates
+                    • **Payment Appropriations**: H2020 and HEU credit consumption, efficiency metrics
+                    • **Absorption Levels**: Specific utilization percentages and execution rates
+                    • **Performance Metrics**: Include variance analysis and trend assessment
+                    • **Cross-Program Analysis**: Compare H2020 and HEU performance and patterns
+
+                    FORMATTING:
+                    • Use **bold** for key financial figures and appropriation amounts
+                    • Include specific percentages for absorption and utilization rates  
+                    • Structure with clear sections for commitment vs payment appropriations
+                    • Highlight performance indicators and efficiency metrics
+                    • Maintain analytical tone with quantitative focus
+
+                    ANALYTICAL FOCUS:
+                    • Budget availability and strategic allocation effectiveness
+                    • Absorption efficiency and utilization optimization
+                    • Performance benchmarking between H2020 and Horizon Europe
+                    • Resource management insights and planning implications
+
+                    Target exactly {word_limit} words for comprehensive budget appropriations coverage.
+                    """
+        elif ' granting_process_overview' in section_name.lower() or 'granting process overview' in section_name.lower():
+            return f"""
+                    Generate a descriptive granting process overview ({word_limit} words) covering grant execution and call completion.
+
+                    STRUCTURE REQUIREMENTS:
+                    1. **Grant Execution Summary**: Number of new grants executed during the period
+                    2. **Process Status**: Grant allocation process schedule adherence  
+                    3. **Table Reference**: Reference to grant agreements overview table
+                    4. **Call Completion**: Brief description of call completion status
+
+                    CONTENT REQUIREMENTS:
+                    • Include specific numbers: "In total, X.X new grants were executed during {period}"
+                    • Process status: "The grant allocation process proceeded as scheduled"
+                    • Table reference: "Table 3a presents an overview of grant agreements (GA) under preparation and signed contracts by ERCEA"
+                    • Call completion rates and progress where applicable
+
+                    FORMATTING:
+                    • Maintain descriptive, factual tone
+                    • Include specific grant execution numbers from data
+                    • Reference relevant tables for detailed breakdown
+                    • Target exactly {word_limit} words for concise overview
+
+                    Focus: Grant signature activity, process efficiency, and scheduled milestone achievement.
+                    """
+        elif 'commitment_budgetary' in section_name.lower() or 'budgetary consequence' in section_name.lower():
+            return f"""
+                    Generate budgetary consequence analysis ({word_limit} words) covering commitment financial impact and regulatory context.
+
+                    STRUCTURE REQUIREMENTS:
+                    1. **Financial Impact**: Total money committed during the period
+                    2. **Breakdown Reference**: Reference to commitment activity breakdown table
+                    3. **Regulatory Boilerplate**: EU Financial Regulation explanation
+                    4. **L2 vs Legal Commitment**: Timing difference explanation
+
+                    CONTENT REQUIREMENTS:
+                    • Financial amounts: Include total commitment amounts for the period
+                    • Table reference: "A breakdown of the total commitment activity for [year] by period and call is detailed in Table 3c"
+                    • Regulatory text: "As per the EU Financial Regulation (FR2018 art. 111.2), the budgetary commitment, also known as the L2 commitment, precedes the grant signature, which constitutes the legal commitment"
+                    • Timing explanation: "Therefore, it is possible that at the end of a month's cut-off, a budgetary commitment for a specific grant has been established while the grant itself has not yet been formally signed"
+
+                    FORMATTING:
+                    • Include specific financial amounts from data
+                    • Maintain analytical tone with regulatory context
+                    • Reference Table 3c for detailed breakdown
+                    • Target exactly {word_limit} words including boilerplate
+
+                    Focus: Financial commitment impact, regulatory compliance, and commitment process timing.
+                    """
+    
+        elif 'fdi_status' in section_name.lower() or 'final date for implementation' in section_name.lower():
+            return f"""
+                    Generate FDI status analysis ({word_limit} words) covering commitments approaching or exceeding FDI thresholds.
+
+                    STRUCTURE REQUIREMENTS:
+                    1. **H2020 FDI Status**: Commitments exceeding FDI threshold with call type breakdown
+                    2. **HEU FDI Status**: Horizon Europe FDI threshold compliance status
+                    3. **Distribution Details**: Call type distribution (COG, POC, STG, etc.)
+                    4. **Factual Reporting**: Specific numbers and observed status
+
+                    CONTENT REQUIREMENTS:
+                    • H2020 format: "At the end of [Period], [X] L2 commitments exceeding the FDI (H2020) threshold were observed, distributed as follows: COG (X), POC (X), STG (X)"
+                    • HEU format: "At the end of [Period], [no/X] commitments exceeding the FDI (HEU) threshold were observed"
+                    • Include specific numbers from grants_exceeding_fdi data
+                    • Call type breakdown with exact counts
+
+                    FORMATTING:
+                    • Use factual, compliance-focused tone
+                    • Include specific numbers and call type distributions
+                    • Separate H2020 and HEU status clearly
+                    • Target exactly {word_limit} words for brief status report
+
+                    Focus: FDI compliance monitoring, threshold status, and call type impact distribution.
+                    """
+    
+        # ✅ DEFAULT HANDLING FOR OTHER SECTIONS (your existing logic)
+        else:
+            return f"""
+                Generate a {tone} {section_name.lower()} ({word_limit} words) focusing on {focus.replace('_', ' ')}.
+
+                Requirements:
+                - Use **bold** for key financial figures and percentages
+                - Structure with clear paragraphs and bullet points
+                - Focus on {', '.join(section_config['data_configuration']['focus_metrics'])}
+                - Maintain {tone} tone throughout
+                - Target exactly {word_limit} words
+
+                Format for Word document integration.
+                """
+    
     ###############################
     # 🤖 8. AI MODEL INTEGRATION  #
     ###############################

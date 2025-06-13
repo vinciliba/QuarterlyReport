@@ -35,92 +35,6 @@ from ingestion.db_utils import (
 
 logger = logging.getLogger(__name__)
 
-# ================================================================
-# 🧪 TESTING AND UTILITIES
-# ================================================================
-
-def test_comments_module(
-    report_name: str = "Quarterly_Report",
-    db_path: str = "database/reporting.db",
-    cutoff_date: str = None
-):
-    """Test the CommentsModule independently"""
-    
-    print("🧪 TESTING COMMENTS MODULE")
-    print("=" * 60)
-    
-    try:
-        # Create mock context
-        from reporting.quarterly_report.utils import RenderContext
-        
-        if cutoff_date is None:
-            cutoff_date = datetime.datetime.now().strftime('%Y-%m-%d')
-        
-        # Mock database connection
-        import sqlite3
-        conn = sqlite3.connect(db_path)
-        
-        # Create context
-        ctx = RenderContext(
-            db=type('DB', (), {'conn': conn})(),
-            cutoff=cutoff_date,
-            report_name=report_name
-        )
-        
-        # Run module
-        module = CommentsModule()
-        result_ctx = module.run(ctx)
-        
-        print("✅ Comments module test completed")
-        return result_ctx
-        
-    except Exception as e:
-        print(f"❌ Comments module test failed: {str(e)}")
-        import traceback
-        print(f"📋 Traceback: {traceback.format_exc()}")
-        return None
-
-def preview_comments_generation(
-    report_name: str = "Quarterly_Report",
-    db_path: str = "database/reporting.db"
-):
-    """Preview what comments would be generated"""
-    
-    print("📋 COMMENTS GENERATION PREVIEW")
-    print("=" * 50)
-    
-    try:
-        # Load report data
-        report_params = load_report_params(report_name, db_path)
-        report_vars = fetch_vars_for_report(report_name, db_path)
-        
-        # Calculate expected generation
-        single_sections = len(CommentsConfig.SINGLE_SECTIONS)
-        loop_combinations = len(CommentsConfig.LOOP_PROGRAMS) * len(CommentsConfig.LOOP_CALL_TYPES)
-        detailed_combinations = len(CommentsConfig.LOOP_PROGRAMS) * len(CommentsConfig.DETAILED_CALL_TYPES)
-        
-        # Show summary
-        print(f"📊 Report: {report_name}")
-        print(f"   Period: {report_params.get('quarter_period')} {report_params.get('current_year')}")
-        print(f"   Available data tables: {len([v for v in report_vars.values() if v is not None])}")
-        print(f"\n🎯 Expected AI Generation:")
-        print(f"   📝 Single sections: {single_sections}")
-        print(f"   🔄 Loop combinations: {loop_combinations}")
-        print(f"   📊 Detailed combinations: {detailed_combinations} (if enabled)")
-        print(f"   💾 Total variables: {single_sections + loop_combinations}")
-        
-        print(f"\n🤖 AI Configuration:")
-        model = report_params.get('ai_model', CommentsConfig.DEFAULT_MODEL)
-        print(f"   Model: {CommentsConfig.AVAILABLE_MODELS[model]['name']}")
-        print(f"   Temperature: {report_params.get('ai_temperature', CommentsConfig.DEFAULT_TEMPERATURE)}")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Preview failed: {str(e)}")
-        return False
-
-
 
 # ================================================================
 # 🎯 MODULE CONFIGURATION
@@ -145,15 +59,15 @@ class CommentsConfig:
             'max_tokens_multiplier': 1.7,
             'recommended_for': ['detailed', 'technical', 'compliance']
         },
-        'llama2:13b': {
-            'name': 'Llama 2 13B',
-            'description': 'Alternative model for general reports',
-            'temperature': 0.4,
-            'max_tokens_multiplier': 1.3,
-            'recommended_for': ['general', 'narrative']
-        }
+        # 'llama2:13b': {
+        #     'name': 'Llama 2 13B',
+        #     'description': 'Alternative model for general reports',
+        #     'temperature': 0.4,
+        #     'max_tokens_multiplier': 1.3,
+        #     'recommended_for': ['general', 'narrative']
+        # }
     }
-    
+
     # 📊 Generation Settings
     DEFAULT_MODEL = 'deepseek-r1:14b'
     DEFAULT_TEMPERATURE = 0.3
@@ -165,6 +79,9 @@ class CommentsConfig:
     SINGLE_SECTIONS = [
         'intro_summary',
         'budget_overview', 
+        'granting_process_overview',
+        'commitment_budgetary',
+        'fdi_status',
         'payments_workflow',
         'commitments_workflow',
         'amendments_workflow',
@@ -292,10 +209,7 @@ class CommentsModule(BaseModule):
             
             model_config = CommentsConfig.AVAILABLE_MODELS[model]
             print(f"🤖 Model configured: {model_config['name']} (temp: {temperature})")
-            
-            # Initialize generator
             generator = EnhancedReportGenerator()
-            
             print("✅ AI components initialized successfully")
 
         except Exception as e:
@@ -387,6 +301,8 @@ class CommentsModule(BaseModule):
                         financial_data=financial_data,
                         model=model,
                         temperature=temperature,
+                        acronym_context=acronym_context,      # ✅ Passed here
+                        cutoff_date=cutoff,   
                         verbose=True
                     )
                     
@@ -473,6 +389,8 @@ class CommentsModule(BaseModule):
                 call_types=call_types,
                 model=model,
                 temperature=temperature,
+                acronym_context=acronym_context,      # ✅ Passed here
+                cutoff_date=cutoff,   
                 verbose=True
             )
             
@@ -546,6 +464,8 @@ class CommentsModule(BaseModule):
                     financial_data=financial_data,
                     model=model,
                     temperature=temperature,
+                    acronym_context=acronym_context,      # ✅ Passed here
+                    cutoff_date=cutoff,   
                     verbose=True
                 )
                 
@@ -584,16 +504,17 @@ class CommentsModule(BaseModule):
         # ══════════════════════════════════════════════════════════════════
         # 6. MODULE COMPLETION STATUS (Following PaymentsModule pattern)
         # ══════════════════════════════════════════════════════════════════
-        
+
         print("\n" + "="*60)
         print("🤖 AI COMMENTS MODULE COMPLETION SUMMARY")
         print("="*60)
-        
+
         # Calculate total statistics
         total_successful = single_section_stats['successful'] + loop_stats['successful']
-        total_failed = single_section_stats['failed'] + loop_stats['failed']
+        total_failed = single_section_stats['failed'] + loop_stats['failed']  # ✅ Now will be used
         total_variables = single_section_stats['variables_created'] + loop_stats['variables_created']
-        
+
+        # ✅ FIXED: Now using total_failed in the completion logic
         if module_errors:
             print(f"⚠️ Module completed with {len(module_errors)} errors:")
             for i, error in enumerate(module_errors, 1):
@@ -605,26 +526,30 @@ class CommentsModule(BaseModule):
                     print(f"   {i}. {warning}")
                     
             print(f"\n❌ Module status: COMPLETED WITH ERRORS")
-            print(f"📊 Partial results: {total_successful} variables generated successfully")
+            print(f"📊 Partial results: {total_successful} successful, {total_failed} failed")  # ✅ Now used
             
         elif module_warnings:
             print(f"✅ Module completed with {len(module_warnings)} warnings:")
             for i, warning in enumerate(module_warnings, 1):
                 print(f"   {i}. {warning}")
             print(f"\n⚠️ Module status: COMPLETED WITH WARNINGS")
+            print(f"📊 Results: {total_successful} successful, {total_failed} failed")  # ✅ Now used
             
         else:
             print("✅ All AI generation completed successfully!")
             print("\n🎉 Module status: FULLY SUCCESSFUL")
+            if total_failed > 0:  # ✅ Show failed count even in success case
+                print(f"📊 Final results: {total_successful} successful, {total_failed} failed")
 
         # Detailed statistics
         print(f"\n📊 GENERATION STATISTICS:")
         print(f"   📝 Single sections: {single_section_stats['successful']} successful, {single_section_stats['failed']} failed")
         print(f"   🔄 Loop combinations: {loop_stats['successful']} successful, {loop_stats['failed']} failed")
         print(f"   💾 Total variables created: {len(total_variables)}")
+        print(f"   📈 Overall success rate: {total_successful}/{total_successful + total_failed} ({(total_successful/(total_successful + total_failed)*100):.1f}%)")  # ✅ Now used
         print(f"   🤖 AI Model used: {model_config['name']}")
         print(f"   🌡️ Temperature: {temperature}")
-        
+
         # Show some created variables
         if total_variables:
             print(f"\n📋 CREATED VARIABLES (showing first 10):")
@@ -633,12 +558,16 @@ class CommentsModule(BaseModule):
             if len(total_variables) > 10:
                 print(f"   ... and {len(total_variables) - 10} more")
 
+        # ✅ NEW: Show failure summary if there were failures
+        if total_failed > 0:
+            print(f"\n⚠️ FAILURE SUMMARY:")
+            print(f"   📝 Single section failures: {single_section_stats['failed']}")
+            print(f"   🔄 Loop generation failures: {loop_stats['failed']}")
+            print(f"   💡 Check logs above for specific error details")
+
         print("="*60)
         print("🏁 AI Comments Module completed")
         print("="*60)
-
-        # Return the context (following BaseModule pattern)
-        return ctx
     
     def _map_financial_data(self, report_vars: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -738,5 +667,335 @@ class CommentsModule(BaseModule):
         detected_acronyms.update(always_include)
         
         return sorted(list(detected_acronyms))
-
     
+    def create_acronym_context_for_ai(self, detected_acronyms: List[str]) -> str:
+        """
+        Create a context string with acronym definitions for AI generation
+        This provides the AI with essential acronym knowledge for generating accurate commentary
+        """
+        if not detected_acronyms:
+            return ""
+        
+        context_lines = [
+            "📚 ACRONYMS REFERENCE (for accurate text generation):",
+            "=" * 60,
+            ""
+        ]
+        
+        # Group acronyms by category for better organization
+        acronyms_by_category = {}
+        for acronym in detected_acronyms:
+            if acronym in CommentsConfig.ACRONYMS_DICTIONARY:
+                definition = CommentsConfig.ACRONYMS_DICTIONARY[acronym]
+                category = definition.get('category', 'general')
+                
+                if category not in acronyms_by_category:
+                    acronyms_by_category[category] = []
+                
+                acronyms_by_category[category].append({
+                    'acronym': acronym,
+                    'full_name': definition.get('full_name', ''),
+                    'description': definition.get('description', '')
+                })
+        
+        # Format by category
+        category_order = [
+            'program', 'call_type', 'payment_type', 'time_metric', 
+            'organization', 'audit', 'financial', 'administrative', 
+            'document', 'system', 'general'
+        ]
+        
+        for category in category_order:
+            if category in acronyms_by_category:
+                # Category header
+                category_title = category.replace('_', ' ').title()
+                context_lines.extend([
+                    f"🎯 {category_title}:",
+                    ""
+                ])
+                
+                # List acronyms in this category
+                for item in sorted(acronyms_by_category[category], key=lambda x: x['acronym']):
+                    acronym = item['acronym']
+                    full_name = item['full_name']
+                    description = item['description']
+                    
+                    if description:
+                        context_lines.append(f"   • {acronym}: {full_name} - {description}")
+                    else:
+                        context_lines.append(f"   • {acronym}: {full_name}")
+                
+                context_lines.append("")  # Empty line between categories
+        
+        # Add usage instructions for AI
+        context_lines.extend([
+            "📝 AI INSTRUCTIONS:",
+            "• Always use full names on first mention: 'Horizon Europe (HEU)'",
+            "• Use acronyms consistently thereafter: 'HEU payments', 'HEU analysis'",
+            "• Ensure technical accuracy when referencing these terms",
+            "• Explain context when introducing complex acronyms",
+            "=" * 60,
+            ""
+        ])
+        
+        return "\n".join(context_lines)
+    
+    def _validate_ai_model_configuration(self, model: str, temperature: float) -> Dict[str, Any]:
+        """
+        Validate and return AI model configuration
+        Returns model config with fallbacks if needed
+        """
+        # Check if model exists
+        if model not in CommentsConfig.AVAILABLE_MODELS:
+            print(f"⚠️ Unknown model '{model}', using default: {CommentsConfig.DEFAULT_MODEL}")
+            model = CommentsConfig.DEFAULT_MODEL
+        
+        # Validate temperature range
+        if not (0.0 <= temperature <= 1.0):
+            print(f"⚠️ Invalid temperature {temperature}, using default: {CommentsConfig.DEFAULT_TEMPERATURE}")
+            temperature = CommentsConfig.DEFAULT_TEMPERATURE
+        
+        model_config = CommentsConfig.AVAILABLE_MODELS[model].copy()
+        model_config['temperature'] = temperature
+        model_config['model_key'] = model
+        
+        return model_config
+
+
+
+# ================================================================
+# 🧪 TESTING AND UTILITIES
+# ================================================================
+
+def test_comments_module(
+    report_name: str = "Quarterly_Report",
+    db_path: str = "database/reporting.db",
+    cutoff_date: str = None
+):
+    """Test the CommentsModule independently"""
+    
+    print("🧪 TESTING COMMENTS MODULE")
+    print("=" * 60)
+    
+    try:
+        # Create mock context
+        from reporting.quarterly_report.utils import RenderContext
+        
+        if cutoff_date is None:
+            cutoff_date = datetime.datetime.now().strftime('%Y-%m-%d')
+        
+        # Mock database connection
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        
+        # Create context
+        ctx = RenderContext(
+            db=type('DB', (), {'conn': conn})(),
+            cutoff=cutoff_date,
+            report_name=report_name
+        )
+        
+        # Run module
+        module = CommentsModule()
+        result_ctx = module.run(ctx)
+        
+        print("✅ Comments module test completed")
+        return result_ctx
+        
+    except Exception as e:
+        print(f"❌ Comments module test failed: {str(e)}")
+        import traceback
+        print(f"📋 Traceback: {traceback.format_exc()}")
+        return None
+
+def preview_comments_generation(
+    report_name: str = "Quarterly_Report",
+    db_path: str = "database/reporting.db"
+):
+    """Preview what comments would be generated"""
+    
+    print("📋 COMMENTS GENERATION PREVIEW")
+    print("=" * 50)
+    
+    try:
+        # Load report data
+        report_params = load_report_params(report_name, db_path)
+        report_vars = fetch_vars_for_report(report_name, db_path)
+        
+        # Calculate expected generation
+        single_sections = len(CommentsConfig.SINGLE_SECTIONS)
+        loop_combinations = len(CommentsConfig.LOOP_PROGRAMS) * len(CommentsConfig.LOOP_CALL_TYPES)
+        detailed_combinations = len(CommentsConfig.LOOP_PROGRAMS) * len(CommentsConfig.DETAILED_CALL_TYPES)
+        
+        # Show summary
+        print(f"📊 Report: {report_name}")
+        print(f"   Period: {report_params.get('quarter_period')} {report_params.get('current_year')}")
+        print(f"   Available data tables: {len([v for v in report_vars.values() if v is not None])}")
+        print(f"\n🎯 Expected AI Generation:")
+        print(f"   📝 Single sections: {single_sections}")
+        print(f"   🔄 Loop combinations: {loop_combinations}")
+        print(f"   📊 Detailed combinations: {detailed_combinations} (if enabled)")
+        print(f"   💾 Total variables: {single_sections + loop_combinations}")
+        
+        print(f"\n🤖 AI Configuration:")
+        model = report_params.get('ai_model', CommentsConfig.DEFAULT_MODEL)
+        print(f"   Model: {CommentsConfig.AVAILABLE_MODELS[model]['name']}")
+        print(f"   Temperature: {report_params.get('ai_temperature', CommentsConfig.DEFAULT_TEMPERATURE)}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Preview failed: {str(e)}")
+        return False
+
+def manage_acronyms():
+    """Utility function to manage the acronym dictionary"""
+    
+    print("📚 ACRONYM DICTIONARY MANAGEMENT")
+    print("=" * 40)
+    
+    print(f"Total acronyms: {len(CommentsConfig.ACRONYMS_DICTIONARY)}")  # ✅ Fixed reference
+    
+    # Show by category
+    categories = set(details.get('category', 'other') for details in CommentsConfig.ACRONYMS_DICTIONARY.values())  # ✅ Fixed reference
+    
+    for category in sorted(categories):
+        category_acronyms = CommentsModule.get_acronyms_by_category(category)  # ✅ Use class method
+        print(f"\n{category.upper()} ({len(category_acronyms)}):")
+        for acronym, details in sorted(category_acronyms.items()):
+            print(f"  {acronym}: {details.get('full_name', 'N/A')}")
+    
+    print("\n🔧 To add new acronyms, update ACRONYMS_DICTIONARY in CommentsConfig")
+    print("🔧 Categories: call_type, program, time_metric, payment_type, organization, audit, document, administrative, system, financial")
+
+
+def test_program_mapping():
+    """Test the enhanced PROGRAM_MAPPING functionality"""
+    
+    print("🧪 TESTING ENHANCED PROGRAM MAPPING")
+    print("=" * 40)
+    
+    # Test program information
+    programs = CommentsConfig.get_available_programs()
+    print(f"Available programs: {programs}")
+    
+    for program in programs:
+        print(f"\n📊 {program} Configuration:")
+        config = CommentsConfig.get_program_info(program)
+        print(f"   Official name: {config.get('official_name')}")
+        print(f"   Period: {config.get('period')}")
+        print(f"   Call types: {config.get('call_types')}")
+        
+        # Show data fields by category
+        payment_fields = CommentsConfig.get_program_data_fields(program, 'payment_fields')
+        analysis_fields = CommentsConfig.get_program_data_fields(program, 'analysis_tables')
+        ttp_fields = CommentsConfig.get_program_data_fields(program, 'ttp_fields')
+        
+        print(f"   Payment fields ({len(payment_fields)}): {payment_fields}")
+        print(f"   Analysis fields ({len(analysis_fields)}): {analysis_fields}")
+        print(f"   TTP fields ({len(ttp_fields)}): {ttp_fields}")
+    
+    # Test alias resolution
+    print(f"\n🔍 Alias Resolution:")
+    test_aliases = ['HEU', 'Horizon Europe', 'H2020', 'Horizon 2020', 'HORIZON']
+    for alias in test_aliases:
+        resolved = CommentsConfig.find_program_by_alias(alias)
+        print(f"   '{alias}' → {resolved}")
+    
+    # Test financial data filtering
+    print(f"\n📊 Financial Data Filtering:")
+    sample_financial_data = {
+        'commitments': 'data1',
+        'pay_credits_HEU': 'data2', 
+        'HEU_payments_analysis_STG': 'data3',
+        'H2020_payments_all': 'data4',
+        'TTP_Overview': 'data5',
+        'auri_overview': 'data6'
+    }
+    
+    for program in programs:
+        filtered = CommentsConfig.filter_financial_data_by_program(sample_financial_data, program)
+        print(f"   {program} relevant data: {list(filtered.keys())}")
+    
+    return True
+
+def test_data_field_mapping():
+    """Test the data field mapping functionality"""
+    
+    print("🧪 TESTING DATA FIELD MAPPING")
+    print("=" * 40)
+    
+    mapping = CommentsConfig.get_data_field_mapping()
+    
+    print(f"Total mapped fields: {len(mapping)}")
+    
+    # Group by category for display
+    categories = {
+        'Core Tables': ['commitments', 'pay_credits_H2020', 'pay_credits_HEU', 'summary_budget'],
+        'Payment Data': [k for k in mapping.keys() if 'payments_' in k and 'analysis' not in k],
+        'Analysis Tables': [k for k in mapping.keys() if 'analysis' in k],
+        'TTP Charts': [k for k in mapping.keys() if 'TTP_' in k],
+        'Amendment Data': [k for k in mapping.keys() if 'amendment_' in k],
+        'Audit Data': [k for k in mapping.keys() if 'auri_' in k or k in ['recovery_activity', 'external_audits_activity', 'error_rates']]
+    }
+    
+    for category, fields in categories.items():
+        if fields:
+            print(f"\n📊 {category} ({len(fields)}):")
+            for field in fields[:3]:  # Show first 3 as examples
+                if field in mapping:
+                    print(f"   {field} → {mapping[field]}")
+            if len(fields) > 3:
+                print(f"   ... and {len(fields) - 3} more")
+    
+    return mapping
+
+def test_acronym_detection():
+    """Test acronym detection functionality"""
+    
+    print("🧪 TESTING ACRONYM DETECTION")
+    print("=" * 40)
+    
+    # Sample financial data keys (from your actual mappings)
+    sample_data = {
+        'pay_credits_H2020': 'some_data',
+        'HEU_payments_STG': 'some_data',
+        'TTP_Overview': 'some_data',
+        'amendment_TTA_H2020': 'some_data',
+        'auri_overview': 'some_data',
+    }
+    
+    module = CommentsModule()
+    detected = module._detect_acronyms_in_data(sample_data)
+    context = module.create_acronym_context_for_ai(detected)
+    
+    print(f"Sample data keys: {list(sample_data.keys())}")
+    print(f"Detected acronyms: {detected}")
+    print(f"\nGenerated context for AI:")
+    print("=" * 40)
+    print(context)
+    print("=" * 40)
+    
+    return detected, context
+
+def test_ai_model_validation():
+    """Test AI model validation functionality"""
+    
+    print("🧪 TESTING AI MODEL VALIDATION")
+    print("=" * 40)
+    
+    module = CommentsModule()
+    
+    # Test valid model
+    config1 = module._validate_ai_model_configuration('deepseek-r1:14b', 0.3)
+    print(f"Valid model: {config1['model_key']} → {config1['name']}")
+    
+    # Test invalid model (should fallback)
+    config2 = module._validate_ai_model_configuration('invalid-model', 0.3)
+    print(f"Invalid model fallback: {config2['model_key']} → {config2['name']}")
+    
+    # Test invalid temperature (should fallback)
+    config3 = module._validate_ai_model_configuration('deepseek-r1:14b', 1.5)
+    print(f"Invalid temperature fallback: temp={config3['temperature']}")
+    
+    return config1, config2, config3
