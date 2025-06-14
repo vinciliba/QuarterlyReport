@@ -1924,7 +1924,6 @@ class EnhancedReportGenerator:
                 print(f"⚠️  Invalid sections: {invalid_sections}")
         
         return results
-    
 
     def validate_sections_configuration(self) -> Dict[str, Any]:
         """
@@ -1989,6 +1988,195 @@ class EnhancedReportGenerator:
         return validation_results
 
 
+    def _get_call_type_description(self, call_type: str) -> str:
+        """Get description for call type"""
+        descriptions = {
+            'STG': 'Starting Grants for early-career researchers',
+            'ADG': 'Advanced Grants for established researchers',
+            'COG': 'Consolidator Grants for mid-career researchers',
+            'SYG': 'Synergy Grants for collaborative research teams',
+            'POC': 'Proof of Concept grants for commercialization',
+            'EXPERTS': 'Expert evaluation and support services'
+        }
+        return descriptions.get(call_type, f'{call_type} grants')
+
+
+    def _generate_call_type_payment_overview(
+        self,
+        program: str,
+        call_type: str,
+        quarter_period: str,
+        current_year: str,
+        financial_data: Dict[str, Any],
+        model: str,
+        temperature: float,
+        acronym_context: str,
+        verbose: bool
+    ) -> Optional[str]:
+        """Generate payment overview for specific program-call type combination"""
+        
+        # Extract data for this specific combination
+        table_key = f"{program}_payments_analysis_{call_type}"
+        
+        if table_key not in financial_data or financial_data[table_key] is None:
+            if verbose:
+                print(f"⚠️ No data found for {table_key}")
+            return None
+        
+        # Get the payment overview template
+        templates = self.template_library.get_template_definitions(quarter_period, current_year)
+        template_key = 'heu_payment_overview_template' if program == 'HEU' else 'h2020_payment_overview_template'
+        template = templates[template_key]
+        
+        # Prepare data specifically for this call type
+        try:
+            if isinstance(financial_data[table_key], str):
+                call_type_data = json.loads(financial_data[table_key])
+            else:
+                call_type_data = financial_data[table_key]
+            
+            # Calculate metrics for this call type
+            total_payments = len(call_type_data) if isinstance(call_type_data, list) else 0
+            total_amount = 0
+            
+            if isinstance(call_type_data, list):
+                for record in call_type_data:
+                    if isinstance(record, dict) and 'amount' in record:
+                        try:
+                            total_amount += float(record.get('amount', 0))
+                        except:
+                            pass
+            
+            # Prepare focused data summary
+            primary_summary = f"""
+            {call_type} PAYMENT DATA FOR {program}:
+            • Total {call_type} payments processed: {total_payments}
+            • Total amount: €{total_amount/1000000:.2f} million
+            • Payment category: {call_type} - {self._get_call_type_description(call_type)}
+            • Period: {quarter_period} {current_year}
+            """
+            
+            secondary_summary = f"""
+            SUPPORTING CONTEXT:
+            • Program: {program} ({'Horizon Europe' if program == 'HEU' else 'Horizon 2020'})
+            • Call type focus: {call_type}
+            • Analysis based on {table_key} data
+            """
+            
+            # Format template
+            formatted_template = template.format(
+                prioritized_data_summary=primary_summary,
+                secondary_data_summary=secondary_summary
+            )
+            
+            # Create specific instructions
+            instructions = f"""
+            Generate a focused payment credit consumption analysis for {program} {call_type} grants.
+            
+            This should be specific to {call_type} payments only, not a general program overview.
+            
+            Requirements:
+            - Focus exclusively on {call_type} grant payments
+            - Include specific {call_type} payment volumes and amounts
+            - Highlight {call_type}-specific processing patterns
+            - Compare to {call_type} forecast if available
+            - Target 250-300 words
+            - Professional, analytical tone
+            """
+            
+            # Generate with enhanced prompt
+            final_prompt = self._create_enhanced_prompt(
+                instructions=instructions,
+                template=formatted_template,
+                acronym_context=acronym_context,
+                section_key=f"{program}_{call_type}_payment_overview"
+            )
+            
+            return self._generate_with_model(
+                prompt=final_prompt,
+                model=model,
+                temperature=temperature,
+                max_tokens=450,
+                verbose=verbose
+            )
+            
+        except Exception as e:
+            if verbose:
+                print(f"❌ Error processing {table_key}: {e}")
+            return None
+
+
+    def _generate_payment_overview_combinations(
+        self,
+        section_key: str,
+        quarter_period: str,
+        current_year: str,
+        financial_data: Dict[str, Any],
+        model: str,
+        temperature: float,
+        acronym_context: str,
+        cutoff_date: Any,
+        verbose: bool
+    ) -> Dict[str, str]:
+        """Generate payment overview for each call type combination"""
+        
+        # Determine program from section key
+        program = 'HEU' if 'heu' in section_key.lower() else 'H2020'
+        
+        # Get call types for this program
+        if program == 'HEU':
+            call_types = ['STG', 'ADG', 'COG', 'SYG', 'POC', 'EXPERTS']
+        else:  # H2020
+            call_types = ['STG', 'ADG', 'COG', 'SYG']
+        
+        generated_texts = {}
+        
+        if verbose:
+            print(f"🔄 Generating {program} payment overviews for {len(call_types)} call types")
+        
+        for call_type in call_types:
+            if verbose:
+                print(f"   📝 Generating {program}-{call_type} overview...")
+            
+            try:
+                # Generate specific commentary for this combination
+                commentary = self._generate_call_type_payment_overview(
+                    program=program,
+                    call_type=call_type,
+                    quarter_period=quarter_period,
+                    current_year=current_year,
+                    financial_data=financial_data,
+                    model=model,
+                    temperature=temperature,
+                    acronym_context=acronym_context,
+                    verbose=False
+                )
+                
+                if commentary:
+                    var_name = f"{section_key}_{call_type.lower()}"
+                    generated_texts[var_name] = commentary
+                    
+                    if verbose:
+                        print(f"   ✅ Generated {len(commentary.split())} words for {program}-{call_type}")
+                else:
+                    if verbose:
+                        print(f"   ❌ Failed to generate {program}-{call_type}")
+                        
+            except Exception as e:
+                if verbose:
+                    print(f"   ❌ Error generating {program}-{call_type}: {e}")
+        
+        # Return a combined result that the module can handle
+        if generated_texts:
+            # Create a summary of all generated texts
+            summary = f"Generated {len(generated_texts)} payment overview combinations for {program}:\n"
+            for var_name in generated_texts:
+                summary += f"- {var_name}\n"
+            return summary
+        else:
+            return None
+
+
     def generate_section_commentary(
         self,
         section_key: str,
@@ -2002,8 +2190,39 @@ class EnhancedReportGenerator:
         verbose: bool = True
     ) -> Optional[str]:
         """Generate commentary for a specific section using the enhanced matrix system"""
+        
+        # # Check if this is a payment overview section that needs loop generation
+        # if section_key in ['heu_payment_overview', 'h2020_payment_overview']:
+        #     # Generate multiple combinations instead of single overview
+        #     return self._generate_payment_overview_combinations(
+        #         section_key=section_key,
+        #         quarter_period=quarter_period,
+        #         current_year=current_year,
+        #         financial_data=financial_data,
+        #         model=model,
+        #         temperature=temperature,
+        #         acronym_context=acronym_context,
+        #         cutoff_date=cutoff_date,
+        #         verbose=verbose
+        #     )
+        
+        # # Original single section generation logic for other sections
+        # return self._generate_single_section_commentary(
+        #     section_key=section_key,
+        #     quarter_period=quarter_period,
+        #     current_year=current_year,
+        #     financial_data=financial_data,
+        #     model=model,
+        #     temperature=temperature,
+        #     acronym_context=acronym_context,
+        #     cutoff_date=cutoff_date,
+        #     verbose=verbose)
 
-        # Step 1: Configuration Lookup
+        
+        """Step 1: Configuration Lookup
+        What: Gets the configuration for the requested section
+        Why: Each section has different templates, data sources, and formatting rules"""
+        # Get section configuration from mapping matrix
         mapping = self.mapping_matrix.get_complete_mapping_matrix()
         
         if section_key not in mapping:
@@ -2012,8 +2231,17 @@ class EnhancedReportGenerator:
             return None
         
         section_config = mapping[section_key]
+        
+        if verbose:
+            print(f"📝 Generating: {section_config['section_info']['name']}")
+            print(f"   Template: {section_config['template_mapping']['template_name']}")
+            print(f"   Output: {section_config['output_configuration']['variable_name']}")
+        
+        # Get template from library
+        """Step 2: Template Retrieval
+        What: Gets the specific template for this section
+        Why: Templates define the structure and format of the output"""
 
-        # Step 2: Template Retrieval - MOVED TO TOP TO FIX THE ERROR
         templates = self.template_library.get_template_definitions(quarter_period, current_year)
         template_name = section_config['template_mapping']['template_name']
         
@@ -2021,19 +2249,23 @@ class EnhancedReportGenerator:
             if verbose:
                 print(f"❌ Template '{template_name}' not found in template library")
             return None
-            
-        template = templates[template_name]  # ✅ NOW DEFINED BEFORE USE
         
-        # Step 3: Apply cutoff date filtering
-        if cutoff_date is not None:
-            financial_data = self._filter_data_by_cutoff(financial_data, cutoff_date, verbose)
-
-        # Step 4: Data Preparation
+        template = templates[template_name]
+        
+        # Prepare data according to configuration
+        """Step 3: Data Preparation
+        What: Filters raw data to only what this section needs
+        Why: Different sections focus on different data tables (payments vs commitments vs budget)
+        """
         data_config = section_config['data_configuration']
         primary_data = {k: v for k, v in financial_data.items() if k in data_config['primary_data']}
         secondary_data = {k: v for k, v in financial_data.items() if k in data_config['secondary_data']}
         
-        # Step 5: Data Formatting
+        # Format data summaries
+        """Step 4: Data Formatting
+           What: Converts raw data into human-readable summaries
+           Why: AI needs structured, summarized data rather than raw JSON
+        """
         prioritized_data_summary = self._prepare_data_summary(
             primary_data, 
             data_config['focus_metrics'], 
@@ -2045,28 +2277,22 @@ class EnhancedReportGenerator:
             "SECONDARY"
         )
         
-        # Step 6: Template Population - NOW SAFE TO USE 'template'
-        if section_key == 'ttp_performance':
-            # Prepare TTP-specific data summaries
-            ttp_summaries = self._prepare_ttp_data_summary(financial_data, quarter_period, current_year)
-            
-            # Format template with TTP-specific variables
-            formatted_template = template.format(
-                quarter_period=quarter_period,              
-                current_year=current_year,                  
-                h2020_ttp_summary=ttp_summaries['h2020_ttp_summary'],
-                heu_ttp_summary=ttp_summaries['heu_ttp_summary'],
-                prioritized_data_summary=prioritized_data_summary,
-                secondary_data_summary=secondary_data_summary
-            )
-        else:
-            # Use existing template formatting
-            formatted_template = template.format(
-                prioritized_data_summary=prioritized_data_summary,
-                secondary_data_summary=secondary_data_summary
-            )
+        # Format template
+        """  Step 5: Template Population
+             What: Inserts data summaries into template placeholders
+             Why: Creates the final prompt structure for the AI
+        """
+        formatted_template = template.format(
+            prioritized_data_summary=prioritized_data_summary,
+            secondary_data_summary=secondary_data_summary
+        )
         
-        # Step 7: AI Generation
+        # Get instructions
+        """Step 6: AI Generation
+           What: Sends structured prompt to AI model and gets response
+           Why: This is where the actual text generation happens
+        """
+        # Step 7: AI Generation (UPDATED TO USE RETRY LOGIC)
         instructions = self._get_section_instructions(section_config)
         
         # Create final prompt with acronym context
@@ -2077,17 +2303,18 @@ class EnhancedReportGenerator:
             section_key=section_key
         )
         
-        # Generate commentary
-        commentary = self._generate_with_model(
+       # Generate commentary WITH RETRY LOGIC
+        commentary = self._generate_with_retry(  # Changed from _generate_with_model
             prompt=final_prompt,
             model=model,
             temperature=temperature,
             max_tokens=int(section_config['output_configuration']['word_limit'] * 1.5),
+            section_key=section_key,  # Added for quality validation
             verbose=verbose
         )
         
         return commentary
-    
+        
     def _generate_program_summary(
         self, 
         program: str, 
@@ -3570,15 +3797,75 @@ class EnhancedReportGenerator:
         
         return text
 
-    
-    
+
+    def _extract_final_response_from_reasoning(self, full_text: str) -> str:
+        """Extract the final response from reasoning model output"""
+        
+        # Common patterns for reasoning model outputs
+        patterns = [
+            # Pattern 1: Look for text after "Final response:" or similar
+            r'(?:final response|final answer|here is the response|here\'s the response):\s*(.+)$',
+            
+            # Pattern 2: Look for text after reasoning markers
+            r'(?:</reasoning>|</think>|</thought>)\s*(.+)$',
+            
+            # Pattern 3: Look for the last substantial paragraph (fallback)
+            r'(?:^|\n\n)([A-Z][^<>\n]{200,})(?:\n\n|$)'
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, full_text, re.IGNORECASE | re.DOTALL)
+            if match:
+                response = match.group(1).strip()
+                # Ensure we got substantial content
+                if len(response) > 100:
+                    return response
+        
+        # If no patterns match, look for the longest paragraph after any XML-like tags
+        paragraphs = re.split(r'\n\n+', full_text)
+        
+        # Filter out reasoning/thinking paragraphs
+        valid_paragraphs = []
+        for para in paragraphs:
+            para = para.strip()
+            # Skip if it looks like reasoning
+            if any(indicator in para.lower() for indicator in 
+                ['let me', 'i need to', 'i should', 'thinking', 'reasoning', 
+                    'first,', 'next,', 'analyzing', 'considering']):
+                continue
+            # Skip if too short
+            if len(para) < 100:
+                continue
+            # Skip if contains XML-like tags
+            if re.search(r'<[^>]+>', para):
+                continue
+            valid_paragraphs.append(para)
+        
+        # Return the longest valid paragraph
+        if valid_paragraphs:
+            return max(valid_paragraphs, key=len)
+        
+        # Last resort: return everything after removing obvious reasoning markers
+        cleaned = re.sub(r'<[^>]+>', '', full_text)
+        cleaned = re.sub(r'(?:Let me|I need to|I should|First,|Next,)[^.]+\.', '', cleaned)
+        
+        return cleaned.strip()
+        
     def _generate_with_model(self, prompt: str, model: str, temperature: float, max_tokens: int, verbose: bool) -> Optional[str]:
-        """Generate with executive quality enforcement"""
+        """Generate with executive quality enforcement and reasoning model support"""
         
         try:
             import requests
+            import re
             
-            # 🎯 EXECUTIVE QUALITY ENFORCEMENT
+            # Detect if this is a reasoning model
+            is_reasoning_model = any(indicator in model.lower() for indicator in ['r1', 'reasoning', 'deepseek-r1'])
+            
+            # Adjust temperature for reasoning models
+            if is_reasoning_model:
+                temperature = max(temperature, 0.5)  # Higher temp for reasoning models
+            
+            # Executive quality enforcement
             executive_enforced_prompt = f"""
             CRITICAL: You are writing for senior European Union executives and department heads. 
             
@@ -3601,12 +3888,11 @@ class EnhancedReportGenerator:
                 "prompt": executive_enforced_prompt,
                 "stream": False,
                 "options": {
-                    "temperature": max(temperature, 0.2),  # Minimum 0.2 for quality
+                    "temperature": temperature,
                     "num_predict": max_tokens,
-                    "top_p": 0.85,  # Slightly more focused
-                    "top_k": 35,    # More selective vocabulary
-                    "stop": ["###", "####", "|", "```", "---", "•", "-"],
-                    "repeat_penalty": 1.1  # Reduce repetition
+                    "top_p": 0.9,
+                    "top_k": 40,
+                    "repeat_penalty": 1.1
                 }
             }
             
@@ -3614,10 +3900,20 @@ class EnhancedReportGenerator:
             
             if response.status_code == 200:
                 result = response.json()
-                commentary = result.get('response', '').strip()
+                full_response = result.get('response', '').strip()
+                
+                # Handle reasoning model output
+                if is_reasoning_model:
+                    # Extract the actual response after reasoning
+                    commentary = self._extract_final_response_from_reasoning(full_response)
+                else:
+                    commentary = full_response
                 
                 # Clean and validate
                 commentary = self._clean_and_validate_executive_text(commentary)
+                
+                if verbose and is_reasoning_model:
+                    print(f"🧠 Reasoning model detected - extracted final response")
                 
                 return commentary if commentary else None
             else:
@@ -3629,6 +3925,107 @@ class EnhancedReportGenerator:
             if verbose:
                 print(f"❌ Generation error: {e}")
             return None
+        
+    
+    # ================================================================
+    # 🔄 QUALITY ENHANCEMENT METHODS (NEW SECTION)
+    # Add these RIGHT AFTER the AI Model Integration section
+    # ================================================================
+    
+    def _generate_with_retry(
+        self,
+        prompt: str,
+        model: str,
+        temperature: float,
+        max_tokens: int,
+        section_key: str,
+        verbose: bool,
+        max_retries: int = 3
+    ) -> Optional[str]:
+        """Generate with retry logic for better quality"""
+        
+        # Import config at top of method to avoid circular imports
+        from reporting.quarterly_report.modules.comments import CommentsConfig
+        
+        # Check for section-specific temperature override
+        if section_key in CommentsConfig.SECTION_TEMPERATURE_OVERRIDES:
+            temperature = CommentsConfig.SECTION_TEMPERATURE_OVERRIDES[section_key]
+            if verbose:
+                print(f"   🌡️ Using section-specific temperature: {temperature}")
+        
+        retry_count = 0
+        current_temperature = temperature
+        
+        while retry_count < max_retries:
+            if retry_count > 0:
+                current_temperature += CommentsConfig.QUALITY_SETTINGS['retry_temperature_increment']
+                if verbose:
+                    print(f"   🔄 Retry {retry_count} with temperature: {current_temperature}")
+            
+            try:
+                response = self._generate_with_model(
+                    prompt=prompt,
+                    model=model,
+                    temperature=current_temperature,
+                    max_tokens=max_tokens,
+                    verbose=verbose
+                )
+                
+                # Validate response quality
+                if response and len(response) >= CommentsConfig.QUALITY_SETTINGS['min_response_length']:
+                    # Additional quality checks
+                    if self._validate_response_quality(response, section_key):
+                        return response
+                    elif verbose:
+                        print(f"   ⚠️ Response quality check failed, retrying...")
+                elif verbose:
+                    print(f"   ⚠️ Response too short ({len(response) if response else 0} chars), retrying...")
+                    
+            except Exception as e:
+                if verbose:
+                    print(f"   ❌ Generation error: {e}")
+            
+            retry_count += 1
+        
+        if verbose:
+            print(f"   ❌ Failed after {max_retries} retries")
+        return None
+
+    def _validate_response_quality(self, response: str, section_key: str) -> bool:
+        """Validate response quality based on section requirements"""
+        
+        # Basic quality checks
+        if not response or len(response) < 100:
+            return False
+        
+        # Check for incomplete sentences
+        if not response.strip().endswith(('.', '!', '?')):
+            return False
+        
+        # Check for repetitive content
+        sentences = response.split('.')
+        if len(sentences) > 3:
+            unique_sentences = set(s.strip().lower() for s in sentences if s.strip())
+            if len(unique_sentences) < len(sentences) * 0.7:  # Too much repetition
+                return False
+        
+        # Section-specific checks
+        if 'payment' in section_key:
+            # Should contain financial metrics
+            if not any(indicator in response.lower() for indicator in ['€', 'eur', 'million', 'payment']):
+                return False
+        
+        if 'budget' in section_key:
+            # Should contain budget-related terms
+            if not any(term in response.lower() for term in ['appropriation', 'allocation', 'budget']):
+                return False
+        
+        if 'ttp' in section_key:
+            # Should contain time-related metrics
+            if not any(term in response.lower() for term in ['days', 'time', 'ttp', 'compliance']):
+                return False
+        
+        return True
     
     def _clean_generated_text(self, text: str) -> str:
         """Clean generated text of any unwanted formatting"""
@@ -3655,3 +4052,4 @@ class EnhancedReportGenerator:
         text = text.strip()
         
         return text
+    

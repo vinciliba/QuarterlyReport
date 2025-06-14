@@ -39,37 +39,69 @@ class CommentsConfig:
     """Configuration for AI comment generation"""
 
     # 🤖 AI Model Configuration
-    AVAILABLE_MODELS={
+    AVAILABLE_MODELS = {
         'deepseek-r1:14b': {
             'name': 'DeepSeek R1 14B',
-            'description': 'Balanced model for financial analysis',
-            'temperature': 0.3,
-            'max_tokens_multiplier': 1.5,
-            'recommended_for': ['financial', 'analytical', 'executive']
+            'description': 'Advanced reasoning model for complex financial analysis',
+            'temperature': 0.5,  # Increased from 0.3 for better creativity
+            'max_tokens_multiplier': 2.0,  # Increased for reasoning output
+            'recommended_for': ['financial', 'analytical', 'executive', 'complex'],
+            'is_reasoning_model': True,
+            'system_prompt_style': 'reasoning'
         },
         'qwen2.5:14b': {
             'name': 'Qwen 2.5 14B',
             'description': 'High-quality model for detailed analysis',
-            'temperature': 0.2,
+            'temperature': 0.4,  # Increased from 0.2
             'max_tokens_multiplier': 1.7,
-            'recommended_for': ['detailed', 'technical', 'compliance']
+            'recommended_for': ['detailed', 'technical', 'compliance'],
+            'is_reasoning_model': False,
+            'system_prompt_style': 'standard'
         },
-        # 'llama2:13b': {
-        #     'name': 'Llama 2 13B',
-        #     'description': 'Alternative model for general reports',
-        #     'temperature': 0.4,
-        #     'max_tokens_multiplier': 1.3,
-        #     'recommended_for': ['general', 'narrative']
-        # }
+        'gemma3:12b': {
+            'name': 'Gemma 3 12B',
+            'description': 'Small model for comprehensive reports',
+            'temperature': 0.4,
+            'max_tokens_multiplier': 1.8,
+            'recommended_for': ['comprehensive', 'narrative', 'strategic'],
+            'is_reasoning_model': False,
+            'system_prompt_style': 'standard'
+        },
+        'mixtral:8x7b': {
+            'name': 'Mixtral 8x7B',
+            'description': 'Efficient model for balanced performance',
+            'temperature': 0.45,
+            'max_tokens_multiplier': 1.6,
+            'recommended_for': ['general', 'balanced', 'efficient'],
+            'is_reasoning_model': False,
+            'system_prompt_style': 'standard'
+        }
     }
 
-    # 📊 Generation Settings
-    # DEFAULT_MODEL='deepseek-r1:14b'
-    DEFAULT_MODEL="qwen2.5:14b"
-    DEFAULT_TEMPERATURE=0.3
-    API_ENDPOINT="http://localhost:11434/api/generate"
-    API_TIMEOUT=180
-    DEFAULT_MODULE="ReinMonModule"
+    # 📊 Generation Settings (ENHANCED)
+    DEFAULT_MODEL = "gemma3:12b"  # Use reasoning model by default
+    DEFAULT_TEMPERATURE = 0.5  # Increased for better quality
+    API_ENDPOINT = "http://localhost:11434/api/generate"
+    API_TIMEOUT = 300  # Increased timeout for reasoning models
+
+    # Quality Enhancement Settings
+    QUALITY_SETTINGS = {
+        'min_response_length': 100,  # Minimum acceptable response length
+        'max_retries': 3,  # Retry failed generations
+        'retry_temperature_increment': 0.1,  # Increase temp on retry
+        'reasoning_extraction_confidence': 0.8,  # Confidence threshold for reasoning extraction
+    }
+
+    # Section-specific temperature overrides
+    SECTION_TEMPERATURE_OVERRIDES = {
+        'intro_summary': 0.6,  # Higher creativity for executive summary
+        'budget_overview': 0.4,  # More factual for budget
+        'ttp_performance': 0.3,  # Very factual for compliance
+        'heu_payment_overview': 0.5,  # Balanced for analysis
+        'h2020_payment_overview': 0.5,  # Balanced for analysis
+    }
+
+    
 
     # 🎯 Section Configuration
     SINGLE_SECTIONS = [
@@ -293,92 +325,150 @@ class CommentsModule(BaseModule):
         ]
         """
         print("📝 Starting single sections generation...")
-        single_section_stats={'successful': 0,
-                              'failed': 0, 'variables_created': []}
+        single_section_stats = {
+            'successful': 0,
+            'failed': 0,
+            'variables_created': []
+            }
 
         try:
             # Get available sections from mapping matrix
-            mapping=TemplateSectionMatrix.get_complete_mapping_matrix()
-            available_sections=[k for k in mapping.keys() if k not in [
-                'payment_analysis', 'call_type_payment_detail', 'auto_call_type_detail']]
-
+            mapping = TemplateSectionMatrix.get_complete_mapping_matrix()
+            available_sections = [k for k in mapping.keys() if k not in [
+                'payment_analysis', 'call_type_payment_detail', 'auto_call_type_detail'
+            ]]
+            
             # Use configured sections or all available
-            sections_to_generate=[
-                s for s in CommentsConfig.SINGLE_SECTIONS if s in available_sections]
-
-            print(
-                f"📋 Generating {len(sections_to_generate)} single sections...")
-
+            sections_to_generate = [
+                s for s in CommentsConfig.SINGLE_SECTIONS if s in available_sections
+            ]
+            
+            print(f"📋 Generating {len(sections_to_generate)} single sections...")
+            
             for i, section_key in enumerate(sections_to_generate, 1):
-                print(
-                    f"\n📝 [{i}/{len(sections_to_generate)}] Generating: {section_key}")
-
+                print(f"\n📝 [{i}/{len(sections_to_generate)}] Generating: {section_key}")
+                
                 try:
-                    commentary=generator.generate_section_commentary(
-                        section_key=section_key,
-                        quarter_period=quarter_period,
-                        current_year=current_year,
-                        financial_data=financial_data,
-                        model=model,
-                        temperature=temperature,
-                        acronym_context=acronym_context,      # ✅ Passed here
-                        cutoff_date=cutoff,
-                        verbose=True
-    )
-
-                    if commentary:
-                        # Get variable name from mapping
-                        section_config=mapping[section_key]
-                        var_name=section_config['output_configuration']['variable_name']
-
-                        # Save to database using your existing function
-                        try:
-                            print(f"💾 Saving {var_name} to database...")
-                            insert_variable(
-                                report=report,
-                                module='CommentsModule',
-                                var=var_name,
-                                value=commentary,
-                                db_path=db_path,
-                                anchor=var_name,
-    )
-                            print(
-                                f"🎉 SUCCESSFULLY saved {var_name} to database")
-
+                    # Check if this is a payment overview section
+                    if section_key in ['heu_payment_overview', 'h2020_payment_overview']:
+                        # Handle payment overview combinations
+                        print(f"   🔄 This is a payment overview section - generating combinations...")
+                        
+                        program = 'HEU' if 'heu' in section_key.lower() else 'H2020'
+                        call_types = ['STG', 'ADG', 'COG', 'SYG', 'POC', 'EXPERTS'] if program == 'HEU' else ['STG', 'ADG', 'COG', 'SYG']
+                        
+                        combination_count = 0
+                        for call_type in call_types:
+                            try:
+                                # Generate specific combination
+                                commentary = generator._generate_call_type_payment_overview(
+                                    program=program,
+                                    call_type=call_type,
+                                    quarter_period=quarter_period,
+                                    current_year=current_year,
+                                    financial_data=financial_data,
+                                    model=model,
+                                    temperature=temperature,
+                                    acronym_context=acronym_context,
+                                    verbose=False
+                                )
+                                
+                                if commentary:
+                                    # Create specific variable name
+                                    var_name = f"{section_key}_{call_type.lower()}"
+                                    
+                                    # Save to database
+                                    print(f"   💾 Saving {var_name} to database...")
+                                    insert_variable(
+                                        report=report,
+                                        module='CommentsModule',
+                                        var=var_name,
+                                        value=commentary,
+                                        db_path=db_path,
+                                        anchor=var_name,
+                                    )
+                                    print(f"   ✅ Saved {var_name} ({len(commentary.split())} words)")
+                                    
+                                    combination_count += 1
+                                    single_section_stats['variables_created'].append(var_name)
+                                else:
+                                    print(f"   ⚠️ No data/generation failed for {program}-{call_type}")
+                                    
+                            except Exception as e:
+                                print(f"   ❌ Error with {program}-{call_type}: {e}")
+                        
+                        if combination_count > 0:
                             single_section_stats['successful'] += 1
-                            single_section_stats['variables_created'].append(
-                                var_name)
-
-                            # Log generation stats
-                            word_count=len(commentary.split())
-                            target=section_config['output_configuration']['word_limit']
-                            print(
-                                f"✅ Generated {word_count} words (target: {target})")
-
-                        except Exception as e:
-                            error_msg=f"Failed to save {var_name}: {str(e)}"
-                            module_errors.append(error_msg)
-                            print(f"❌ {error_msg}")
+                            print(f"   🎉 Generated {combination_count} combinations for {section_key}")
+                        else:
                             single_section_stats['failed'] += 1
+                            print(f"   ❌ No combinations generated for {section_key}")
+                            
                     else:
-                        error_msg=f"Generation failed for section: {section_key}"
-                        module_warnings.append(error_msg)
-                        print(f"⚠️ {error_msg}")
-                        single_section_stats['failed'] += 1
-
+                        # Regular single section generation
+                        commentary = generator.generate_section_commentary(
+                            section_key=section_key,
+                            quarter_period=quarter_period,
+                            current_year=current_year,
+                            financial_data=financial_data,
+                            model=model,
+                            temperature=temperature,
+                            acronym_context=acronym_context,
+                            cutoff_date=cutoff,
+                            verbose=True
+                        )
+                        
+                        if commentary:
+                            # Get variable name from mapping
+                            section_config = mapping[section_key]
+                            var_name = section_config['output_configuration']['variable_name']
+                            
+                            # Save to database
+                            try:
+                                print(f"💾 Saving {var_name} to database...")
+                                insert_variable(
+                                    report=report,
+                                    module='CommentsModule',
+                                    var=var_name,
+                                    value=commentary,
+                                    db_path=db_path,
+                                    anchor=var_name,
+                                )
+                                print(f"🎉 SUCCESSFULLY saved {var_name} to database")
+                                
+                                single_section_stats['successful'] += 1
+                                single_section_stats['variables_created'].append(var_name)
+                                
+                                # Log generation stats
+                                word_count = len(commentary.split())
+                                target = section_config['output_configuration']['word_limit']
+                                print(f"✅ Generated {word_count} words (target: {target})")
+                                
+                            except Exception as e:
+                                error_msg = f"Failed to save {var_name}: {str(e)}"
+                                module_errors.append(error_msg)
+                                print(f"❌ {error_msg}")
+                                single_section_stats['failed'] += 1
+                        else:
+                            error_msg = f"Generation failed for section: {section_key}"
+                            module_warnings.append(error_msg)
+                            print(f"⚠️ {error_msg}")
+                            single_section_stats['failed'] += 1
+                            
                 except Exception as e:
-                    error_msg=f"Error generating {section_key}: {str(e)}"
+                    error_msg = f"Error generating {section_key}: {str(e)}"
                     module_errors.append(error_msg)
                     print(f"❌ {error_msg}")
                     single_section_stats['failed'] += 1
-
-            print(
-                f"\n✅ Single sections completed: {single_section_stats['successful']} successful, {single_section_stats['failed']} failed")
-
+            
+            print(f"\n✅ Single sections completed: {single_section_stats['successful']} successful, {single_section_stats['failed']} failed")
+            print(f"   💾 Variables created: {len(single_section_stats['variables_created'])}")
+            
         except Exception as e:
-            error_msg=f"Single sections generation failed: {str(e)}"
+            error_msg = f"Single sections generation failed: {str(e)}"
             module_errors.append(error_msg)
             print(f"❌ {error_msg}")
+                
 
         # ══════════════════════════════════════════════════════════════════
         # 4. PREDEFINED CALL TYPE LOOPS GENERATION - WORKFLOW 2
