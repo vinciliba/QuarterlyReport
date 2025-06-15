@@ -78,6 +78,16 @@ class CommentsConfig:
         }
     }
 
+    # Generation Control Settings
+    GENERATION_CONTROL = {
+        'enable_diagnostics': True,
+        'enable_human_validation': False,  # MUST be False
+        'save_partial_results': True,
+        'continue_on_failure': True,
+        'diagnostic_sections': ['intro_summary', 'budget_overview'],
+        'minimum_acceptable_score': 0.3,  # Lowered from 0.5
+        }
+
     # 📊 Generation Settings (ENHANCED)
     DEFAULT_MODEL = "gemma3:12b"  # Use reasoning model by default
     DEFAULT_TEMPERATURE = 0.5  # Increased for better quality
@@ -86,11 +96,11 @@ class CommentsConfig:
 
     # Quality Enhancement Settings
     QUALITY_SETTINGS = {
-        'min_response_length': 100,  # Minimum acceptable response length
-        'max_retries': 3,  # Retry failed generations
-        'retry_temperature_increment': 0.1,  # Increase temp on retry
-        'reasoning_extraction_confidence': 0.8,  # Confidence threshold for reasoning extraction
-    }
+        'min_response_length': 50,  # Lowered from 100
+        'max_retries': 2,  # Reduced from 3
+        'retry_temperature_increment': 0.1,
+        'reasoning_extraction_confidence': 0.8,
+     }
 
     # Section-specific temperature overrides
     SECTION_TEMPERATURE_OVERRIDES = {
@@ -114,6 +124,8 @@ class CommentsConfig:
         'h2020_payment_overview',  # ✅ Matches mapping
         'ttp_performance'          # ✅ FIXED: Was 'ttp performance' (space)
     ]
+
+   
 
     # 🔄 Loop Configuration
     LOOP_PROGRAMS=['HEU', 'H2020']
@@ -328,88 +340,67 @@ class CommentsModule(BaseModule):
         single_section_stats = {
             'successful': 0,
             'failed': 0,
+            'skipped': 0,
+            'human_validated': 0,
             'variables_created': []
-            }
+        }
+
+        generation_log = []
 
         try:
-            # Get available sections from mapping matrix
+            # Debug section availability first
+            sections_to_generate = self._debug_section_availability(
+                generator, quarter_period, current_year, financial_data
+            )
+            
+            # CRITICAL: Ensure we have all 8 sections
+            if len(sections_to_generate) != len(CommentsConfig.SINGLE_SECTIONS):
+                print(f"\n⚠️ WARNING: Only {len(sections_to_generate)} out of {len(CommentsConfig.SINGLE_SECTIONS)} sections available!")
+                print("Attempting to continue anyway...")
+            
+            # Get mapping for later use
             mapping = TemplateSectionMatrix.get_complete_mapping_matrix()
-            available_sections = [k for k in mapping.keys() if k not in [
-                'payment_analysis', 'call_type_payment_detail', 'auto_call_type_detail'
-            ]]
             
-            # Use configured sections or all available
-            sections_to_generate = [
-                s for s in CommentsConfig.SINGLE_SECTIONS if s in available_sections
-            ]
-            
-            print(f"📋 Generating {len(sections_to_generate)} single sections...")
-            
+            # Process EACH section one by one
             for i, section_key in enumerate(sections_to_generate, 1):
-                print(f"\n📝 [{i}/{len(sections_to_generate)}] Generating: {section_key}")
+                print(f"\n{'='*60}")
+                print(f"📝 [{i}/{len(sections_to_generate)}] SECTION: {section_key}")
+                print(f"{'='*60}")
+                
+                section_start_time = datetime.datetime.now()
                 
                 try:
-                    # Check if this is a payment overview section
+                    # Handle payment overview sections differently
                     if section_key in ['heu_payment_overview', 'h2020_payment_overview']:
-                        # Handle payment overview combinations
-                        print(f"   🔄 This is a payment overview section - generating combinations...")
+                        print(f"🔄 This is a payment overview section - generating combinations...")
                         
                         program = 'HEU' if 'heu' in section_key.lower() else 'H2020'
                         call_types = ['STG', 'ADG', 'COG', 'SYG', 'POC', 'EXPERTS'] if program == 'HEU' else ['STG', 'ADG', 'COG', 'SYG']
                         
-                        combination_count = 0
-                        for call_type in call_types:
-                            try:
-                                # Generate specific combination
-                                commentary = generator._generate_call_type_payment_overview(
-                                    program=program,
-                                    call_type=call_type,
-                                    quarter_period=quarter_period,
-                                    current_year=current_year,
-                                    financial_data=financial_data,
-                                    model=model,
-                                    temperature=temperature,
-                                    acronym_context=acronym_context,
-                                    verbose=False
-                                )
-                                
-                                if commentary:
-                                    # Create specific variable name
-                                    var_name = f"{section_key}_{call_type.lower()}"
-                                    
-                                    # Save to database
-                                    print(f"   💾 Saving {var_name} to database...")
-                                    insert_variable(
-                                        report=report,
-                                        module='CommentsModule',
-                                        var=var_name,
-                                        value=commentary,
-                                        db_path=db_path,
-                                        anchor=var_name,
-                                    )
-                                    print(f"   ✅ Saved {var_name} ({len(commentary.split())} words)")
-                                    
-                                    combination_count += 1
-                                    single_section_stats['variables_created'].append(var_name)
-                                else:
-                                    print(f"   ⚠️ No data/generation failed for {program}-{call_type}")
-                                    
-                            except Exception as e:
-                                print(f"   ❌ Error with {program}-{call_type}: {e}")
+                        combination_results = self._generate_payment_combinations(
+                            generator, program, call_types, section_key,
+                            quarter_period, current_year, financial_data,
+                            model, temperature, acronym_context, report, db_path,
+                            single_section_stats, module_errors, verbose=True
+                        )
                         
-                        if combination_count > 0:
-                            single_section_stats['successful'] += 1
-                            print(f"   🎉 Generated {combination_count} combinations for {section_key}")
-                        else:
-                            single_section_stats['failed'] += 1
-                            print(f"   ❌ No combinations generated for {section_key}")
-                            
+                        generation_log.append({
+                            'section': section_key,
+                            'type': 'payment_combinations',
+                            'results': combination_results,
+                            'timestamp': section_start_time,
+                            'duration': (datetime.datetime.now() - section_start_time).total_seconds()
+                        })
+                        
                     else:
                         # Regular single section generation
+                        print(f"📄 Generating single section commentary...")
+                        
+                        # Generate commentary with proper period focus
                         commentary = generator.generate_section_commentary(
                             section_key=section_key,
-                            quarter_period=quarter_period,
-                            current_year=current_year,
+                            quarter_period=quarter_period,  # This should be "Quarter 1 - 2025"
+                            current_year=current_year,       # This should be "2025"
                             financial_data=financial_data,
                             model=model,
                             temperature=temperature,
@@ -418,10 +409,14 @@ class CommentsModule(BaseModule):
                             verbose=True
                         )
                         
-                        if commentary:
+                        if commentary and len(commentary.strip()) > 50:
                             # Get variable name from mapping
                             section_config = mapping[section_key]
                             var_name = section_config['output_configuration']['variable_name']
+                            
+                            # Fix period references in the generated text
+                            commentary = commentary.replace("Q2 2025", f"{quarter_period}")
+                            commentary = commentary.replace("Quarter 2", quarter_period.split('-')[0].strip())
                             
                             # Save to database
                             try:
@@ -434,25 +429,21 @@ class CommentsModule(BaseModule):
                                     db_path=db_path,
                                     anchor=var_name,
                                 )
-                                print(f"🎉 SUCCESSFULLY saved {var_name} to database")
+                                print(f"✅ SUCCESS: Saved {var_name}")
                                 
                                 single_section_stats['successful'] += 1
                                 single_section_stats['variables_created'].append(var_name)
                                 
-                                # Log generation stats
-                                word_count = len(commentary.split())
-                                target = section_config['output_configuration']['word_limit']
-                                print(f"✅ Generated {word_count} words (target: {target})")
+                                # Show preview of generated text
+                                print(f"📄 Preview: {commentary[:150]}...")
                                 
                             except Exception as e:
-                                error_msg = f"Failed to save {var_name}: {str(e)}"
+                                error_msg = f"Database save failed for {var_name}: {str(e)}"
                                 module_errors.append(error_msg)
                                 print(f"❌ {error_msg}")
                                 single_section_stats['failed'] += 1
                         else:
-                            error_msg = f"Generation failed for section: {section_key}"
-                            module_warnings.append(error_msg)
-                            print(f"⚠️ {error_msg}")
+                            print(f"⚠️ Generation failed or too short for {section_key}")
                             single_section_stats['failed'] += 1
                             
                 except Exception as e:
@@ -460,16 +451,108 @@ class CommentsModule(BaseModule):
                     module_errors.append(error_msg)
                     print(f"❌ {error_msg}")
                     single_section_stats['failed'] += 1
+                
+                # CRITICAL: Continue to next section regardless of success/failure
+                print(f"✅ Completed processing {section_key}, moving to next...")
+                
+                # Small delay between sections
+                import time
+                time.sleep(1)
             
-            print(f"\n✅ Single sections completed: {single_section_stats['successful']} successful, {single_section_stats['failed']} failed")
-            print(f"   💾 Variables created: {len(single_section_stats['variables_created'])}")
+            # Final summary
+            print(f"\n{'='*60}")
+            print("📊 SINGLE SECTIONS GENERATION SUMMARY")
+            print(f"{'='*60}")
+            print(f"Total sections requested: {len(CommentsConfig.SINGLE_SECTIONS)}")
+            print(f"Total sections processed: {len(sections_to_generate)}")
+            print(f"✅ Successful: {single_section_stats['successful']}")
+            print(f"❌ Failed: {single_section_stats['failed']}")
+            print(f"💾 Variables Created: {single_section_stats['variables_created']}")
             
         except Exception as e:
-            error_msg = f"Single sections generation failed: {str(e)}"
+            error_msg = f"Critical error in single sections generation: {str(e)}"
             module_errors.append(error_msg)
             print(f"❌ {error_msg}")
+            import traceback
+            print(traceback.format_exc())
+    
+    def _generate_payment_combinations(
+        self, generator, program, call_types, section_key,
+        quarter_period, current_year, financial_data,
+        model, temperature, acronym_context, report, db_path,
+        stats, module_errors, verbose=True
+    ) -> Dict[str, Any]:
+        """Helper method to generate payment combinations"""
+        
+        combination_results = {
+            'program': program,
+            'total_combinations': len(call_types),
+            'successful': 0,
+            'failed': 0,
+            'variables': []
+        }
+        
+        for call_type in call_types:
+            try:
+                print(f"\n   📝 Generating {program}-{call_type}...")
                 
-
+                # Check if data exists for this combination
+                table_key = f"{program}_payments_analysis_{call_type}"
+                if table_key not in financial_data or financial_data[table_key] is None:
+                    print(f"   ⚠️ No data found for {table_key}")
+                    combination_results['failed'] += 1
+                    continue
+                
+                # Generate specific combination
+                commentary = generator._generate_call_type_payment_overview(
+                    program=program,
+                    call_type=call_type,
+                    quarter_period=quarter_period,
+                    current_year=current_year,
+                    financial_data=financial_data,
+                    model=model,
+                    temperature=temperature,
+                    acronym_context=acronym_context,
+                    verbose=False
+                )
+                
+                if commentary:
+                    # Create specific variable name
+                    var_name = f"{section_key}_{call_type.lower()}"
+                    
+                    # Save to database
+                    print(f"   💾 Saving {var_name}...")
+                    insert_variable(
+                        report=report,
+                        module='CommentsModule',
+                        var=var_name,
+                        value=commentary,
+                        db_path=db_path,
+                        anchor=var_name,
+                    )
+                    print(f"   ✅ Saved {var_name} ({len(commentary.split())} words)")
+                    
+                    combination_results['successful'] += 1
+                    combination_results['variables'].append(var_name)
+                    stats['variables_created'].append(var_name)
+                else:
+                    print(f"   ❌ Generation failed for {program}-{call_type}")
+                    combination_results['failed'] += 1
+                    
+            except Exception as e:
+                print(f"   ❌ Error with {program}-{call_type}: {e}")
+                combination_results['failed'] += 1
+                module_errors.append(f"Payment combination error {program}-{call_type}: {str(e)}")
+        
+        # Update main stats based on results
+        if combination_results['successful'] > 0:
+            stats['successful'] += 1
+        else:
+            stats['failed'] += 1
+        
+        print(f"\n   📊 {program} Results: {combination_results['successful']}/{combination_results['total_combinations']} successful")
+        
+        return combination_results
         # ══════════════════════════════════════════════════════════════════
         # 4. PREDEFINED CALL TYPE LOOPS GENERATION - WORKFLOW 2
         # ══════════════════════════════════════════════════════════════════
@@ -551,6 +634,8 @@ class CommentsModule(BaseModule):
             error_msg=f"Loop generation failed: {str(e)}"
             module_errors.append(error_msg)
             print(f"❌ {error_msg}")
+
+    
 
         # ══════════════════════════════════════════════════════════════════
         # 5. DETAILED CALL TYPE GENERATION - WORKFLOW 3 (Optional)

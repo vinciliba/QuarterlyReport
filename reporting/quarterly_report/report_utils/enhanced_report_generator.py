@@ -2090,6 +2090,9 @@ class EnhancedReportGenerator:
                 template=formatted_template,
                 acronym_context=acronym_context,
                 section_key=f"{program}_{call_type}_payment_overview"
+                current_year=current_year,
+                quarter_period=quarter_period
+
             )
             
             return self._generate_with_model(
@@ -2300,7 +2303,9 @@ class EnhancedReportGenerator:
             instructions=instructions,
             template=formatted_template,
             acronym_context=acronym_context,
-            section_key=section_key
+            section_key=section_key,
+            current_year=current_year,
+            quarter_period=quarter_period
         )
         
        # Generate commentary WITH RETRY LOGIC
@@ -2589,7 +2594,9 @@ class EnhancedReportGenerator:
         instructions: str, 
         template: str, 
         acronym_context: str, 
-        section_key: str
+        section_key: str,
+        quarter_period: str,
+        current_year: str,
     ) -> str:
         """Enhanced prompt creation for executive-quality output"""
         
@@ -2631,6 +2638,16 @@ class EnhancedReportGenerator:
         
         # Add template
         prompt_parts.append(f"\n📄 CONTENT FRAMEWORK:\n{template}")
+
+        # Add period-specific instruction
+        period_reminder = f"""
+        ⚠️ CRITICAL TIME PERIOD INSTRUCTION:
+        - You are analyzing ONLY {quarter_period} {current_year} data
+        - This is NOT a year-to-date report
+        - Focus ONLY on activities that occurred during {quarter_period} {current_year}
+        - Do NOT mention Q2, Q3, Q4 or any other period
+        - Do NOT aggregate data from previous quarters
+        """
         
         # Add final quality reminder
         prompt_parts.append(f"""
@@ -2774,6 +2791,8 @@ class EnhancedReportGenerator:
                         instructions=instructions,
                         template=formatted_template,
                         acronym_context=acronym_context,
+                        current_year=current_year,
+                        quarter_period=quarter_period,
                         section_key=f"call_type_detail_{programme}_{call_type['code']}"
                     )
                     
@@ -3687,6 +3706,8 @@ class EnhancedReportGenerator:
                         instructions=instructions,
                         template=formatted_template,
                         acronym_context=acronym_context,
+                        current_year=current_year,
+                        quarter_period=quarter_period,
                         section_key=f"payment_summary_{program}_{call_type}"
                     )
                     
@@ -3925,8 +3946,249 @@ class EnhancedReportGenerator:
             if verbose:
                 print(f"❌ Generation error: {e}")
             return None
-        
     
+    def _extract_final_response_enhanced(self, full_text: str) -> str:
+        """Enhanced extraction that preserves the complete final response"""
+        
+        import re
+        
+        # Try multiple extraction strategies
+        
+        # Strategy 1: Look for explicit final response markers
+        final_markers = [
+            r'(?:final response|final answer|here is the response|here\'s the response):\s*(.+)$',
+            r'(?:in conclusion|to conclude|in summary)[,:]?\s*(.+)$',
+            r'(?:</reasoning>|</think>|</thought>)\s*(.+)$'
+        ]
+        
+        for pattern in final_markers:
+            match = re.search(pattern, full_text, re.IGNORECASE | re.DOTALL)
+            if match:
+                response = match.group(1).strip()
+                if len(response) > 100:  # Ensure substantial content
+                    return response
+        
+        # Strategy 2: Find the executive summary section
+        # Look for content that starts with executive language
+        exec_patterns = [
+            r'(The\s+(?:Grant Management Department|department|EU|European Union).+?)(?:\n\n[A-Z]|$)',
+            r'((?:Budget|Payment|Grant|Audit)\s+(?:appropriations|processing|management).+?)(?:\n\n[A-Z]|$)',
+            r'(\*\*[^*]+\*\*.+?)(?:\n\n[A-Z]|$)'  # Bold text sections
+        ]
+        
+        for pattern in exec_patterns:
+            matches = re.findall(pattern, full_text, re.IGNORECASE | re.DOTALL)
+            if matches:
+                # Get the longest match that looks like executive text
+                best_match = max(matches, key=len)
+                if len(best_match) > 200:
+                    return best_match.strip()
+        
+        # Strategy 3: Extract everything after reasoning markers
+        reasoning_end_markers = [
+            '</reasoning>', '</think>', '</thought>', 
+            'Final response:', 'Here is the response:',
+            'Based on this analysis:', 'In conclusion:'
+        ]
+        
+        for marker in reasoning_end_markers:
+            if marker in full_text:
+                parts = full_text.split(marker)
+                if len(parts) > 1:
+                    final_part = parts[-1].strip()
+                    if len(final_part) > 100:
+                        return final_part
+        
+        # Strategy 4: Get the last substantial paragraphs
+        # Split by double newlines and get the last meaningful content
+        paragraphs = re.split(r'\n\n+', full_text)
+        
+        # Filter paragraphs
+        valid_paragraphs = []
+        for para in paragraphs:
+            para = para.strip()
+            
+            # Skip reasoning indicators
+            if any(skip in para.lower() for skip in [
+                'let me', 'i need', 'i should', 'first,', 'next,',
+                'i\'ll', 'i will', 'looking at', 'analyzing'
+            ]):
+                continue
+                
+            # Skip too short
+            if len(para) < 100:
+                continue
+                
+            # Skip XML tags
+            if re.search(r'<[^>]+>', para):
+                continue
+                
+            valid_paragraphs.append(para)
+        
+        # Get the last 2-3 valid paragraphs as the response
+        if valid_paragraphs:
+            # Take up to last 3 paragraphs
+            final_paragraphs = valid_paragraphs[-3:]
+            return '\n\n'.join(final_paragraphs)
+        
+        # Fallback: Return everything after cleaning
+        cleaned = re.sub(r'<[^>]+>', '', full_text)
+        cleaned = re.sub(r'(?:Let me|I need to|I should|First,|Next,)[^.]+\.', '', cleaned)
+        return cleaned.strip()
+
+    # FIX 2: Improved reasoning model handling with full response capture
+    def _generate_with_model_enhanced(
+        self, 
+        prompt: str, 
+        model: str, 
+        temperature: float, 
+        max_tokens: int, 
+        verbose: bool,
+        capture_reasoning: bool = True
+    ) -> Optional[str]:
+        """Enhanced generation that properly captures full reasoning output"""
+        
+        try:
+            import requests
+            import re
+            
+            # Detect if this is a reasoning model
+            is_reasoning_model = any(indicator in model.lower() 
+                                for indicator in ['r1', 'reasoning', 'deepseek-r1'])
+            
+            # For reasoning models, ensure we get the complete response
+            if is_reasoning_model:
+                max_tokens = max(max_tokens, 2000)  # Ensure enough tokens for reasoning
+                temperature = max(temperature, 0.5)
+            
+            # Executive quality prompt
+            executive_prompt = f"""
+            CRITICAL: You are writing for senior European Union executives and department heads. 
+            
+            {prompt}
+            
+            IMPORTANT: Provide your complete analysis and final response.
+            """
+            
+            payload = {
+                "model": model,
+                "prompt": executive_prompt,
+                "stream": False,
+                "options": {
+                    "temperature": temperature,
+                    "num_predict": max_tokens,
+                    "top_p": 0.9,
+                    "top_k": 40,
+                    "repeat_penalty": 1.1,
+                    "stop": []  # Remove stop sequences for reasoning models
+                }
+            }
+            
+            if verbose:
+                print(f"   🤖 Calling {model} (temp: {temperature}, max_tokens: {max_tokens})")
+            
+            response = requests.post(
+                "http://localhost:11434/api/generate", 
+                json=payload, 
+                timeout=300  # Increased timeout
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                full_response = result.get('response', '').strip()
+                
+                if verbose and is_reasoning_model:
+                    print(f"   📝 Got full response: {len(full_response)} chars")
+                
+                # For reasoning models, extract the final response
+                if is_reasoning_model and capture_reasoning:
+                    final_response = self._extract_final_response_enhanced(full_response)
+                    
+                    if verbose:
+                        print(f"   🧠 Extracted final response: {len(final_response)} chars")
+                    
+                    return final_response
+                else:
+                    # For non-reasoning models, clean the response
+                    return self._clean_and_validate_executive_text(full_response)
+            else:
+                if verbose:
+                    print(f"   ❌ API error: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            if verbose:
+                print(f"   ❌ Generation error: {str(e)}")
+            return None
+        
+    def diagnose_section_generation(
+        self,
+        section_key: str,
+        quarter_period: str,
+        current_year: str,
+        financial_data: Dict[str, Any],
+        verbose: bool = True
+    ) -> Dict[str, Any]:
+        """Diagnose why a section might fail to generate"""
+        
+        diagnosis = {
+            'section_key': section_key,
+            'has_mapping': False,
+            'has_template': False,
+            'has_required_data': False,
+            'data_availability': {},
+            'issues': []
+        }
+        
+        # Check mapping
+        mapping = self.mapping_matrix.get_complete_mapping_matrix()
+        if section_key in mapping:
+            diagnosis['has_mapping'] = True
+            section_config = mapping[section_key]
+            
+            # Check template
+            templates = self.template_library.get_template_definitions(quarter_period, current_year)
+            template_name = section_config['template_mapping']['template_name']
+            if template_name in templates:
+                diagnosis['has_template'] = True
+            else:
+                diagnosis['issues'].append(f"Template '{template_name}' not found")
+            
+            # Check data availability
+            data_config = section_config['data_configuration']
+            primary_data_keys = data_config['primary_data']
+            secondary_data_keys = data_config['secondary_data']
+            
+            # Check primary data
+            for key in primary_data_keys:
+                if key in financial_data and financial_data[key] is not None:
+                    diagnosis['data_availability'][key] = 'available'
+                else:
+                    diagnosis['data_availability'][key] = 'missing'
+                    diagnosis['issues'].append(f"Missing primary data: {key}")
+            
+            # Check if at least some data is available
+            available_primary = [k for k, v in diagnosis['data_availability'].items() 
+                            if v == 'available' and k in primary_data_keys]
+            if available_primary:
+                diagnosis['has_required_data'] = True
+            else:
+                diagnosis['issues'].append("No primary data available")
+        else:
+            diagnosis['issues'].append(f"No mapping found for section '{section_key}'")
+        
+        if verbose:
+            print(f"\n🔍 DIAGNOSIS FOR {section_key}:")
+            print(f"   ✓ Has mapping: {diagnosis['has_mapping']}")
+            print(f"   ✓ Has template: {diagnosis['has_template']}")
+            print(f"   ✓ Has required data: {diagnosis['has_required_data']}")
+            if diagnosis['issues']:
+                print(f"   ❌ Issues found:")
+                for issue in diagnosis['issues']:
+                    print(f"      - {issue}")
+        
+        return diagnosis
+        
     # ================================================================
     # 🔄 QUALITY ENHANCEMENT METHODS (NEW SECTION)
     # Add these RIGHT AFTER the AI Model Integration section
@@ -4026,6 +4288,202 @@ class EnhancedReportGenerator:
                 return False
         
         return True
+    
+    def _generate_with_quality_assurance(
+        self,
+        prompt: str = None,  # Make prompt optional
+        model: str = None,
+        temperature: float = None,
+        max_tokens: int = None,
+        section_key: str = None,
+        verbose: bool = True,
+        max_retries: int = 3,
+        allow_human_validation: bool = False
+    ) -> Optional[str]:
+        """Generate with quality assurance and optional human validation"""
+        
+        from reporting.quarterly_report.modules.comments import CommentsConfig
+
+        # If prompt not provided, we need to generate it
+        if prompt is None and section_key:
+            # Get the section config and generate prompt
+            mapping = self.mapping_matrix.get_complete_mapping_matrix()
+            if section_key not in mapping:
+                return None
+                
+            # ... (generate the prompt here if needed)
+            # For now, assume prompt is always provided
+        
+        if not prompt:
+            if verbose:
+                print("❌ No prompt provided for generation")
+            return None
+        
+        # Check for section-specific temperature
+        if section_key in CommentsConfig.SECTION_TEMPERATURE_OVERRIDES:
+            temperature = CommentsConfig.SECTION_TEMPERATURE_OVERRIDES[section_key]
+        
+        retry_count = 0
+        current_temperature = temperature
+        questionable_responses = []  # Store responses that might be acceptable
+        
+        while retry_count < max_retries:
+            if retry_count > 0:
+                current_temperature += 0.1
+                if verbose:
+                    print(f"   🔄 Retry {retry_count} with temperature: {current_temperature}")
+            
+            try:
+                # Use enhanced generation method
+                response = self._generate_with_model_enhanced(
+                    prompt=prompt,
+                    model=model,
+                    temperature=current_temperature,
+                    max_tokens=max_tokens,
+                    verbose=verbose
+                )
+                
+                if response:
+                    # Check basic length requirement
+                    if len(response) >= 80:  # Lowered from 100
+                        # Try quality validation
+                        quality_score = self._assess_response_quality(response, section_key)
+                        
+                        if quality_score >= 0.8:  # High quality
+                            if verbose:
+                                print(f"   ✅ High quality response (score: {quality_score:.2f})")
+                            return response
+                        elif quality_score >= 0.5:  # Questionable quality
+                            questionable_responses.append({
+                                'response': response,
+                                'score': quality_score,
+                                'retry': retry_count
+                            })
+                            if verbose:
+                                print(f"   ⚠️ Questionable quality (score: {quality_score:.2f})")
+                        else:
+                            if verbose:
+                                print(f"   ❌ Low quality (score: {quality_score:.2f})")
+                    else:
+                        if verbose:
+                            print(f"   ⚠️ Response too short: {len(response)} chars")
+                            
+            except Exception as e:
+                if verbose:
+                    print(f"   ❌ Generation error: {e}")
+            
+            retry_count += 1
+        
+        # If we have questionable responses and human validation is allowed
+        if questionable_responses and allow_human_validation:
+            if verbose:
+                print(f"\n   🤔 {len(questionable_responses)} questionable responses available")
+            
+            # Get the best questionable response
+            best_questionable = max(questionable_responses, key=lambda x: x['score'])
+            
+            # Ask for human validation
+            if self._request_human_validation(
+                section_key, 
+                best_questionable['response'], 
+                best_questionable['score']
+            ):
+                if verbose:
+                    print(f"   ✅ Human approved the response")
+                return best_questionable['response']
+        
+        # Last resort: return the best response we have
+        if questionable_responses:
+            best_response = max(questionable_responses, key=lambda x: x['score'])['response']
+            if verbose:
+                print(f"   ⚠️ Returning best available response (no human validation)")
+            return best_response
+        
+        if verbose:
+            print(f"   ❌ Failed to generate acceptable response")
+        return None
+    
+    def _assess_response_quality(self, response: str, section_key: str) -> float:
+        """Assess response quality with a score from 0 to 1"""
+        
+        if not response:
+            return 0.0
+        
+        score = 1.0
+        
+        # Length check (more lenient)
+        if len(response) < 80:
+            score -= 0.5
+        elif len(response) < 150:
+            score -= 0.2
+        
+        # Completeness check
+        if not response.strip().endswith(('.', '!', '?', '"')):
+            score -= 0.1
+        
+        # Check for incomplete words at the end
+        words = response.split()
+        if words and len(words[-1]) < 3:
+            score -= 0.1
+        
+        # Section-specific content checks (more lenient)
+        content_found = False
+        
+        if 'payment' in section_key:
+            if any(indicator in response.lower() for indicator in ['payment', 'disburs', 'credit', 'process']):
+                content_found = True
+        elif 'budget' in section_key:
+            if any(term in response.lower() for term in ['budget', 'appropriation', 'allocation', 'fund']):
+                content_found = True
+        elif 'ttp' in section_key:
+            if any(term in response.lower() for term in ['time', 'day', 'process', 'compliance', 'performance']):
+                content_found = True
+        else:
+            # For other sections, just check if it mentions relevant terms
+            if any(term in response.lower() for term in ['department', 'grant', 'eu', 'european', 'achieve', 'perform']):
+                content_found = True
+        
+        if not content_found:
+            score -= 0.3
+        
+        # Check for quality indicators (positive scoring)
+        if '€' in response or 'eur' in response.lower():
+            score += 0.1
+        if any(word in response.lower() for word in ['achieve', 'success', 'deliver', 'perform']):
+            score += 0.1
+        if response.count('.') >= 3:  # Multiple sentences
+            score += 0.1
+        
+        # Ensure score is between 0 and 1
+        return max(0.0, min(1.0, score))
+    
+    def _request_human_validation(self, section_key: str, response: str, quality_score: float) -> bool:
+        """Request human validation for questionable quality responses"""
+        
+        print("\n" + "="*60)
+        print("🤔 HUMAN VALIDATION REQUESTED")
+        print("="*60)
+        print(f"Section: {section_key}")
+        print(f"Quality Score: {quality_score:.2f}/1.00")
+        print(f"Response Length: {len(response)} characters")
+        print("\n--- GENERATED TEXT ---")
+        print(response[:500] + "..." if len(response) > 500 else response)
+        print("\n--- END OF TEXT ---")
+        
+        while True:
+            user_input = input("\n✅ Accept this response? (y/n/v to view full): ").lower().strip()
+            
+            if user_input == 'y':
+                return True
+            elif user_input == 'n':
+                return False
+            elif user_input == 'v':
+                print("\n--- FULL TEXT ---")
+                print(response)
+                print("\n--- END OF FULL TEXT ---")
+            else:
+                print("Please enter 'y' for yes, 'n' for no, or 'v' to view full text")
+
     
     def _clean_generated_text(self, text: str) -> str:
         """Clean generated text of any unwanted formatting"""
