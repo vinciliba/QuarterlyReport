@@ -1,4 +1,3 @@
-
 """
             🎯 Enhanced Report Generator - Customization Guide
 
@@ -166,40 +165,44 @@ class ReportTemplateLibrary:
         current_date = datetime.datetime.now().strftime('%Y-%m-%d')
 
         return {
-            # ============================================================
-            # ✅ NEW, HIGHLY STRUCTURED TEMPLATE FOR INTRO SUMMARY
-            # ============================================================
-            'intro_summary_structured_template': """{{opening_paragraph}}
+                            # ============================================================
+                            # 🛠️ POINT 6: Modify Existing Templates
+                            #
+                            # EXECUTIVE & OVERVIEW TEMPLATES
+                            # ============================================================
 
-**Payments:**
-{{payments_section}}
 
-**Granting:**
-{{granting_section}}
+        # ============================================================
+        # 🎯 Executive Summary -
+        # ============================================================
+        'executive_summary_template': f"""
+            GRANT MANAGEMENT DEPARTMENT - EXECUTIVE ACHIEVEMENT SUMMARY
+            Period: {quarter_period} {current_year}
+            Generated: {current_date}
 
-**Amendments:**
-{{amendments_section}}
+            **----- Budget and Reporting Team -----**
 
-**Audits:**
-{{audits_section}}
+            **The Grant Management Department** achieved significant milestones in {quarter_period} {current_year}, successfully meeting and exceeding several key targets.
 
-**Other Activities:**
-{{other_activities_section}}
+            COMPREHENSIVE PERFORMANCE ANALYSIS:
+            {{prioritized_data_summary}}
 
-{{concluding_paragraph}}
-""",
-            # Fallback Executive Summary Template
-            'executive_summary_template': f"""
-                GRANT MANAGEMENT DEPARTMENT - EXECUTIVE ACHIEVEMENT SUMMARY
-                Period: {quarter_period} {current_year}
-                Generated: {current_date}
+            DETAILED WORKFLOW BREAKDOWN AND SUPPORTING METRICS:
+            {{secondary_data_summary}}
 
-                COMPREHENSIVE PERFORMANCE ANALYSIS:
-                {{prioritized_data_summary}}
+            **Detailed Breakdown of Activities**
 
-                DETAILED WORKFLOW BREAKDOWN AND SUPPORTING METRICS:
-                {{secondary_data_summary}}
-            """,
+            The analysis covers:
+            • **Payments:** Volume execution, Time-to-Pay (TTP) performance, appropriation utilization
+            • **Granting:** Time-to-Grant (TTG) metrics, call completion rates, funding milestone achievements
+            • **Amendments:** Processing efficiency, Time-to-Amend (TTA) performance, amendment volume analysis
+            • **Audits:** Recovery implementation, audit completion rates, financial integrity measures
+            • **Other Activities:** Budget compliance, contractual adherence, exceptional cases
+
+            **Executive Focus:** Cross-workflow achievements, quantitative performance indicators, strategic accomplishments demonstrating departmental excellence in grant management operations and successful execution of contractual obligations.
+
+            Analysis Date: {current_date}
+        """,
         # ============================================================
         # 💰 BUDGET
         # ============================================================
@@ -592,7 +595,11 @@ class TemplateSectionMatrix:
             # 1. EXECUTIVE LEVEL SECTIONS
             # ============================================================
 
-            # ✅ UPDATED INTRO SUMMARY to use the new structured template and placeholders
+            # Target Text Analysis for Executive Summary:
+            # ✅ Covers: TTP metrics, TTA metrics, payment volumes, amendment statistics, audit results, grant progress
+            # ✅ Tone: Executive, achievement-focused, specific numbers
+            # ✅ Length: ~600 words
+            # ✅ Structure: Department achievements → Detailed breakdowns by workflow
             'intro_summary': {
                 'section_info': {
                     'name': 'Introductory Summary',
@@ -601,16 +608,11 @@ class TemplateSectionMatrix:
                     'description': 'Comprehensive executive overview covering all department workflows and achievements'
                 },
                 'template_mapping': {
-                    'template_name': 'intro_summary_structured_template', # Point to the new structured template
+                    'template_name': 'executive_summary_template',
                     'template_category': 'executive_overview',
-                    'supports_variables': [ # List all the new placeholders
-                        'opening_paragraph', 'payments_section', 'granting_section',
-                        'amendments_section', 'audits_section', 'other_activities_section',
-                        'concluding_paragraph'
-                    ]
+                    'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
                 },
                 'data_configuration': {
-                    # Data requirements remain broad as we need to feed different parts to different helpers
                     'primary_data': [
                         'TTP_Overview', 'pay_credits_H2020', 'pay_credits_HEU',
                         'amendment_activity_H2020', 'amendment_activity_HEU',
@@ -637,7 +639,6 @@ class TemplateSectionMatrix:
                     'formatting_level': 'executive'
                 },
                 'instruction_mapping': {
-                    # This is now handled by the specialized helper functions
                     'instruction_key': 'executive_summary_instructions',
                     'tone': 'executive',
                     'focus': 'comprehensive_achievements'
@@ -1077,44 +1078,44 @@ class CallTypeProcessor:
         return None
     @staticmethod
     def extract_program_summary_data(
-            financial_data: Dict[str, Any],
-            program: str,
-            verbose: bool = False
-        ) -> Optional[Dict[str, Any]]:
-            """
-            Extract general program data when specific call type data isn't available.
-            This provides a fallback for generating program-level summaries.
-            """
+                financial_data: Dict[str, Any],
+                program: str,
+                verbose: bool = False
+            ) -> Optional[Dict[str, Any]]:
+                """
+                Extract general program data when specific call type data isn't available.
+                This provides a fallback for generating program-level summaries.
+                """
 
-            program_info = ProgramProcessor.get_program_info(program)
-            if not program_info:
+                program_info = ProgramProcessor.get_program_info(program)
+                if not program_info:
+                    return None
+
+                # Get main program data keys
+                main_data_key = program_info.get('data_key')
+
+                if main_data_key in financial_data and financial_data[main_data_key] is not None:
+                    try:
+                        if isinstance(financial_data[main_data_key], str):
+                            parsed_data = json.loads(financial_data[main_data_key])
+                        else:
+                            parsed_data = financial_data[main_data_key]
+
+                        if isinstance(parsed_data, list) and len(parsed_data) > 0:
+                            return {
+                                'program': program,
+                                'program_info': program_info,
+                                'call_type': 'ALL',
+                                'normalized_call_type': 'ALL',
+                                'records': parsed_data,
+                                'total_records': len(parsed_data),
+                                'derived_description': f'{program} Program Overview',
+                                'data_source': main_data_key
+                            }
+                    except json.JSONDecodeError:
+                        pass
+
                 return None
-
-            # Get main program data keys
-            main_data_key = program_info.get('data_key')
-
-            if main_data_key in financial_data and financial_data[main_data_key] is not None:
-                try:
-                    if isinstance(financial_data[main_data_key], str):
-                        parsed_data = json.loads(financial_data[main_data_key])
-                    else:
-                        parsed_data = financial_data[main_data_key]
-
-                    if isinstance(parsed_data, list) and len(parsed_data) > 0:
-                        return {
-                            'program': program,
-                            'program_info': program_info,
-                            'call_type': 'ALL',
-                            'normalized_call_type': 'ALL',
-                            'records': parsed_data,
-                            'total_records': len(parsed_data),
-                            'derived_description': f'{program} Program Overview',
-                            'data_source': main_data_key
-                        }
-                except json.JSONDecodeError:
-                    pass
-
-            return None
 
     @staticmethod
     def _select_best_description(descriptions: List[str], call_type: str) -> str:
@@ -1352,12 +1353,14 @@ class EnhancedReportGenerator:
     ) -> Optional[str]:
         """
         Generate commentary for a specific section using the enhanced matrix system.
-        This method is the primary entry point for generating any section.
+        This method is the primary entry point for generating any section, handling both
+        single text outputs and complex outputs that require looping (like payment overviews).
         """
         # Step 1: Configuration Lookup
         mapping = self.mapping_matrix.get_complete_mapping_matrix()
         if section_key not in mapping:
-            if verbose: print(f"❌ Section key '{section_key}' not found in mapping matrix")
+            if verbose:
+                print(f"❌ Section key '{section_key}' not found in mapping matrix")
             return None
         section_config = mapping[section_key]
 
@@ -1365,102 +1368,36 @@ class EnhancedReportGenerator:
             print(f"📝 Generating: {section_config['section_info']['name']}")
             print(f"   Template: {section_config['template_mapping']['template_name']}")
 
-        # Step 2: Special Handling for Composite Sections
-        # ✅ FIX: The intro_summary is now a composite section built from multiple AI calls
-        if section_key == 'intro_summary':
-            return self._generate_structured_intro_summary(section_config, quarter_period, current_year, financial_data, model, temperature, acronym_context, verbose)
-
-        # Payment overviews are also composite, with one sub-report per call type
+        # ✅ FIX: Centralized logic to handle special "looping" sections like payment overviews.
+        # This replaces the hardcoded logic that was previously in comments.py.
         if section_key in ['heu_payment_overview', 'h2020_payment_overview']:
-            return self._generate_payment_overview_combinations(section_key, quarter_period, current_year, financial_data, model, temperature, acronym_context, cutoff_date, verbose)
+            # This section requires generating multiple commentaries (one for each call type).
+            # The method returns a single string summarizing the results, which the calling module can handle.
+            return self._generate_payment_overview_combinations(
+                section_key=section_key,
+                quarter_period=quarter_period,
+                current_year=current_year,
+                financial_data=financial_data,
+                model=model,
+                temperature=temperature,
+                acronym_context=acronym_context,
+                cutoff_date=cutoff_date,
+                verbose=verbose
+            )
 
-        # For all other "normal" sections, proceed with the standard generation flow
-        return self._generate_single_section_commentary(section_key, section_config, quarter_period, current_year, financial_data, model, temperature, acronym_context, cutoff_date, verbose)
-
-    def _generate_structured_intro_summary(self, section_config, quarter_period, current_year, financial_data, model, temperature, acronym_context, verbose):
-        """
-        ✅ NEW ORCHESTRATOR: Generates the intro_summary by calling multiple specialized helpers.
-        This fixes the `AttributeError` and implements the required multi-stage generation.
-        """
-        if verbose: print("   🏗️  Building structured intro summary from multiple parts...")
-
-        # Get the structured template
-        templates = self.template_library.get_template_definitions(quarter_period, current_year)
-        template = templates.get('intro_summary_structured_template')
-        if not template:
-            if verbose: print("❌ 'intro_summary_structured_template' not found.")
-            return None
-
-        # Generate each part of the summary
-        parts = {
-            'opening_paragraph': self._generate_intro_opening_paragraph(financial_data, model, temperature, acronym_context, verbose),
-            'payments_section': self._generate_intro_payments_section(financial_data, model, temperature, acronym_context, verbose),
-            'granting_section': self._generate_intro_granting_section(financial_data, model, temperature, acronym_context, verbose),
-            'amendments_section': self._generate_intro_amendments_section(financial_data, model, temperature, acronym_context, verbose),
-            'audits_section': self._generate_intro_audits_section(financial_data, model, temperature, acronym_context, verbose),
-            'other_activities_section': self._generate_intro_other_activities_section(financial_data, model, temperature, acronym_context, verbose),
-            'concluding_paragraph': self._generate_intro_concluding_paragraph(financial_data, model, temperature, acronym_context, verbose),
-        }
-
-        # Assemble the final text
-        return self._format_template_safely(template, parts)
-
-    # ================================================================
-    # ✅ NEW: INTRO SUMMARY HELPER METHODS
-    # ================================================================
-    def _generate_intro_opening_paragraph(self, financial_data, model, temperature, acronym_context, verbose):
-        data_keys = ['TTP_Overview', 'amendment_TTA_H2020', 'amendment_TTA_HEU', 'H2020_TTP_FP', 'H2020_TTP_IP', 'HEU_TTP_FP', 'HEU_TTP_IP']
-        subset_data = {k: financial_data[k] for k in data_keys if k in financial_data}
-        instructions = "Write a 2-paragraph opening for an executive summary. The first paragraph should state the department's key achievements for the quarter, focusing on meeting targets. The second paragraph must focus on Time-to-Pay (TTP) and Time-to-Amend (TTA) metrics, comparing performance against contractual limits and providing specific average day counts for H2020 and HEU as available in the data."
-        data_summary = self._prepare_data_summary(subset_data, ['ttp', 'tta', 'days', 'rate'], "TIMELINESS METRICS")
-        prompt = self._create_enhanced_prompt(instructions, data_summary, acronym_context, "intro_opening", "Q4", "2024")
-        return self._generate_with_quality_assurance(prompt, model, temperature, 300, "intro_opening", verbose)
-
-    def _generate_intro_payments_section(self, financial_data, model, temperature, acronym_context, verbose):
-        data_keys = ['pay_credits_H2020', 'pay_credits_HEU']
-        subset_data = {k: financial_data[k] for k in data_keys if k in financial_data}
-        instructions = "Write a brief paragraph about Payments. Focus on the volume of payments processed this quarter for both Horizon Europe (HEU) and H2020. State the strategic objective this performance met, such as utilizing payment appropriations."
-        data_summary = self._prepare_data_summary(subset_data, ['volume', 'count'], "PAYMENT VOLUMES")
-        prompt = self._create_enhanced_prompt(instructions, data_summary, acronym_context, "intro_payments", "Q4", "2024")
-        return self._generate_with_quality_assurance(prompt, model, temperature, 150, "intro_payments", verbose)
-
-    def _generate_intro_granting_section(self, financial_data, model, temperature, acronym_context, verbose):
-        data_keys = ['TTG', 'completion_previous_year_calls', 'grants_signature_activity']
-        subset_data = {k: financial_data[k] for k in data_keys if k in financial_data}
-        instructions = "Write a brief paragraph about Granting. Mention the successful completion of the previous year's calls and that Time-to-Grant (TTG) was below target. Provide specific completion rate percentages for the current year's STG and POC calls."
-        data_summary = self._prepare_data_summary(subset_data, ['ttg', 'completion', 'rate'], "GRANTING PERFORMANCE")
-        prompt = self._create_enhanced_prompt(instructions, data_summary, acronym_context, "intro_granting", "Q4", "2024")
-        return self._generate_with_quality_assurance(prompt, model, temperature, 150, "intro_granting", verbose)
-
-    def _generate_intro_amendments_section(self, financial_data, model, temperature, acronym_context, verbose):
-        data_keys = ['amendment_activity_H2020', 'amendment_activity_HEU', 'amendment_cases_H2020', 'amendment_cases_HEU']
-        subset_data = {k: financial_data[k] for k in data_keys if k in financial_data}
-        instructions = "Write a paragraph about Amendments. State the total number of amendments signed in the year, with a breakdown for H2020 and HE. Describe the trend compared to previous years. Detail the most common types of amendments for both H2020 and HE, including percentages."
-        data_summary = self._prepare_data_summary(subset_data, ['total', 'count', 'type', 'percentage'], "AMENDMENT ANALYSIS")
-        prompt = self._create_enhanced_prompt(instructions, data_summary, acronym_context, "intro_amendments", "Q4", "2024")
-        return self._generate_with_quality_assurance(prompt, model, temperature, 200, "intro_amendments", verbose)
-
-    def _generate_intro_audits_section(self, financial_data, model, temperature, acronym_context, verbose):
-        data_keys = ['auri_overview', 'recovery_activity', 'external_audits_activity']
-        subset_data = {k: financial_data[k] for k in data_keys if k in financial_data}
-        instructions = "Write a paragraph about Audits. State the number of H2020 audits that resulted in recoveries and the total EUR amount recovered. Mention the number of new audits closed in the year, the total closed, and the number remaining ongoing. Emphasize the importance of these activities for financial integrity."
-        data_summary = self._prepare_data_summary(subset_data, ['audit', 'recovery', 'eur', 'count'], "AUDIT ACTIVITY")
-        prompt = self._create_enhanced_prompt(instructions, data_summary, acronym_context, "intro_audits", "Q4", "2024")
-        return self._generate_with_quality_assurance(prompt, model, temperature, 200, "intro_audits", verbose)
-
-    def _generate_intro_other_activities_section(self, financial_data, model, temperature, acronym_context, verbose):
-        data_keys = ['grants_exceeding_fdi']
-        subset_data = {k: financial_data[k] for k in data_keys if k in financial_data}
-        instructions = "Write a very brief paragraph about Other Activities. Mention the number of L2 budgetary commitments that exceeded their Final Date of Implementation (FDI) for H2020."
-        data_summary = self._prepare_data_summary(subset_data, ['fdi', 'count'], "FDI EXCEPTIONS")
-        prompt = self._create_enhanced_prompt(instructions, data_summary, acronym_context, "intro_other", "Q4", "2024")
-        return self._generate_with_quality_assurance(prompt, model, temperature, 100, "intro_other", verbose)
-
-    def _generate_intro_concluding_paragraph(self, financial_data, model, temperature, acronym_context, verbose):
-        instructions = "Write a single concluding paragraph for the executive summary. Summarize the department's overall performance for the year, using keywords like 'timely payments', 'efficient processing', and 'proactive management'. End with a strong, forward-looking statement about setting a precedent for the future."
-        # This part doesn't need data, it's a summary of summaries.
-        prompt = self._create_enhanced_prompt(instructions, "Data from previous sections should be synthesized.", acronym_context, "intro_conclusion", "Q4", "2024")
-        return self._generate_with_quality_assurance(prompt, model, temperature, 150, "intro_conclusion", verbose)
+        # For all other "normal" sections, proceed with single commentary generation.
+        return self._generate_single_section_commentary(
+            section_key=section_key,
+            section_config=section_config,
+            quarter_period=quarter_period,
+            current_year=current_year,
+            financial_data=financial_data,
+            model=model,
+            temperature=temperature,
+            acronym_context=acronym_context,
+            cutoff_date=cutoff_date, # Not used here, but passed for consistency
+            verbose=verbose
+        )
 
 
     def _generate_single_section_commentary(
@@ -1550,12 +1487,12 @@ class EnhancedReportGenerator:
             quarter_period=quarter_period
         )
 
-        # Step 8: AI Generation with quality assurance
-        commentary = self._generate_with_quality_assurance(
+        # Step 8: AI Generation with Retry Logic
+        commentary = self._generate_with_retry(
             prompt=final_prompt,
             model=model,
             temperature=temperature,
-            max_tokens=int(section_config['output_configuration']['word_limit'] * 1.8),
+            max_tokens=int(section_config['output_configuration']['word_limit'] * 1.8), # Increased multiplier
             section_key=section_key,
             verbose=verbose
         )
@@ -2262,7 +2199,7 @@ class EnhancedReportGenerator:
             Focus on accomplishments, efficiency, and the strategic value delivered.
             """
 
-    def _generate_with_quality_assurance(
+    def _generate_with_retry(
         self,
         prompt: str,
         model: str,
@@ -2272,101 +2209,71 @@ class EnhancedReportGenerator:
         verbose: bool,
         max_retries: int = 2
     ) -> Optional[str]:
-        """
-        ✅ NEW: Main generation loop with scoring-based quality checks and human validation.
-        This replaces the old _generate_with_retry method.
-        """
+        """Generate with retry logic for better quality"""
         from reporting.quarterly_report.modules.comments import CommentsConfig
 
-        allow_human_validation = CommentsConfig.GENERATION_CONTROL.get('enable_human_validation', False)
-        questionable_responses = []
+        retry_count = 0
+        current_temperature = temperature
+        min_length = CommentsConfig.QUALITY_SETTINGS['min_response_length']
 
-        for attempt in range(max_retries + 1):
-            if attempt > 0:
-                temperature += CommentsConfig.QUALITY_SETTINGS['retry_temperature_increment']
-                if verbose: print(f"   🔄 Retry {attempt} with increased temperature: {temperature:.2f}")
+        while retry_count <= max_retries:
+            if retry_count > 0:
+                current_temperature += CommentsConfig.QUALITY_SETTINGS['retry_temperature_increment']
+                if verbose:
+                    print(f"   🔄 Retry {retry_count} with increased temperature: {current_temperature:.2f}")
 
             response = self._generate_with_model(
-                prompt=prompt, model=model, temperature=temperature, max_tokens=max_tokens, verbose=verbose
+                prompt=prompt,
+                model=model,
+                temperature=current_temperature,
+                max_tokens=max_tokens,
+                verbose=verbose
             )
 
-            if response:
-                quality_score = self._assess_response_quality(response, section_key)
-                if quality_score >= 0.8: # High quality, accept immediately
-                    if verbose: print(f"   ✅ High quality response found (Score: {quality_score:.2f}).")
-                    return response
-                elif quality_score >= 0.5: # Questionable, save for later
-                     if verbose: print(f"   ⚠️ Questionable response found (Score: {quality_score:.2f}). Saving for review.")
-                     questionable_responses.append({'response': response, 'score': quality_score})
-                elif verbose:
-                    print(f"   ❌ Low quality response rejected (Score: {quality_score:.2f}).")
+            # Pass the raw response length to the validation function
+            raw_response_len = len(response) if response else 0
+            is_valid = self._validate_response_quality(response, section_key)
 
-        # If loop finishes with no high-quality response, check for questionable ones
-        if questionable_responses:
-            best_response = max(questionable_responses, key=lambda x: x['score'])
-            if allow_human_validation:
-                if verbose: print("\n   🤔 No high-quality response generated automatically. Requesting human validation for best available option...")
-                if self._request_human_validation(section_key, best_response['response'], best_response['score']):
-                    return best_response['response']
-            else:
-                if verbose: print(f"   ⚠️ Returning best available response (Score: {best_response['score']:.2f}) without human validation.")
-                return best_response['response']
+            if is_valid:
+                if verbose:
+                    print(f"   ✅ Quality check passed on attempt {retry_count + 1}.")
+                return response
+            elif verbose:
+                 # The log message was confusing, let's clarify it.
+                 # The length shown was likely the prompt, not the response. Let's show the actual response length.
+                print(f"   ⚠️ Quality check failed for attempt {retry_count + 1}. Actual response length: {raw_response_len} chars.")
 
-        if verbose: print(f"   ❌ Failed to generate an acceptable response after {max_retries + 1} attempts.")
+
+            retry_count += 1
+
+        if verbose:
+            print(f"   ❌ Failed to generate a quality response after {max_retries + 1} attempts.")
         return None
 
-    def _assess_response_quality(self, response: str, section_key: str) -> float:
-        """✅ NEW: Assesses response quality with a score from 0.0 to 1.0."""
-        if not response: return 0.0
 
-        score = 1.0
-        # Length check (soft penalty)
-        if len(response) < 50: score -= 0.6
-        elif len(response) < 100: score -= 0.3
+    def _validate_response_quality(self, response: str, section_key: str) -> bool:
+        """Validate response quality based on section requirements"""
+        # Basic quality checks
+        if not response or len(response) < 50: return False
+        if not response.strip().endswith(('.', '!', '?', '"', ')')): return False # Check for incomplete sentence
 
-        # Incompleteness check
-        if not response.strip().endswith(('.', '!', '?', '"', ')')): score -= 0.2
-
-        # Repetition check
+        # Check for repetitive content
         sentences = response.split('.')
         if len(sentences) > 3:
+            # Normalize sentences for comparison
             unique_sentences = {s.strip().lower() for s in sentences if len(s.strip()) > 10}
-            repetition_ratio = 1 - (len(unique_sentences) / (len(sentences) -1))
-            if repetition_ratio > 0.4: score -= 0.3 # Penalize if over 40% repetitive
-
-        # Keyword check (less severe penalty)
-        if 'payment' in section_key or 'ttp' in section_key:
-            if not any(kw in response.lower() for kw in ['€', 'eur', 'million', 'payment', 'ttp', 'compliance']): score -= 0.1
-        if 'budget' in section_key:
-            if not any(kw in response.lower() for kw in ['appropriation', 'allocation', 'budget', 'consumption']): score -= 0.1
-
-        return max(0.0, score)
-
-    def _request_human_validation(self, section_key: str, response: str, score: float) -> bool:
-        """✅ NEW: Prompts the user to manually validate a questionable AI response."""
-        print("\n" + "="*60)
-        print("🤔 HUMAN VALIDATION REQUIRED")
-        print("="*60)
-        print(f"Section: {section_key}")
-        print(f"Automated Quality Score: {score:.2f}/1.00 (below threshold)")
-        print("\n--- GENERATED TEXT PREVIEW ---")
-        print(response[:600] + "..." if len(response) > 600 else response)
-        print("--- END OF PREVIEW ---\n")
-
-        while True:
-            user_input = input("✅ Accept this response? (y/n/v to view full text): ").lower().strip()
-            if user_input == 'y':
-                print("   👍 Response manually approved.")
-                return True
-            elif user_input == 'n':
-                print("   👎 Response manually rejected.")
+            if len(unique_sentences) < len(sentences) * 0.6:  # Over 40% repetition
                 return False
-            elif user_input == 'v':
-                print("\n--- FULL GENERATED TEXT ---")
-                print(response)
-                print("--- END OF FULL TEXT ---\n")
-            else:
-                print("Invalid input. Please enter 'y', 'n', or 'v'.")
+
+        # Section-specific keyword checks
+        if 'payment' in section_key or 'ttp' in section_key:
+            if not any(kw in response.lower() for kw in ['€', 'eur', 'million', 'payment', 'ttp', 'compliance']):
+                return False
+        if 'budget' in section_key:
+            if not any(kw in response.lower() for kw in ['appropriation', 'allocation', 'budget', 'consumption']):
+                return False
+
+        return True
 
 
     def _generate_with_model(self, prompt: str, model: str, temperature: float, max_tokens: int, verbose: bool) -> Optional[str]:
