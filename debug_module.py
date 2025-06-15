@@ -254,7 +254,7 @@ def run_complete_diagnosis(financial_data):
 def debug_section_mapping(self):
     """Debug which sections are being skipped and why"""
     
-    from reporting.quarterly_report.modules.comments import CommentsConfig
+    from comments_old import CommentsConfig
     
     SINGLE_SECTIONS = CommentsConfig.SINGLE_SECTIONS
     mapping = self.mapping_matrix.get_complete_mapping_matrix()
