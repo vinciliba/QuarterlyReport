@@ -422,6 +422,109 @@ def implementation_comparison_df(
 
     return out
 
+import pandas as pd
+from typing import Dict, Any
+def calculate_table_dimensions(
+    df: pd.DataFrame,
+    config: Dict[str, Any]
+) -> tuple[int, int]:
+    """
+    Calculates the optimal width and height for a DataFrame table based on a detailed config.
+    """
+    # --- Configuration Extraction ---
+    stub_width = config.get("stub_width", 250)
+    base_width_per_column = config.get("base_width_per_column", 80)
+    normal_row_height = config.get("row_height", 40)
+    group_row_height = config.get("group_row_height", 45)
+    summary_row_height = config.get("summary_row_height", 45)
+    has_spanners = config.get("has_spanners", False)
+    wrap_text_column = config.get("wrap_text_column", None)
+    line_height = config.get("line_height", 20)
+    chars_per_line = config.get("chars_per_line", 60)
+    has_groups = config.get("has_groups", False)
+    group_col_name = config.get("group_col_name", None)
+    group_header_height = config.get("group_header_height", 25)
+    summary_row_count = config.get("summary_row_count", 0)
+
+    # --- Static Component Heights (in pixels) ---
+    title_height, subtitle_height, column_header_height = 30, 20, 35
+    spanner_height = 30 if has_spanners else 0
+    footer_padding, border_padding = 30, 20
+
+    # --- Width Calculation ---
+    if config.get("total_width_override"):
+        table_width_px = config["total_width_override"]
+    else:
+        num_data_cols = len(df.columns) - 1
+        table_width_px = stub_width + (num_data_cols * base_width_per_column)
+
+    # --- Height Calculation ---
+    total_data_height = 0
+    group_headers_height = 0
+
+    if wrap_text_column and wrap_text_column in df.columns:
+        height_from_summary = summary_row_count * summary_row_height
+        height_from_data = 0
+        data_df = df.iloc[:-summary_row_count] if summary_row_count > 0 else df
+        for _, row in data_df.iterrows():
+            text_length = len(str(row[wrap_text_column]))
+            num_lines = max(1, (text_length // chars_per_line) + 1)
+            row_height = max(normal_row_height, (num_lines * line_height) + 15)
+            height_from_data += row_height
+        total_data_height = height_from_data + height_from_summary
+    elif has_groups and group_col_name and group_col_name in df.columns:
+        num_groups = df[group_col_name].nunique()
+        group_headers_height = num_groups * group_header_height
+        special_rows = config.get("special_rows_in_group", [])
+        num_special_rows = df.iloc[:, 1].isin(special_rows).sum()
+        num_normal_rows = len(df) - num_special_rows
+        total_data_height = (num_special_rows * group_row_height) + (num_normal_rows * normal_row_height)
+    else:
+        group_like_rows = config.get("group_like_rows", [])
+        num_group_like_rows = df.iloc[:, 0].isin(group_like_rows).sum()
+        num_summary_rows = summary_row_count
+        num_normal_rows = len(df) - num_group_like_rows - num_summary_rows
+        total_data_height = (num_normal_rows * normal_row_height) + (num_group_like_rows * group_row_height) + (num_summary_rows * summary_row_height)
+
+    base_header_footer_height = (
+        title_height + subtitle_height + column_header_height +
+        spanner_height + footer_padding + border_padding + group_headers_height
+    )
+    table_height_px = base_header_footer_height + total_data_height
+
+    # --- Safety Margins ---
+    final_width = max(600, min(int(table_width_px), 2000)) # Increased max width
+    final_height = max(400, min(int(table_height_px), 1500)) # Increased min/max height
+
+    return final_width, final_height
+
+# --- NEW HELPER FOR tti_combined TO FIX MISSING TOTAL ROW ---
+def build_tti_combined_df(auri_df: pd.DataFrame, current_year: int) -> pd.DataFrame:
+    """
+    Builds the complete tti_combined DataFrame, including the final total row.
+    """
+    tti_closed = tti_closed_projects_df(auri_df, current_year)
+    tti_open = tti_open_projects_df(auri_df, current_year)
+    df = pd.concat([tti_closed, tti_open], ignore_index=True)
+
+    # Add grand total row
+    subtotal_df = df[df['Adjustment Type'].isin(['Closed Projects', 'On-going Projects'])]
+    total_row_data = {
+        'Adjustment Type': 'Total',
+        '0-6 months': subtotal_df['0-6 months'].sum(),
+        'above 6 months': subtotal_df['above 6 months'].sum(),
+        'Total': subtotal_df['Total'].sum()
+    }
+    total_row = pd.DataFrame([total_row_data])
+    
+    df = pd.concat([df, total_row], ignore_index=True)
+
+    # Calculate percentages after all rows are present
+    df['% total (0-6 months)'] = (df['0-6 months'] / df['Total'] * 100).where(df['Total'] > 0, 0)
+    df['% above 6 months'] = (df['above 6 months'] / df['Total'] * 100).where(df['Total'] > 0, 0)
+    
+    return df
+
 # ──────────────────────────────────────────────────────────────
 # utils for RO tables
 # ──────────────────────────────────────────────────────────────
@@ -655,289 +758,147 @@ from typing import Dict, List, Optional
 from great_tables import GT, style, loc
 import logging
 
+# def apply_table_styling(
+#     gt: GT,
+#     table_type: str,
+#     df_columns: Optional[List[str]] = None,
+#     params: Optional[Dict[str, str]] = None
+# ) -> GT:
+#     """
+#     Apply consistent styling to great_tables objects based on table type.
+
+#     Args:
+#         gt: The great_tables object to style.
+#         table_type: Type of table (e.g., 'auri_overview', 'tti_combined', etc.).
+#         df_columns: List of column names for the table (optional).
+#         params: Dictionary of styling parameters, including colors (optional).
+
+#     Returns:
+#         Styled great_tables object.
+#     """
+#     logger = logging.getLogger(__name__)  # Add this line
+  
+#     rows_to_style = []
+
+#     # Define column groups based on table type
+#     if table_type == "auri_overview":
+#         first_col = ["Source"]
+#         other_cols = ["Audit results processed", "% Audit results processed", "Audit results pending", "% Audit results pending", "Total"]
+#         location_stub =  "Total"
+#         location_body = "Total"
+
+#     elif table_type == "tti_combined":
+#         first_col = ["Adjustment Type"]
+#         other_cols = ["0-6 months", "% total (0-6 months)", "above 6 months", "% above 6 months", "Total"]
+#         rows_to_style = ["Closed Projects", "On-going Projects", "Total"]
+      
+
+#     elif table_type == "negative_adj":
+#         first_col = ["Source"]
+#         other_cols = [
+#             "Processed No. of AURIs", "Processed Adjustment Amount (AUDEX)",
+#             "Pending No. of AURIs", "Pending Adjustment Amount (AUDEX)",
+#             "Total No. of AURIs", "Total Adjustment Amount (AUDEX)"
+#         ]
+#     elif table_type == "deviations":
+#         first_col = ["Beneficiary"]
+#         other_cols = [
+#             "Project Number", "Acronym", "Count of AURI", "AURI Deviation Comment",
+#             "Audex Total Cost Adjustment", "Deviation Amount", "AURI Cost Adjustments"
+#         ]
+#     elif table_type == "participation_impl":
+#         first_col = ["Indicator"]
+#         if df_columns is None:
+#             df_columns = list(gt.collect().columns)
+#         other_cols = [c for c in df_columns if c not in first_col]
+#         location_stub =  "Total participation implemented"
+#         location_body = "Total participation implemented"
+    
+#     elif table_type == "negative_adj":
+#         location_stub =  "Total"
+#         location_body = "Total"
+
+#     elif table_type == "negative_adj":
+#         location_stub =  ["Closed Projects", "On-going Projects", "Total"]
+#         location_body = ["Closed Projects", "On-going Projects", "Total"]
+
+#     elif table_type == "ro_activity":
+#         first_col = ["Reason"]
+#         other_cols = [c for c in df_columns if c not in first_col + ["Row group"]]
+#     else:
+#         raise ValueError(f"Unknown table type: {table_type}")
+
+#     gt = gt.opt_table_font(font="Arial").opt_stylize(style=6, color="blue")
+    
+#     # Only apply the row styling if there are rows to style
+#     if rows_to_style:
+#         background_color = params.get("subtotal_background_color", '#1f77b4')
+        
+#         gt = gt.tab_style(
+#             style=[
+#                 style.fill(color=background_color),
+#                 style.text(color="white", weight="bold")
+#             ],
+#             locations=[
+#                 # Apply to the stub cell (e.g., the "Total" label itself)
+#                 loc.stub(rows=rows_to_style),
+#                 # Apply to the rest of the cells in that row
+#                 loc.body(rows=rows_to_style)
+#             ]
+#         )
+#     return gt
+
 def apply_table_styling(
     gt: GT,
-    table_type: str,
-    df_columns: Optional[List[str]] = None,
+    styling_config: Dict[str, Any],
     params: Optional[Dict[str, str]] = None
 ) -> GT:
     """
-    Apply consistent styling to great_tables objects based on table type.
-
-    Args:
-        gt: The great_tables object to style.
-        table_type: Type of table (e.g., 'auri_overview', 'tti_combined', etc.).
-        df_columns: List of column names for the table (optional).
-        params: Dictionary of styling parameters, including colors (optional).
-
-    Returns:
-        Styled great_tables object.
+    Apply consistent styling to a great_tables object based on a dedicated config.
     """
-    logger = logging.getLogger(__name__)  # Add this line
-    # Default colors if params is not provided or missing keys
-    default_colors = {
-        "BLUE": "#004A99",
-        "LIGHT_BLUE": "#d6e6f4",
-        "DARK_BLUE": "#01244B",
-        "subtotal_background_color": "#E6E6FA"
-    }
+    # Apply base theme and font
+    gt = gt.opt_table_font(font="Arial").opt_stylize(style=6, color="blue")
     
-    # Use params if provided, otherwise fall back to defaults
-    colors = params if params is not None else default_colors
-    BLUE = colors.get("BLUE", default_colors["BLUE"])
-    LIGHT_BLUE = colors.get("LIGHT_BLUE", default_colors["LIGHT_BLUE"])
-    DARK_BLUE = colors.get("DARK_BLUE", default_colors["DARK_BLUE"])
-    subtotal_background_color = colors.get("subtotal_background_color", default_colors["subtotal_background_color"])
-
-    OUTLINE_B = '1px'
-
-    # Define column groups based on table type
-    if table_type == "auri_overview":
-        first_col = ["Source"]
-        other_cols = ["Audit results processed", "% Audit results processed", "Audit results pending", "% Audit results pending", "Total"]
-    elif table_type == "tti_combined":
-        first_col = ["Adjustment Type"]
-        other_cols = ["0-6 months", "% total (0-6 months)", "above 6 months", "% above 6 months", "Total"]
-    elif table_type == "negative_adj":
-        first_col = ["Source"]
-        other_cols = [
-            "Processed No. of AURIs", "Processed Adjustment Amount (AUDEX)",
-            "Pending No. of AURIs", "Pending Adjustment Amount (AUDEX)",
-            "Total No. of AURIs", "Total Adjustment Amount (AUDEX)"
-        ]
-    elif table_type == "deviations":
-        first_col = ["Beneficiary"]
-        other_cols = [
-            "Project Number", "Acronym", "Count of AURI", "AURI Deviation Comment",
-            "Audex Total Cost Adjustment", "Deviation Amount", "AURI Cost Adjustments"
-        ]
-    elif table_type == "participation_impl":
-        first_col = ["Indicator"]
-        if df_columns is None:
-            df_columns = list(gt.collect().columns)
-        other_cols = [c for c in df_columns if c not in first_col]
-    elif table_type == "ro_activity":
-        first_col = ["Reason"]
-        other_cols = [c for c in df_columns if c not in first_col + ["Row group"]]
-    else:
-        raise ValueError(f"Unknown table type: {table_type}")
-
-    # Apply base styling
-    gt = (
-        gt
-        .opt_table_font(font="Arial")
-        .opt_table_outline(style = "solid", width = '1px', color ="#cccccc") 
-        .tab_options(
-                table_font_size="12px",
-                table_width="100%",
-                table_background_color="#ffffff",
-                table_font_color=DARK_BLUE
-            )
-        .tab_style(
-            style=style.borders(sides="all", color="#cccccc", weight="1px"),
-            locations=loc.body()
-        )
-        .tab_style(
-            style=style.borders(sides="all", color="#ffffff", weight="2px"),
-            locations=loc.column_labels()
-        )
-
-        # Row group styling
-        .tab_style(
+    # Apply styling for specific rows (e.g., "Total" rows)
+    rows_to_style = styling_config.get("rows_to_style", [])
+    if rows_to_style:
+        params = params or {}
+        background_color = params.get("subtotal_background_color", '#1f77b4')
+        
+        gt = gt.tab_style(
             style=[
-                style.text(color=DARK_BLUE, weight="bold", font='Arial', size='small'),
-                style.fill(color=LIGHT_BLUE),
-                style.css(f"line-height:1.2; padding:5px;")
+                style.fill(color=background_color),
+                style.text(color="white", weight="bold")
             ],
-            locations=loc.row_groups()
+            locations=[
+                loc.stub(rows=rows_to_style),
+                loc.body(rows=rows_to_style)
+            ]
         )
+    
+    # --- FINAL, CORRECTED HEADER STYLING ---
 
-        # Column labels styling
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align="left", size='small'),
-                style.css("min-width:50px; padding:5px; line-height:1.2")
-            ],
-            locations=loc.column_labels(columns=first_col)
-        )
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align="right", size='small'),
-                style.css("min-width:50px; padding:5px; line-height:1.2")
-            ],
-            locations=loc.column_labels(columns=other_cols)
-        )
-
-        # Stubhead styling
-        .tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold", align="center", size='small'),
-                style.css("min-width:150px; padding:20px; line-height:1.2")
-            ],
-            locations=loc.stubhead()
-        )
-
-        # Body cell styling
-        .tab_style(
-            style=[
-                style.text(align="left", size='small'),
-                style.css("padding:5px")
-            ],
-            locations=loc.body(columns=first_col)
-        )
-        .tab_style(
-            style=[
-                style.text(align="right", size='small'),
-                style.css("padding:5px")
-            ],
-            locations=loc.body(columns=other_cols)
-        )
-
-        # Stub cell styling
-        .tab_style(
-            style=[
-                style.text(size='small'),
-                style.css("padding:5px")
-            ],
-            locations=loc.stub()
-        )
-
-        # Footer styling
-        .tab_source_note("Source: Compass")
-        .tab_source_note("Report: Audit Result Implementation")
-        .tab_style(
-            style=[
-                style.text(size="small"),
-                style.fill(color="#f5f5f5"),  # Light gray background for footer
-                style.css("padding:5px; line-height:1.2")
-            ],
-            locations=loc.footer()
-        )
+    # Step 1: Style the column labels. This works for all tables.
+    gt = gt.tab_style(
+        style=style.text(weight="bold"),
+        locations=loc.column_labels()
     )
-    
-    # Apply spanner labels styling using the safe helper function
-    gt = style_spanners_safe(gt, fill_color=DARK_BLUE, text_color="white")
 
-  
-    # Apply table-specific styling
-    if table_type == "tti_combined":
+    # Step 2: Safely style spanner labels.
+    # We use a try/except block to make this robust for tables that don't have spanners.
+    try:
         gt = gt.tab_style(
-            style=[
-                style.fill(color=subtotal_background_color),
-                style.text(weight="bold")
-            ],
-            locations=[
-                loc.stub(rows=["Closed Projects", "On-going Projects", "Total"]),
-                loc.body(rows=["Closed Projects", "On-going Projects", "Total"])
-            ]
+            style=style.text(weight="bold"),
+            locations=loc.spanner_labels()
         )
-        
-    elif table_type == "negative_adj":
-        # Apply styling to the Total row
-        gt = gt.tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold")
-            ],
-            locations=[
-                loc.stub(rows=["Total"]),
-                loc.body(rows=["Total"])
-            ]
-        )
-            
-    elif table_type == "auri_overview":
-        # Apply styling to the Total row
-        gt = gt.tab_style(
-            style=[
-                style.fill(color=BLUE),
-                style.text(color="white", weight="bold")
-            ],
-            locations=[
-                loc.stub(rows=["Total"]),
-                loc.body(rows=["Total"])
-            ]
-        )
-        
-    elif table_type == "participation_impl":
-        # Apply styling to the Total row
-        gt = gt.tab_style(
-            style=[
-                # style.fill(color=DARK_BLUE),
-                style.text(weight="bold", color=DARK_BLUE)
-            ],
-            locations=[
-                loc.stub(rows=["Total participation implemented"]),
-                loc.body(rows=["Total participation implemented"])
-            ]
-        )
-        
-        # Style spanner labels with DARK_BLUE
-        try:
-            gt = gt.tab_style(
-                style=[
-                    style.fill(color=DARK_BLUE),
-                    style.text(color='white', weight='bold')
-                ],
-                locations=loc.spanner_labels()
-            )
-        except Exception as e:
-            logger.debug(f"Could not style spanners for {table_type}: {e}")
-            
-    elif table_type == "ro_activity":
-        # Style spanner labels with DARK_BLUE
-        try:
-            gt = gt.tab_style(
-                style=[
-                    style.fill(color=DARK_BLUE),
-                    style.text(color='white', weight='bold')
-                ],
-                locations=loc.spanner_labels()
-            )
-        except Exception as e:
-            logger.debug(f"Could not style spanners for {table_type}: {e}")
-            
-    elif table_type == "deviations":
-        # Style the "Total" row
-        gt = (
-            gt
-            .tab_style(
-                style=[
-                    style.fill(color=BLUE),
-                    style.text(color="white", weight="bold")
-                ],
-                locations=[
-                    loc.stub(rows=["TOTAL"]),
-                    loc.body(rows=["TOTAL"])
-                ]
-            )
-            .tab_style(
-                style=[
-                    style.fill(color=BLUE),
-                    style.text(color="white", weight="bold", align="center"),
-                    style.css("min-width:50px; padding:5px; line-height:1.2")
-                ],
-                locations=[
-
-                    loc.column_labels()
-                ]
-            )
-        )
-        # Wrap content in "AURI Deviation Comment" column
-        gt = gt.tab_style(
-            style=style.css("white-space: normal; word-wrap: break-word; min-width: 200px; max-width: 300px;"),
-            locations=loc.body(columns=["AURI Deviation Comment"])
-        )
-
-        # Set stub cells (Beneficiary column) to LIGHT_BLUE
-        gt = gt.tab_style(
-            style=style.fill(color=LIGHT_BLUE),
-            locations=loc.stub()
-        )
+    except Exception:
+        # If a table has no spanners, great_tables might raise an error.
+        # This block catches it and allows the code to continue safely.
+        pass
     
     return gt
+    
+
 
 # Helper function to check if a table has spanners
 def has_spanners(gt: GT) -> bool:
@@ -992,7 +953,13 @@ def style_spanners_safe(gt: GT, fill_color: str, text_color: str = "white") -> G
 
 
 # Alternative approach: Create a complete styling function for tables with spanners
-def create_styled_table_with_spanners(df, table_type, spanner_config, report_params):
+def create_styled_table_with_spanners(
+    df: pd.DataFrame, 
+    table_name: str, 
+    spanner_config: Dict[str, Any], 
+    report_params: Dict[str, str],
+    rowname_col: Optional[str] = None  # <-- 1. ADD THIS ARGUMENT
+) -> GT:
     """
     Create a GT table with spanners and apply styling in one go.
     
@@ -1023,157 +990,367 @@ def create_styled_table_with_spanners(df, table_type, spanner_config, report_par
         gt = create_styled_table_with_spanners(df, 'my_table', spanner_config, report_params)
     """
     # Create base GT table with optional parameters
-    gt_params = {}
-    if 'rowname_col' in spanner_config:
-        gt_params['rowname_col'] = spanner_config['rowname_col']
-    if 'groupname_col' in spanner_config:
-        gt_params['groupname_col'] = spanner_config['groupname_col']
-        
-    gt = GT(df, **gt_params)
-    
-    # Add spanners
-    for spanner in spanner_config.get('spanners', []):
-        gt = gt.tab_spanner(
-            label=spanner['label'],
-            columns=spanner['columns']
-        )
-    
+    gt = GT(df,  rowname_col=rowname_col)
+   
     # Apply formatting if specified
-    if 'format_config' in spanner_config:
-        for fmt in spanner_config['format_config']:
-            if fmt['type'] == 'number':
-                gt = gt.fmt_number(
-                    columns=fmt['columns'],
-                    decimals=fmt.get('decimals', 0),
-                    use_seps=fmt.get('use_seps', True)
-                )
-            elif fmt['type'] == 'percent':
-                gt = gt.fmt_percent(
-                    columns=fmt['columns'],
-                    decimals=fmt.get('decimals', 1),
-                    scale_values=fmt.get('scale_values', False)
-                )
-    
-    # Apply table styling
-    gt = apply_table_styling(gt, table_type=table_type, params=report_params)
+    format_config = spanner_config.get('format_config', [])
+    for fmt in format_config:
+        fmt_type = fmt.pop('type')
+        if fmt_type == 'number':
+            gt = gt.fmt_number(**fmt)
+        elif fmt_type == 'percent':
+            gt = gt.fmt_percent(**fmt)
+
+    spanners = spanner_config.get('spanners', [])
+
+    for spanner in spanners:
+        gt = gt.tab_spanner(label=spanner['label'], columns=spanner['columns'])
+
+    # Apply general table styling
+    gt = apply_table_styling(gt, table_type=table_name, params=report_params)
+
     
     return gt
 
-def generate_auri_report(
-    conn: sqlite3.Connection,
-    cutoff: pd.Timestamp,
-    alias: str,
-    report: str,
-    db_path: Path,
-    report_params: dict,
-    save_to_db: bool = True,
-    export_dir: Path | None = None
-) -> dict:
-    """
-    Generate AURI (Audit Result Implementation) report tables and save them to the database if specified.
+# def generate_auri_report(
+#     conn: sqlite3.Connection,
+#     cutoff: pd.Timestamp,
+#     alias: str,
+#     report: str,
+#     db_path: Path,
+#     report_params: dict,
+#     save_to_db: bool = True,
+#     export_dir: Path | None = None
+# ) -> dict:
+#     """
+#     Generate AURI (Audit Result Implementation) report tables and save them to the database if specified.
 
-    Args:
-        conn: SQLite database connection.
-        cutoff: Timestamp for the reporting cutoff date.
-        alias: Table alias for fetching data (e.g., 'audit_result_implementation').
-        report: Name of the report (e.g., 'Quarterly_Report').
-        db_path: Path to the SQLite database.
-        report_params: Dictionary containing report parameters, including table colors.
-        save_to_db: Whether to save the results to the database.
-        export_dir: Directory path for exporting tables as HTML (optional).
+#     Args:
+#         conn: SQLite database connection.
+#         cutoff: Timestamp for the reporting cutoff date.
+#         alias: Table alias for fetching data (e.g., 'audit_result_implementation').
+#         report: Name of the report (e.g., 'Quarterly_Report').
+#         db_path: Path to the SQLite database.
+#         report_params: Dictionary containing report parameters, including table colors.
+#         save_to_db: Whether to save the results to the database.
+#         export_dir: Directory path for exporting tables as HTML (optional).
 
-    Returns:
-        Dictionary containing generated DataFrames and tables.
-    """
-    logger = logging.getLogger("Auri")
-    logger.info("Starting AURI report generation")
+#     Returns:
+#         Dictionary containing generated DataFrames and tables.
+#     """
+#     logger = logging.getLogger("Auri")
+#     logger.info("Starting AURI report generation")
 
-    try:
-        # Initialize constants and parameters
-        months_scope = get_months_in_scope(cutoff)
-        current_year = determine_epoch_year(cutoff)
-        subtotal_background_color = report_params.get("subtotal_background_color", "#E6E6FA")
+#     try:
+#         # Initialize constants and parameters
+#         months_scope = get_months_in_scope(cutoff)
+#         current_year = determine_epoch_year(cutoff) # e.g., current_year = 2025
+#         subtotal_background_color = report_params.get("subtotal_background_color", '#1f77b4')
 
-        # Load and preprocess AURI data
-        auri_df = load_auri_data(db_path, cutoff, current_year, months_scope)
-        if auri_df.empty:
-            logger.warning("No AURI data loaded for the given cutoff and parameters")
-            return {}
+#         # 2. NOW, define the table configurations using the dynamic variables
+#         table_configs = {
+#             'auri_overview': {
+#                 "stub_width": 300,
+#                 "summary_row_count": 1
+#             },
+#             'tti_combined': {
+#                 "stub_width": 250,
+#                 "group_like_rows": ['Closed Projects', 'On-going Projects'],
+#                 "summary_row_count": 1,
+#                 "group_row_height": 55  # Tuned value for taller group headers
+#             },
+#             'negative_adjustments': {
+#                 "has_spanners": True,
+#                 "stub_width": 150,
+#                 "summary_row_count": 1
+#             },
+#             'deviations': {
+#                 "stub_width": 200, 
+#                 "base_width_per_column": 110,
+#                 "wrap_text_column": "AURI_DEVIATION_COMMENT",
+#                 "chars_per_line": 45,
+#                 "summary_row_count": 1  # <-- Crucial addition
+#             },
+#             'implementation_comparison': {
+#                 "has_spanners": True,
+#                 "stub_width": 250
+#             },
+#             'recovery_activity': {
+#                 "has_spanners": True,
+#                 "has_groups": True,
+#                 "group_col_name": "Row group",
+#                 "stub_width": 200,
+#                 "group_header_height": 35, # <-- Tuned value for "ROs Cashed", etc.
+#                 "group_row_height": 50,    # <-- Tuned value for "Total RO..." rows
+#                 "special_rows_in_group": [
+#                     f'Total RO cashed in {current_year}', 
+#                     f'Total RO issued in {current_year}'
+#                 ]
+#             }
+#         }
 
-        # Load RO (Recovery Order) data
-        ro_df = fetch_latest_table_data(conn, "c0_ro_yearly_overview", cutoff)
-        if ro_df.empty:
-            logger.warning("No RO data loaded for the given cutoff")
+#         # Load and preprocess AURI data
+#         auri_df = load_auri_data(db_path, cutoff, current_year, months_scope)
+#         if auri_df.empty:
+#             logger.warning("No AURI data loaded for the given cutoff and parameters")
+#             return {}
 
-        # Generate tables
-        # Table 1: AURI Overview
-        auri_overview = auri_overview_df(auri_df)
-        tbl1 = (
-            GT(auri_overview)
-            .fmt_number(columns=['Audit results processed', 'Audit results pending', 'Total'], decimals=0)
-            .fmt_percent(columns=['% Audit results processed', '% Audit results pending'], decimals=1, scale_values=False)
-        )
-        tbl1 = apply_table_styling(tbl1, table_type="auri_overview", params=report_params)
+#         # Load RO (Recovery Order) data
+#         ro_df = fetch_latest_table_data(conn, "c0_ro_yearly_overview", cutoff)
+#         if ro_df.empty:
+#             logger.warning("No RO data loaded for the given cutoff")
 
-        # Table 2: TTI Combined (Closed and Open Projects)
-        tti_closed = tti_closed_projects_df(auri_df, current_year)
-        tti_open = tti_open_projects_df(auri_df, current_year)
-        tti_combined = pd.concat([tti_closed, tti_open]).reset_index(drop=True)
+#         # Generate tables
+#         # Table 1: AURI Overview
+#         auri_overview = auri_overview_df(auri_df)
 
-        # Add grand total row
-        subtotal_df = tti_combined[tti_combined['Adjustment Type'].isin(['Closed Projects', 'On-going Projects'])]
-        total_row = pd.DataFrame([{
-            'Adjustment Type': 'Total',
-            '0-6 months': subtotal_df['0-6 months'].sum(),
-            '% total (0-6 months)': (subtotal_df['0-6 months'].sum() / subtotal_df['Total'].sum() * 100) if subtotal_df['Total'].sum() > 0 else 0,
-            'above 6 months': subtotal_df['above 6 months'].sum(),
-            '% above 6 months': (subtotal_df['above 6 months'].sum() / subtotal_df['Total'].sum() * 100) if subtotal_df['Total'].sum() > 0 else 0,
-            'Total': subtotal_df['Total'].sum()
-        }], index=['Grand_Total'])
-        tti_combined = pd.concat([tti_combined, total_row]).reset_index(drop=True)
+#         tbl1 = (
+#             GT(auri_overview)
+#             .fmt_number(columns=['Audit results processed', 'Audit results pending', 'Total'], decimals=0)
+#             .fmt_percent(columns=['% Audit results processed', '% Audit results pending'], decimals=1, scale_values=False)
+#         )
+#         tbl1 = apply_table_styling(tbl1, table_type="auri_overview", params=report_params)
 
-        tbl2 = (
-            GT(tti_combined)
-            .fmt_number(columns=['0-6 months', 'above 6 months', 'Total'], decimals=0)
-            .fmt_percent(columns=['% total (0-6 months)', '% above 6 months'], decimals=1, scale_values=False)
-        )
-        tbl2 = apply_table_styling(tbl2, table_type="tti_combined", params=report_params)
+#         # Table 2: TTI Combined (Closed and Open Projects)
+#         tti_closed = tti_closed_projects_df(auri_df, current_year)
+#         tti_open = tti_open_projects_df(auri_df, current_year)
+#         tti_combined = pd.concat([tti_closed, tti_open]).reset_index(drop=True)
 
-        # Table 3: Negative Adjustments
-        negative_adj = negative_adjustments_df(auri_df)
-        # tbl3 = (
-        #     GT(negative_adj)
-        #     .fmt_number(columns=[
-        #         'Total No. of AURIs', 'Processed No. of AURIs', 'Pending No. of AURIs'
-        #     ], decimals=0)
-        #     .fmt_number(columns=[
-        #         'Total Adjustment Amount (AUDEX)', 'Processed Adjustment Amount (AUDEX)', 'Pending Adjustment Amount (AUDEX)'
-        #     ], decimals=2, use_seps=True)
-        #     .tab_spanner(
-        #         label="Audit results processed",
-        #         columns=["Processed No. of AURIs", "Processed Adjustment Amount (AUDEX)"]
-        #     )
-        #     .tab_spanner(
-        #         label="Audit results pending implementation",
-        #         columns=["Pending No. of AURIs", "Pending Adjustment Amount (AUDEX)"]
-        #     )
-        #     .tab_spanner(
-        #         label="Total Negative Adjustments",
-        #         columns=["Total No. of AURIs", "Total Adjustment Amount (AUDEX)"]
-        #     )
-        #     .cols_label(
-        #         Source="Source",
-        #         **{
-        #             "Processed No. of AURIs": "No. of AURIs",
-        #             "Processed Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
-        #             "Pending No. of AURIs": "No. of AURIs",
-        #             "Pending Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
-        #             "Total No. of AURIs": "No. of AURIs",
-        #             "Total Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)"
-        #         }
-        #     )
-        # )
-        def get_negative_adjustments_config():
+#         # Add grand total row
+#         subtotal_df = tti_combined[tti_combined['Adjustment Type'].isin(['Closed Projects', 'On-going Projects'])]
+#         total_row = pd.DataFrame([{
+#             'Adjustment Type': 'Total',
+#             '0-6 months': subtotal_df['0-6 months'].sum(),
+#             '% total (0-6 months)': (subtotal_df['0-6 months'].sum() / subtotal_df['Total'].sum() * 100) if subtotal_df['Total'].sum() > 0 else 0,
+#             'above 6 months': subtotal_df['above 6 months'].sum(),
+#             '% above 6 months': (subtotal_df['above 6 months'].sum() / subtotal_df['Total'].sum() * 100) if subtotal_df['Total'].sum() > 0 else 0,
+#             'Total': subtotal_df['Total'].sum()
+#         }], index=['Grand_Total'])
+#         tti_combined = pd.concat([tti_combined, total_row]).reset_index(drop=True)
+
+#         tbl2 = (
+#             GT(tti_combined,rowname_col="Adjustment Type")
+#             .fmt_number(columns=['0-6 months', 'above 6 months', 'Total'], decimals=0)
+#             .fmt_percent(columns=['% total (0-6 months)', '% above 6 months'], decimals=1, scale_values=False)
+#         )
+#         tbl2 = apply_table_styling(tbl2, table_type="tti_combined", params=report_params)
+
+#         # Table 3: Negative Adjustments
+#         negative_adj = negative_adjustments_df(auri_df)
+       
+#         def get_negative_adjustments_config():
+#             """Get spanner configuration for negative adjustments table."""
+#             return {
+#                 'spanners': [
+#                     {
+#                         'label': 'Audit results processed',
+#                         'columns': ['Processed No. of AURIs', 'Processed Adjustment Amount (AUDEX)']
+#                     },
+#                     {
+#                         'label': 'Audit results pending implementation',
+#                         'columns': ['Pending No. of AURIs', 'Pending Adjustment Amount (AUDEX)']
+#                     },
+#                     {
+#                         'label': 'Total Negative Adjustments',
+#                         'columns': ['Total No. of AURIs', 'Total Adjustment Amount (AUDEX)']
+#                     }
+#                 ],
+#                 'format_config': [
+#                     {
+#                         'type': 'number',
+#                         'columns': ['Total No. of AURIs', 'Processed No. of AURIs', 'Pending No. of AURIs'],
+#                         'decimals': 0
+#                     },
+#                     {
+#                         'type': 'number',
+#                         'columns': [
+#                             'Total Adjustment Amount (AUDEX)', 
+#                             'Processed Adjustment Amount (AUDEX)', 
+#                             'Pending Adjustment Amount (AUDEX)'
+#                         ],
+#                         'decimals': 2,
+#                         'use_seps': True
+#                     }
+#                 ]
+#             }
+
+#         spanner_config = get_negative_adjustments_config()
+#         # tbl3 = create_styled_table_with_spanners(negative_adj, 'negative_adj', spanner_config, report_params)
+#         tbl3 = create_styled_table_with_spanners(
+#             negative_adj, 
+#             'negative_adj', 
+#             spanner_config, 
+#             report_params,
+#             rowname_col="Source"  # <-- ADD THIS ARGUMENT
+#         )
+#         # Then add the column labels
+#         tbl3 = tbl3.cols_label(
+#             Source="Source",
+#             **{
+#                 "Processed No. of AURIs": "No. of AURIs",
+#                 "Processed Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
+#                 "Pending No. of AURIs": "No. of AURIs",
+#                 "Pending Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
+#                 "Total No. of AURIs": "No. of AURIs",
+#                 "Total Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)"
+#             }
+#         )
+      
+#         # Table 4: Deviations
+#         deviations = deviations_df(auri_df, current_year)
+#         tbl4 = (
+#             GT(deviations)
+#             .fmt_number(columns=['Count of AURI'], decimals=0)
+#             .fmt_number(columns=['AUDEX_TOTAL_COST_ADJUSTMENT', 'DEVIATION_AMOUNT', 'AURI_COST_ADJUSTMENTS'], decimals=2, use_seps=True)
+#             .cols_label(
+#                 BENEFICIARY="Beneficiary",
+#                 PROJECT_NUMBER="Project Number",
+#                 ACRONYM="Acronym",
+#                 AURI_DEVIATION_COMMENT="AURI Deviation Comment",
+#                 AUDEX_TOTAL_COST_ADJUSTMENT="Audex Total Cost Adjustment",
+#                 DEVIATION_AMOUNT="Deviation Amount",
+#                 AURI_COST_ADJUSTMENTS="AURI Cost Adjustments"
+#             )
+#         )
+#         tbl4 = apply_table_styling(tbl4, table_type="deviations", params=report_params)
+
+#         # Table 5: Implementation Comparison
+#         impl_comparison = implementation_comparison_df(auri_df, cutoff, months_scope)
+#         current_lab = impl_comparison.columns[1].split(" ", 1)[0]
+#         prev_lab = impl_comparison.columns[4].split(" ", 1)[0]
+
+#         stub_width=300
+#         # Calculate table width
+#         base_width_per_column = 80
+#         data_columns = impl_comparison.columns[1:].tolist()
+#         table_width = f"{stub_width + (len(data_columns) * base_width_per_column)}px"
+
+#         tbl5 = (
+#             GT(impl_comparison, rowname_col="Indicator")
+#             .tab_options(
+#                 table_width=table_width
+#             )
+#             .fmt_number(columns=[c for c in impl_comparison.columns if c.endswith("number of cases")], decimals=0)
+#             .fmt_number(columns=[c for c in impl_comparison.columns if c.endswith("in €")], decimals=2, use_seps=True)
+#             .fmt_percent(columns=[c for c in impl_comparison.columns if c.endswith("% cases")], decimals=1, scale_values=False)
+#             .tab_spanner(label=current_lab, columns=[c for c in impl_comparison.columns if c.startswith(current_lab)])
+#             .tab_spanner(label=prev_lab, columns=[c for c in impl_comparison.columns if c.startswith(prev_lab)])
+#         )
+#         tbl5 = apply_table_styling(
+#             tbl5,
+#             table_type="participation_impl",
+#             df_columns=list(impl_comparison.columns),
+#             params = report_params
+#         )
+
+#         # Table 6: Recovery Activity
+#         ro_activity = _recovery_activity_df(ro_df, current_year)
+#         tbl6 = (
+#             GT(ro_activity, rowname_col="Reason", groupname_col="Row group")
+#             .fmt_number(columns=[c for c in ro_activity.columns if c.startswith("Number")], decimals=0)
+#             .fmt_number(columns=[c for c in ro_activity.columns if c.startswith("Amount")], decimals=2, use_seps=True)
+#             .tab_spanner(label="H2020", columns=[c for c in ro_activity.columns if "H2020" in c])
+#             .tab_spanner(label="HEU", columns=[c for c in ro_activity.columns if "HEU" in c])
+#             .tab_spanner(label="Total", columns=[c for c in ro_activity.columns if "Total" in c])
+#         )
+#         tbl6 = apply_table_styling(
+#             tbl6,
+#             table_type="ro_activity",
+#             df_columns=list(ro_activity.columns),
+#             params = report_params
+#         )
+
+#         # Save to database if requested
+#         results = {
+#             'auri_overview': auri_overview,
+#             'tti_combined': tti_combined,
+#             'negative_adjustments': negative_adj,
+#             'deviations': deviations,
+#             'implementation_comparison': impl_comparison,
+#             'recovery_activity': ro_activity
+#         }
+        
+#         table_configs = {
+#             'auri_overview': {
+#                 "stub_width": 300,
+#                 "summary_row_count": 1  # <-- ADD THIS LINE
+#             },
+#             'tti_combined': {
+#                 "stub_width": 250,
+#                 # NEW: Identify rows that act as group headers
+#                 "group_like_rows": ['Closed Projects', 'On-going Projects'],
+#                 # NEW: Specify how many summary rows are at the bottom
+#                 "summary_row_count": 1 
+#             },
+#             'negative_adjustments': {"has_spanners": True, "stub_width": 150},
+#             'deviations': {
+#                 "stub_width": 200, 
+#                 "base_width_per_column": 110,
+#                 "wrap_text_column": "AURI_DEVIATION_COMMENT",
+#                 "chars_per_line": 45  # <-- ADD THIS FOR FINE-TUNING
+#             },
+#             'implementation_comparison': {"has_spanners": True, "stub_width": 300},
+#             'recovery_activity': {
+#                 "has_spanners": True,
+#                 "has_groups": True,
+#                 "group_col_name": "Row group",
+#                 "stub_width": 200,
+#                 # This now uses the 'current_year' variable to build the strings
+#                 "special_rows_in_group": [
+#                     f'Total RO cashed in {current_year}', 
+#                     f'Total RO issued in {current_year}'
+#                 ]
+#             }
+#         }
+#         if save_to_db:
+#             tables_to_save = [
+#                 ('auri_overview', auri_overview, tbl1),
+#                 ('tti_combined', tti_combined, tbl2),
+#                 ('negative_adjustments', negative_adj, tbl3),
+#                 ('deviations', deviations, tbl4),
+#                 ('implementation_comparison', impl_comparison, tbl5),
+#                 ('recovery_activity', ro_activity, tbl6)
+#             ]
+#             for var_name, df_value, gt_table in tables_to_save:
+#                 try:
+#                     # Step 1: Get the specific configuration for the current table
+#                     config = table_configs.get(var_name, {})
+                    
+#                     # Step 2: Calculate the dimensions in pixels for THIS table
+#                     table_width_px, table_height_px = calculate_table_dimensions(df_value, config)
+                    
+#                     # Step 3: APPLY THE CALCULATED WIDTH to the Great Tables object
+#                     # This is the crucial step that was missing.
+#                     gt_table = gt_table.tab_options(table_width=f"{table_width_px}px")
+                    
+#                     logger.debug(f"Saving {var_name} with width={table_width_px}px height={table_height_px}px")
+                    
+#                     # Step 4: Pass the MODIFIED gt_table and pixel dimensions to the database
+#                     insert_variable(
+#                         report=report,
+#                         module="AuritModule",
+#                         var=var_name,
+#                         value=df_value.to_dict(orient='records'),
+#                         db_path=db_path,
+#                         anchor=var_name,
+#                         gt_table=gt_table,  # Pass the updated table
+#                         simple_gt_save=True,
+#                         table_width=table_width_px,
+#                         table_height=table_height_px,
+#                     )
+#                     logger.debug(f"Saved {var_name} to database")
+#                 except Exception as e:
+#                     logger.error(f"Failed to save {var_name}: {str(e)}", exc_info=True)
+
+#         logger.info("AURI report generation finished successfully.")
+#         return results
+    
+#     except Exception as e:
+#             logger.error(f"Failed to save to generate auri reports", exc_info=True)
+
+# In auri_builder.py
+
+def get_negative_adjustments_config():
             """Get spanner configuration for negative adjustments table."""
             return {
                 'spanners': [
@@ -1209,132 +1386,202 @@ def generate_auri_report(
                 ]
             }
 
-        spanner_config = get_negative_adjustments_config()
-        tbl3 = create_styled_table_with_spanners(negative_adj, 'negative_adj', spanner_config, report_params)
-        # Then add the column labels
-        tbl3 = tbl3.cols_label(
-            Source="Source",
-            **{
-                "Processed No. of AURIs": "No. of AURIs",
-                "Processed Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
-                "Pending No. of AURIs": "No. of AURIs",
-                "Pending Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)",
-                "Total No. of AURIs": "No. of AURIs",
-                "Total Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)"
-            }
-        )
-        # tbl3 = apply_table_styling(tbl3, table_type="negative_adj", params=report_params)
+# --- FINAL, REFACTORED MAIN FUNCTION ---
+def generate_auri_report(
+    conn: sqlite3.Connection,
+    cutoff: pd.Timestamp,
+    alias: str,
+    report: str,
+    db_path: Path,
+    report_params: dict,
+    save_to_db: bool = True,
+    export_dir: Path | None = None
+) -> dict:
+    """
+    Generate AURI report tables using a robust, definition-driven, and correctly-sized pattern.
+    """
+    logger = logging.getLogger("Auri")
+    logger.info("Starting AURI report generation")
+
+    try:
+        # --- 1. Initial Setup ---
+        months_scope = get_months_in_scope(cutoff)
+        current_year = determine_epoch_year(cutoff)
         
+        # --- 2. Load all necessary data once ---
+        auri_df = load_auri_data(db_path, cutoff, current_year, months_scope)
+        ro_df = fetch_latest_table_data(conn, "c0_ro_yearly_overview", cutoff)
 
-        # Table 4: Deviations
-        deviations = deviations_df(auri_df, current_year)
-        tbl4 = (
-            GT(deviations)
-            .fmt_number(columns=['Count of AURI'], decimals=0)
-            .fmt_number(columns=['AUDEX_TOTAL_COST_ADJUSTMENT', 'DEVIATION_AMOUNT', 'AURI_COST_ADJUSTMENTS'], decimals=2, use_seps=True)
-            .cols_label(
-                BENEFICIARY="Beneficiary",
-                PROJECT_NUMBER="Project Number",
-                ACRONYM="Acronym",
-                AURI_DEVIATION_COMMENT="AURI Deviation Comment",
-                AUDEX_TOTAL_COST_ADJUSTMENT="Audex Total Cost Adjustment",
-                DEVIATION_AMOUNT="Deviation Amount",
-                AURI_COST_ADJUSTMENTS="AURI Cost Adjustments"
-            )
-        )
-        tbl4 = apply_table_styling(tbl4, table_type="deviations", params=report_params)
+        if auri_df.empty:
+            logger.warning("No AURI data loaded; report will be empty.")
+            return {}
 
-        # Table 5: Implementation Comparison
-        impl_comparison = implementation_comparison_df(auri_df, cutoff, months_scope)
-        current_lab = impl_comparison.columns[1].split(" ", 1)[0]
-        prev_lab = impl_comparison.columns[4].split(" ", 1)[0]
-        tbl5 = (
-            GT(impl_comparison, rowname_col="Indicator")
-            .fmt_number(columns=[c for c in impl_comparison.columns if c.endswith("number of cases")], decimals=0)
-            .fmt_number(columns=[c for c in impl_comparison.columns if c.endswith("in €")], decimals=2, use_seps=True)
-            .fmt_percent(columns=[c for c in impl_comparison.columns if c.endswith("% cases")], decimals=1, scale_values=False)
-            .tab_spanner(label=current_lab, columns=[c for c in impl_comparison.columns if c.startswith(current_lab)])
-            .tab_spanner(label=prev_lab, columns=[c for c in impl_comparison.columns if c.startswith(prev_lab)])
-        )
-        tbl5 = apply_table_styling(
-            tbl5,
-            table_type="participation_impl",
-            df_columns=list(impl_comparison.columns),
-            params = report_params
-        )
-
-        # Table 6: Recovery Activity
-        ro_activity = _recovery_activity_df(ro_df, current_year)
-        tbl6 = (
-            GT(ro_activity, rowname_col="Reason", groupname_col="Row group")
-            .fmt_number(columns=[c for c in ro_activity.columns if c.startswith("Number")], decimals=0)
-            .fmt_number(columns=[c for c in ro_activity.columns if c.startswith("Amount")], decimals=2, use_seps=True)
-            .tab_spanner(label="H2020", columns=[c for c in ro_activity.columns if "H2020" in c])
-            .tab_spanner(label="HEU", columns=[c for c in ro_activity.columns if "HEU" in c])
-            .tab_spanner(label="Total", columns=[c for c in ro_activity.columns if "Total" in c])
-        )
-        tbl6 = apply_table_styling(
-            tbl6,
-            table_type="ro_activity",
-            df_columns=list(ro_activity.columns),
-            params = report_params
-        )
-
-        # Save to database if requested
-        results = {
-            'auri_overview': auri_overview,
-            'tti_combined': tti_combined,
-            'negative_adjustments': negative_adj,
-            'deviations': deviations,
-            'implementation_comparison': impl_comparison,
-            'recovery_activity': ro_activity
-        }
-
+        # --- 3. THE DEFINITIVE TABLE DEFINITIONS ---
+        TABLE_DEFINITIONS = [
+            {
+                "name": "auri_overview",
+                "builder_func": lambda: auri_overview_df(auri_df),
+                "gt_kwargs": {"rowname_col": "Source"},
+                "styling_config": {"rows_to_style": ["Total"]},
+                "sizing_config": {"stub_width": 300, "summary_row_count": 1},
+                "formatters": [
+                    {"method": "fmt_number", "kwargs": {"columns": ['Audit results processed', 'Audit results pending', 'Total'], "decimals": 0}},
+                    {"method": "fmt_percent", "kwargs": {"columns": ['% Audit results processed', '% Audit results pending'], "decimals": 1, "scale_values": False}}
+                ]
+            },
+            {
+                "name": "tti_combined",
+                "builder_func": lambda: build_tti_combined_df(auri_df, current_year), # Use new builder
+                "gt_kwargs": {"rowname_col": "Adjustment Type"},
+                "styling_config": {"rows_to_style": ["Closed Projects", "On-going Projects", "Total"]},
+                 "sizing_config": {
+                    "stub_width": 250,
+                    "group_like_rows": ['Closed Projects', 'On-going Projects'],
+                    "summary_row_count": 1,
+                    "group_row_height": 60,
+                    "summary_row_height": 60  # <-- INCREASE THIS VALUE FROM 50 to 60
+                },
+                "formatters": [
+                    {"method": "fmt_number", "kwargs": {"columns": ['0-6 months', 'above 6 months', 'Total'], "decimals": 0}},
+                    {"method": "fmt_percent", "kwargs": {"columns": ['% total (0-6 months)', '% above 6 months'], "decimals": 1, "scale_values": False}}
+                ]
+            },
+           {
+                "name": "negative_adjustments",
+                "builder_func": lambda: negative_adjustments_df(auri_df),
+                "gt_kwargs": {"rowname_col": "Source"},
+                "styling_config": {"rows_to_style": ["Total"]},
+                "sizing_config": {"has_spanners": True, "stub_width": 150, "summary_row_count": 1, "total_width_override": 1400},
+                # FIX: Spanner logic is now handled by the generic spanner key below
+                "spanners": get_negative_adjustments_config().get('spanners', []),
+                # FIX: Formatting is now handled by the generic formatters key
+                "formatters": get_negative_adjustments_config().get('format_config', [])
+            },
+            {
+                "name": "deviations",
+                "builder_func": lambda: deviations_df(auri_df, current_year),
+                "gt_kwargs": {"rowname_col": "BENEFICIARY"},
+                "styling_config": {"rows_to_style": ["TOTAL"]},
+                 "sizing_config": {
+                        "stub_width": 200, 
+                        "base_width_per_column": 120,
+                        "wrap_text_column": "AURI_DEVIATION_COMMENT",
+                        "chars_per_line": 38,
+                        "line_height": 24,
+                        "row_height": 50,
+                        "summary_row_count": 1
+                    },
+                "formatters": [
+                    {"method": "fmt_number", "kwargs": {"columns": ['Count of AURI'], "decimals": 0}},
+                    {"method": "fmt_number", "kwargs": {"columns": ['AUDEX_TOTAL_COST_ADJUSTMENT', 'DEVIATION_AMOUNT', 'AURI_COST_ADJUSTMENTS'], "decimals": 2, "use_seps": True}}
+                ],
+                "rename_cols_from_snake_case": True  # <-- ADD THIS NEW KEY
+            },
+             {
+                "name": "implementation_comparison",
+                "builder_func": lambda: implementation_comparison_df(auri_df, cutoff, months_scope),
+                "gt_kwargs": {"rowname_col": "Indicator"},
+                "styling_config": {"rows_to_style": ["Total participation implemented"]},
+                "sizing_config": {
+                    "has_spanners": True, "stub_width": 350, "summary_row_count": 1, 
+                    "base_width_per_column": 100, 
+                    "summary_row_height": 50 # FIX: Increase height for the bolded total row
+                },
+                # FIX: Define spanners here so they can be styled
+                "spanners": lambda df: [
+                    {'label': df.columns[1].split(" ", 1)[0], 'columns': [c for c in df.columns if c.startswith(df.columns[1].split(" ", 1)[0])]},
+                    {'label': df.columns[4].split(" ", 1)[0], 'columns': [c for c in df.columns if c.startswith(df.columns[4].split(" ", 1)[0])]}
+                ],
+                "formatters": [
+                    {"method": "fmt_number", "kwargs": {"columns": lambda df: [c for c in df.columns if c.endswith("number of cases")], "decimals": 0}},
+                    {"method": "fmt_number", "kwargs": {"columns": lambda df: [c for c in df.columns if c.endswith("in €")], "decimals": 2, "use_seps": True}},
+                    {"method": "fmt_percent", "kwargs": {"columns": lambda df: [c for c in df.columns if c.endswith("% cases")], "decimals": 1, "scale_values": False}}
+                ]
+            },
+            {
+                "name": "recovery_activity",
+                "builder_func": lambda: _recovery_activity_df(ro_df, current_year),
+                "gt_kwargs": {"rowname_col": "Reason", "groupname_col": "Row group"},
+                "styling_config": {"rows_to_style": [f'Total RO cashed in {current_year}', f'Total RO issued in {current_year}']},
+                "sizing_config": {"has_spanners": True, "has_groups": True, "group_col_name": "Row group", "stub_width": 200, "group_header_height": 45, "group_row_height": 55, "normal_row_height": 45, "special_rows_in_group": [f'Total RO cashed in {current_year}', f'Total RO issued in {current_year}']},
+                 # FIX: Define spanners here so they can be styled
+                "spanners": [
+                    {'label': "H2020", 'columns': lambda df: [c for c in df.columns if "H2020" in c]},
+                    {'label': "HEU", 'columns': lambda df: [c for c in df.columns if "HEU" in c]},
+                    {'label': "Total", 'columns': lambda df: [c for c in df.columns if "Total" in c]}
+                ],
+                "formatters": [
+                    {"method": "fmt_number", "kwargs": {"columns": lambda df: [c for c in df.columns if c.startswith("Number")], "decimals": 0}},
+                    {"method": "fmt_number", "kwargs": {"columns": lambda df: [c for c in df.columns if c.startswith("Amount")], "decimals": 2, "use_seps": True}}
+                ]
+            }
+        ]
+ 
+        # --- 4. Process all tables using their definitions ---
+        results = {}
         if save_to_db:
-            for var_name, value, table in [
-                ('auri_overview', auri_overview, tbl1),
-                ('tti_combined', tti_combined, tbl2),
-                ('negative_adjustments', negative_adj, tbl3),
-                ('deviations', deviations, tbl4),
-                ('implementation_comparison', impl_comparison, tbl5),
-                ('recovery_activity', ro_activity, tbl6)
-            ]:
+            for definition in TABLE_DEFINITIONS:
+                var_name = definition["name"]
+                logger.info(f"Processing table: {var_name}")
                 try:
-                    logger.debug(f"Saving {var_name} to database")
+                    df_value = definition["builder_func"]()
+                    results[var_name] = df_value
+                    
+                    gt_table = GT(df_value, **definition.get("gt_kwargs", {}))
+
+                    # FIX: Apply spanners BEFORE styling
+                    spanners = definition.get("spanners", [])
+                    if callable(spanners):
+                        spanners = spanners(df_value)
+                    for spanner in spanners:
+                        # Handle dynamic column selectors in spanners
+                        if callable(spanner.get('columns')):
+                            spanner['columns'] = spanner['columns'](df_value)
+                        gt_table = gt_table.tab_spanner(label=spanner['label'], columns=spanner['columns'])
+
+                    # Apply formatters
+                    formatters = definition.get("formatters", [])
+                    for rule in formatters:
+                        # Handle type for negative_adjustments special case
+                        if rule.get('type'):
+                            method_name = f"fmt_{rule['type']}"
+                            kwargs = {k: v for k, v in rule.items() if k != 'type'}
+                        else:
+                            method_name = rule["method"]
+                            kwargs = rule["kwargs"].copy()
+
+                        if callable(kwargs.get("columns")):
+                            kwargs["columns"] = kwargs["columns"](df_value)
+                        gt_table = getattr(gt_table, method_name)(**kwargs)
+                    
+                    # Special column labeling for negative_adjustments
+                    if var_name == 'negative_adjustments':
+                         gt_table = gt_table.cols_label(Source="Source", **{"Processed No. of AURIs": "No. of AURIs", "Processed Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)", "Pending No. of AURIs": "No. of AURIs", "Pending Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)", "Total No. of AURIs": "No. of AURIs", "Total Adjustment Amount (AUDEX)": "Adjustment Amount (AUDEX)"})
+
+                    # Rename columns from snake_case if requested
+                    if definition.get("rename_cols_from_snake_case"):
+                        rename_dict = {col: col.replace('_', ' ').title() for col in df_value.columns}
+                        gt_table = gt_table.cols_label(**rename_dict)
+
+                    # Apply common styling (now that spanners exist)
+                    gt_table = apply_table_styling(gt_table, definition["styling_config"], report_params)
+                    
+                    # Calculate dimensions and apply width
+                    table_width_px, table_height_px = calculate_table_dimensions(df_value, definition.get("sizing_config", {}))
+                    gt_table = gt_table.tab_options(table_width=f"{table_width_px}px")
+                    
                     insert_variable(
-                        report=report,
-                        module="AuritModule",
-                        var=var_name,
-                        value=value.to_dict() if isinstance(value, pd.DataFrame) else value,
-                        db_path=db_path,
-                        anchor=var_name,
-                        gt_table=table
+                        report=report, module="AuritModule", var=var_name,
+                        value=df_value.to_dict(orient='records'), db_path=db_path, anchor=var_name,
+                        gt_table=gt_table, simple_gt_save=True,
+                        table_width=table_width_px, table_height=table_height_px
                     )
-                    logger.debug(f"Saved {var_name} to database")
                 except Exception as e:
-                    logger.error(f"Failed to save {var_name}: {str(e)}")
+                    logger.error(f"Failed to process and save table '{var_name}': {e}", exc_info=True)
 
-        # Export to HTML files if export_dir is provided
-        if export_dir:
-            export_dir.mkdir(parents=True, exist_ok=True)
-            for var_name, table in [
-                ('auri_overview', tbl1),
-                ('tti_combined', tbl2),
-                ('negative_adjustments', tbl3),
-                ('deviations', tbl4),
-                ('implementation_comparison', tbl5),
-                ('recovery_activity', tbl6)
-            ]:
-                try:
-                    output_path = export_dir / f"{var_name}.html"
-                    table.to_html(output_path)
-                    logger.debug(f"Exported {var_name} to {output_path}")
-                except Exception as e:
-                    logger.error(f"Failed to export {var_name}: {str(e)}")
-
-        logger.info("AURI report generation complete")
+        logger.info("AURI report generation finished successfully.")
         return results
-
+    
     except Exception as e:
-        logger.error(f"Error in generate_amendments_report: {str(e)}", exc_info=True)
-        raise
+        logger.error(f"A fatal error occurred during report generation: {e}", exc_info=True)
+        return {}
