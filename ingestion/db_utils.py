@@ -1264,7 +1264,7 @@ def get_variable_status(report_name, db_path):
     try:
         # Query all relevant columns including module_name, except gt_image (BLOB)
         df = pd.read_sql_query('''
-            SELECT var_name, module_name, value, created_at,
+            SELECT var_name, module_name, value,anchor_name, created_at,
                    julianday('now') - julianday(created_at) as age_days
             FROM report_variables
             WHERE report_name = ?
