@@ -661,6 +661,8 @@ def generate_amendments_report(
             locations=loc.body(rows=[-1])
         )
 
+        .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
+
         # Footer styling
         .tab_source_note("Source: Compass")
         .tab_source_note("Report: Amendments Report")
@@ -790,6 +792,7 @@ def generate_amendments_report(
                         loc.stub(rows=total_rows_indices )
                     ]
                 )
+                .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
 
                 # Footer styling
                 .tab_source_note("Source: Compass")
@@ -890,6 +893,7 @@ def generate_amendments_report(
                     style=[style.fill(color=SUB_TOTAL_BACKGROUND), style.text(color=DARK_BLUE, weight="bold")],
                     locations=loc.stub(rows=pivot_tta.index[pivot_tta["Month"] == "Total"].tolist())
                 )
+                .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
 
                 # Footer styling
                 .tab_source_note("Source: Compass")
@@ -991,6 +995,7 @@ def generate_amendments_report(
                     style=[style.fill(color=SUB_TOTAL_BACKGROUND), style.text(color=DARK_BLUE, weight="bold")],
                     locations=loc.stub(rows=cases_df.index[cases_df["DESCRIPTION"] == "Total"].tolist())
                 )
+                .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
 
                 # Footer styling
                 .tab_source_note("Source: Compass")

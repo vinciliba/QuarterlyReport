@@ -1378,6 +1378,15 @@ def quarterly_tables_generation_main(df_paym, cutoff, db_path, report, table_col
                 
                 for pay_type, title in PAYMENT_TYPES.items():
                     var_name = f'{program}_{pay_type}'
+
+                    if pay_type == 'Interim Payments':
+                        anchor_name = f'{program}_Interim_Payments'
+                    elif pay_type == 'Final Payments':
+                        anchor_name = f'{program}_Final_Payments'
+                    elif pay_type == 'Pre-financing':
+                        anchor_name = f'{program}_Pre_Financing'
+                    else:
+                        anchor_name = f'{program}_{pay_type}'            
                     
                     try:
                         # 1. Get table data
@@ -1419,7 +1428,7 @@ def quarterly_tables_generation_main(df_paym, cutoff, db_path, report, table_col
                             var=var_name,
                             value=table_data.to_dict() if isinstance(table_data, pd.DataFrame) else table_data,
                             db_path=db_path,
-                            anchor=var_name,
+                            anchor=anchor_name,
                             gt_table=formatted_table
                         )
                         
@@ -1499,6 +1508,16 @@ def quarterly_tables_generation_main(df_paym, cutoff, db_path, report, table_col
             Returns: (success: bool, message: str)
             """
             var_name = f'{program}_{pay_type}'
+
+            if pay_type == 'Interim Payments':
+                anchor_name = f'{program}_Interim_Payments'
+            elif pay_type == 'Final Payments':
+                anchor_name = f'{program}_Final_Payments'
+            elif pay_type == 'Pre-financing':
+                anchor_name = f'{program}_Pre_Financing'
+            else:
+                anchor_name = f'{program}_{pay_type}'
+
             
             try:
                 # Get data
@@ -1525,7 +1544,7 @@ def quarterly_tables_generation_main(df_paym, cutoff, db_path, report, table_col
                     var=var_name,
                     value=table_data.to_dict() if isinstance(table_data, pd.DataFrame) else table_data,
                     db_path=db_path,
-                    anchor=var_name,
+                    anchor=anchor_name,
                     gt_table=formatted_table
                 )
                 
@@ -2324,7 +2343,7 @@ def generate_ttp_summary_overview (df_paym, cutoff, db_path, report, table_color
                 .tab_style(
                     style=[
                         style.text(color="white", weight="bold"),
-                        style.fill(color=BLUE)
+                        style.fill(color="#004d80")
                     ],
                     locations=loc.column_labels()
                 )
@@ -2340,6 +2359,7 @@ def generate_ttp_summary_overview (df_paym, cutoff, db_path, report, table_color
                     style=style.text(weight="bold"),
                     locations=loc.stub()
                 )
+                .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
             )
         
             return tbl
@@ -2803,7 +2823,7 @@ def generate_ttp_tables (df_paym, cutoff, db_path, report, table_colors, report_
                         row_striping_include_table_body=False,
                         row_striping_include_stub=False
                     )
-                    
+                    .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
                     #Format target columns (percentages) 
                     .fmt_number(
                         columns=ttp_columns,
@@ -2857,6 +2877,16 @@ def generate_ttp_tables (df_paym, cutoff, db_path, report, table_colors, report_
                     is_empty = data['is_empty']
                     
                     var_name = f'Table_ttp_{program}_{payment_type}'
+
+                    if payment_type == 'Interim Payments':
+                        anchor_name = f'{program}_Interim_Payments'
+                    elif payment_type == 'Final Payments':
+                        anchor_name = f'{program}_Final_Payments'
+                    elif payment_type == 'Pre-financing':
+                        anchor_name = f'{program}_Pre_Financing'
+                    else:
+                        anchor_name = f'{program}_{payment_type}'
+
                     
                     # Skip empty tables
                     if table_data is None or (isinstance(table_data, pd.DataFrame) and table_data.empty) or is_empty:
@@ -2903,7 +2933,7 @@ def generate_ttp_tables (df_paym, cutoff, db_path, report, table_colors, report_
                                 var=var_name,
                                 value=table_data_copy.to_dict() if isinstance(table_data_copy, pd.DataFrame) else table_data_copy,
                                 db_path=db_path,
-                                anchor=var_name,
+                                anchor=anchor_name,
                                 gt_table=formatted_table,
                                 simple_gt_save=True  # ← KEY: Use simple save instead of complex retry logic
                             )
@@ -3313,8 +3343,9 @@ def generate_ttp_charts (df_paym, cutoff, db_path, report, table_colors, report_
                         text=f'{prog} {paymentType} - Time to Pay Analysis',
                         fontSize=16,
                         fontWeight='bold',
-                        anchor='start',
-                        color='#1B5390'
+                        color='#1B5390',
+                        align='center',
+                        anchor='middle'
                     )
                 ).resolve_scale(
                     color='independent'
@@ -5783,24 +5814,24 @@ def paym_charts_summary_tables (df_paym, cutoff, db_path, report, table_colors, 
                         dx_comment=-10
                 
                     
-                    # Set up Altair theme
-                    def my_theme():
-                        return {
-                            'config': {
-                                'view': {'continuousHeight': 350, 'continuousWidth': 550},
-                                'range': {'category': {'scheme': colorScheme}},
-                                'title': {
-                                    "fontSize": 18, 
-                                    "font": 'Lato', 
-                                    "anchor": "center",
-                                    'color': BLUE,
-                                    'fontWeight': 'bold'
-                                }
-                            }
-                        }
+                    # # Set up Altair theme
+                    # def my_theme():
+                    #     return {
+                    #         'config': {
+                    #             'view': {'continuousHeight': 350, 'continuousWidth': 550},
+                    #             'range': {'category': {'scheme': colorScheme}},
+                    #             'title': {
+                    #                 "fontSize": 18, 
+                    #                 "font": 'Lato', 
+                    #                 "anchor": "center",
+                    #                 'color': BLUE,
+                    #                 'fontWeight': 'bold'
+                    #             }
+                    #         }
+                    #     }
                     
-                    alt.themes.register('my_theme', my_theme)
-                    alt.themes.enable('my_theme')
+                    # alt.themes.register('my_theme', my_theme)
+                    # alt.themes.enable('my_theme')
                     
                     # Prepare data for consumption bars with legend
                     df_current_renamed = df_current.copy()
@@ -5936,8 +5967,9 @@ def paym_charts_summary_tables (df_paym, cutoff, db_path, report, table_colors, 
                                 text=title_text,
                                 fontSize=16,
                                 fontWeight='bold',
-                                anchor='start',
-                                color='#1B5390'
+                                color='#1B5390',
+                                align='center',
+                                anchor='middle'
                             )
                         ).resolve_scale(
                             color='independent'
@@ -5950,8 +5982,9 @@ def paym_charts_summary_tables (df_paym, cutoff, db_path, report, table_colors, 
                                 text= title_text,
                                 fontSize=16,
                                 fontWeight='bold',
-                                anchor='start',
-                                color='#1B5390'
+                                color='#1B5390',
+                                align='center',
+                                anchor='middle'
                             )
                         ).resolve_scale(
                             color='independent'

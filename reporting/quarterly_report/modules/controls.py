@@ -292,7 +292,7 @@ class ControlsModule(BaseModule):
 
             df_mon['Due Date Period'] = df_mon['days_diff'].apply(categorize_due_date)
 
-            df_mon.to_excel('df_mon.xlsx')
+            # df_mon.to_excel('df_mon.xlsx')
 
             # Create the pivot table
             pivot_table = pd.pivot_table(

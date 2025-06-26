@@ -552,6 +552,7 @@ def process_granting_data(
                 ],
                 locations=loc.stub()
             )
+            .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
       
             # BODY
             .fmt_percent(
@@ -640,6 +641,7 @@ def process_granting_data(
                 decimals=1,
                 accounting=False
             )
+            .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
             # Source notes
             .tab_source_note("Source: Compass")
             .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
@@ -714,6 +716,7 @@ def process_granting_data(
                 rows=["Completion Rate"],  # or use `where` with a condition
                 decimals=1
             )
+            .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
             # Source notes
             .tab_source_note("Source: Compass")
             .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
@@ -751,14 +754,14 @@ def process_granting_data(
                     table_background_color="#ffffff",
                     table_font_color=DARK_BLUE
                 )
-                .tab_style(
-                    style=style.borders(sides="all", color="#cccccc", weight="1px"),
-                    locations=loc.body()
-                )
-                .tab_style(
-                    style=style.borders(sides="all", color="#ffffff", weight="2px"),
-                    locations=loc.column_labels()
-                )
+            .tab_style(
+                style=style.borders(sides="all", color="#cccccc", weight="1px"),
+                locations=loc.body()
+            )
+            .tab_style(
+                style=style.borders(sides="all", color="#ffffff", weight="2px"),
+                locations=loc.column_labels()
+            )
 
             # Header and stub styling
             .tab_style(
@@ -790,6 +793,7 @@ def process_granting_data(
                 rows=["Completion Rate"],  # or use `where` with a condition
                 decimals=1
             )
+            .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
             # Source notes
             .tab_source_note("Source: Compass")
             .tab_source_note("Reports: Budgetary Execution Details - Call Overview Report")
@@ -867,7 +871,8 @@ def process_granting_data(
             style.text(size = 'small'),
             
             loc.body()
-        )
+            )
+            .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
             # BODY
             .fmt_percent(
                 columns=["Completion_Rate"],  # or use `where` with a condition
@@ -1311,6 +1316,7 @@ def build_po_exceeding_FDI_tb_3c(df_summa: pd.DataFrame, current_year: int, cuto
                 style=[style.text(size="small")],
                 locations=loc.footer()
             )
+            .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
         )
     else:
         log.warning("No data to display for table 3c.")
@@ -1600,6 +1606,7 @@ def build_signatures_table(
                     style=[style.text(size="small")],
                     locations=loc.footer()
                 )
+                .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
             )
         else:
             tbl = None
@@ -1945,6 +1952,7 @@ def build_commitments_table(
                     style=[style.text(size="small")],
                     locations=loc.footer()
                 )
+                .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
             )
         else:
             tbl = None

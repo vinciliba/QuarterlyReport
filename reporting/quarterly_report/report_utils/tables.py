@@ -241,23 +241,7 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
                     ],
                     locations=loc.header()
                 )
-                # Grid lines
-                # .tab_style(
-                #     style=style.borders(weight="1px", color=DARK_BLUE),
-                #     locations=loc.stub()
-                # )
-                # .tab_style(
-                #     style=style.borders(sides=["all"], color=DARK_BLUE, weight='1px'),
-                #     locations=loc.body()
-                # )
-                # .tab_style(
-                #     style=style.borders(color=DARK_BLUE, weight='2px'),
-                #     locations=loc.column_labels()
-                # )
-                # .tab_style(
-                #     style=style.borders(color=DARK_BLUE, weight='2px'),
-                #     locations=loc.stubhead()
-                # )
+   
                 # Style total row
                 .tab_style(
                     style=[style.fill(color="#E6E6FA"), style.text(color=DARK_BLUE, weight="bold")],
@@ -267,12 +251,7 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
                     style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
                     locations=loc.stub(rows=[-1])
                 )
-                # Table borders
-                # .tab_options(table_body_border_bottom_color=DARK_BLUE, table_body_border_bottom_width="2px")
-                # .tab_options(table_border_right_color=DARK_BLUE, table_border_right_width="2px")
-                # .tab_options(table_border_left_color=DARK_BLUE, table_border_left_width="2px")
-                # .tab_options(table_border_top_color=DARK_BLUE, table_border_top_width="2px")
-                # .tab_options(column_labels_border_top_color=DARK_BLUE, column_labels_border_top_width="2px")
+                .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
                 # Source notes
                 .tab_source_note("Source: Summa DataWarehouse")
                 .tab_source_note("BO Report: C0_Budgetary_Execution_Details")
@@ -520,6 +499,7 @@ def build_payment_summary_tables(
                             style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
                             locations=loc.stub(rows=[-1])
                         )
+                        .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
                      
                         .tab_source_note("Source: Summa DataWarehouse")
                         .tab_source_note("BO Report: C0_Budgetary_Execution_Details")
@@ -794,6 +774,7 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
                 style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
                 locations=loc.stub(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
             )
+            .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
       
             .tab_source_note("Source: Summa DataWarehouse")
             .tab_source_note("BO Report: C0_COMMITMENTS_SUMMA")
@@ -954,6 +935,7 @@ def build_commitment_detail_table_2(df: pd.DataFrame, current_year: int, report:
                 style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
                 locations=loc.stub(rows=agg_with_subtotals.index[agg_with_subtotals["FR Fund Reservation Desc"] == "Subtotal"].tolist())
             )
+        .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
    
         .tab_source_note("Source: Summa DataWarehouse")
         .tab_source_note("BO Report: C0_COMMITMENTS_SUMMA")
@@ -1187,11 +1169,13 @@ def build_budget_summary_table(conn, db_path, report, cutoff, table_colors):
                 container_width="100%",
                 column_labels_background_color=BLUE,
                 row_group_background_color=LIGHT_BLUE,
-                # table_body_hlines_style="solid",
-                # table_body_vlines_style="solid",
-                # table_body_border_bottom_color=DARK_BLUE,
-                # table_body_border_bottom_width="2px"
+                heading_title_font_size="medium", 
+                table_font_size='medium',  
+                column_labels_font_size='medium',
+                row_group_font_size='medium', 
+                stub_font_size='medium'
             )
+                            
         )
 
         insert_variable(

@@ -362,6 +362,8 @@ if selected_section == "workflow":
 if selected_section == "export_report":
     from PIL import Image
     from docxtpl import DocxTemplate, InlineImage
+    from jinja2 import Environment, DebugUndefined, meta
+    from docx import Document as DocxDocument
 
     # helper that also fetches raw value (extra query)
     def _fetch_raw_value(report: str, var: str) -> str | None:
@@ -380,8 +382,8 @@ if selected_section == "export_report":
 
     # ---------------- Variable snapshot ----------------
     snap_df = get_variable_status(chosen_report, DB_PATH)
-    # if "anchor_name" in snap_df.columns:
-    #     snap_df = snap_df[["anchor_name"] + [c for c in snap_df.columns if c != "anchor_name"]]
+    if "anchor_name" in snap_df.columns:
+        snap_df = snap_df[["anchor_name"] + [c for c in snap_df.columns if c != "anchor_name"]]
 
     def _age_style(r):
         return ["background-color:#ffd6d6" if r.get("age_days", 0) > 5 else "" for _ in r]
@@ -745,7 +747,6 @@ if selected_section == "export_report":
                 out = Path("app_files") / fname
                 st.session_state.staged_docx.save(out)
                 st.success(f"Saved partial report as {fname} in app_files/")
-                
 #--------------------------------------------------------------------------
 # --- SINGLE UPLOAD -----------------------------------
 #--------------------------------------------------------------------------
