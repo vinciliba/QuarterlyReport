@@ -23,8 +23,10 @@ from ingestion.db_utils import (
     insert_variable
 )
 
-logger=logging.getLogger(__name__)
 
+from pprint import pprint
+
+logger=logging.getLogger(__name__)
 
 # ================================================================
 # 🎯 MODULE CONFIGURATION
@@ -89,13 +91,13 @@ class CommentsConfig:
 
     # Section-specific temperature overrides for balancing creativity and factuality
     SECTION_TEMPERATURE_OVERRIDES = {
-        'intro_summary': 0.2, 'budget_overview': 0.2, 'ttp_performance': 0.2,
+        'intro_summary': 0.4, 'budget_overview': 0.2, 'ttp_performance': 0.2,
         'heu_payment_overview': 0.2, 'h2020_payment_overview': 0.2,
     }
 
     # 🎯 Section Configuration - ✅ CORRECTED to match TemplateSectionMatrix keys
     SINGLE_SECTIONS = [
-        'intro_summary', 
+        'intro_summary'
         # 'budget_overview', 
         # 'granting_process_overview', 
         # 'commitment_budgetary_impact', 
@@ -195,18 +197,22 @@ class CommentsModule(BaseModule):
             row_count = len(next(iter(data.values())))
             rows = []
 
-            
-            VALID_KEYS = [
+            valid_keys = {
                 'Type of Payments',
                 f'Average Net Time to Pay (in days) {current_year}-YTD',
                 f'Average Gross Time to Pay (in days) {current_year}-YTD',
                 f'Target Paid on Time - Contractually {current_year}-YTD',
-            ]
+            }
 
             # Step 1: Convert columnar JSON to row-based records
             for i in range(row_count):
                 # row = {col: data[col].get(str(i)) or data[col].get(i) for col in data}
-                row = {col: data[col].get(str(i)) or data[col].get(i) for col in data if col in VALID_KEYS}
+                row = {
+                    col: data[col].get(str(i)) or data[col].get(i)
+                    for col in data
+                    if col in valid_keys
+                }
+
                 row['index'] = i
                 rows.append(row)
 
@@ -234,13 +240,10 @@ class CommentsModule(BaseModule):
                 if ptype in ['H2020', 'HEU', 'TOTAL']:
                     continue
 
-                # Assign Programme tag
                 if idx < h2020_marker:
                     programme = 'H2020'
-                elif heu_marker < idx < total_marker:
+                elif h2020_marker < idx < heu_marker:
                     programme = 'HEU'
-                else:
-                    programme = None
 
                 if programme:
                     row['Programme'] = programme
@@ -285,22 +288,38 @@ class CommentsModule(BaseModule):
             _parse_safe(report_vars.get('TTP_performance_summary_table')),
             current_year
         )
-        kpis['h2020_ttp_interim'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'H2020' and r.get('Payment_Type') == 'Interim Payments'], 'yearly_avg_ttp', 22.1)
-        kpis['heu_ttp_interim'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'HEU' and r.get('Payment_Type') == 'Interim Payments'], 'yearly_avg_ttp', 15.0)
-        kpis['h2020_ttp_final'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'H2020' and r.get('Payment_Type') == 'Final Payments'], 'yearly_avg_ttp', 48.0)
-        kpis['heu_ttp_final'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'HEU' and r.get('Payment_Type') == 'Final Payments'], 'yearly_avg_ttp', 42.7)
+        
+
+        kpis['h2020_ttp_interim'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'H2020' and r.get('Payment_Type') == 'Interim Payments'], 'yearly_avg_ttp', 'none')
+        # kpis['h2020_ttp_interim_on_time'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'H2020' and r.get('Payment_Type') == 'Interim Payments'], 'on_time_target', 'none')
+
+        kpis['heu_ttp_interim'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'HEU' and r.get('Payment_Type') == 'Interim Payments'], 'yearly_avg_ttp',  'none')
+        # kpis['heu_ttp_interim_on_time'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'HEU' and r.get('Payment_Type') == 'Interim Payments'], 'on_time_target', 'none')
+
+        kpis['h2020_ttp_final'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'H2020' and r.get('Payment_Type') == 'Final Payments'], 'yearly_avg_ttp',  'none')
+        # kpis['h2020_ttp_final_on_time'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'H2020' and r.get('Payment_Type') == 'Final Payments'], 'on_time_target', 'none')
+
+        kpis['heu_ttp_final'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'HEU' and r.get('Payment_Type') == 'Final Payments'], 'yearly_avg_ttp',  'none')
+        # kpis['heu_ttp_final_on_time'] = _safe_get_avg([r for r in (ttp_data or []) if isinstance(r, dict) and r.get('Programme') == 'HEU' and r.get('Payment_Type') == 'Final Payments'], 'on_time_target', 'none')
 
         kpis['h2020_tta_avg'] = _safe_get_avg(_parse_safe(report_vars.get('H2020_tta')), 'TTA', 6.4)
         kpis['heu_tta_avg'] = _safe_get_avg(_parse_safe(report_vars.get('HORIZON_tta')), 'TTA', 6.5)
 
         # --- Amendment Rates & Counts ---
+        
         amend_h2020 = _parse_safe(report_vars.get('H2020_overview'))
+        print("\n📦 DEBUG: Final AMD H2020 Data (after tagging and mapping):")
+        pprint(amend_h2020)
         kpis['h2020_amendment_count'] = _safe_get_count(amend_h2020, 891)
         kpis['h2020_tta_delays'] = _safe_get_sum(amend_h2020, 'Delayed', 4)
         total_signed = _safe_get_sum(amend_h2020, 'Signed', 1)
         kpis['h2020_tta_ontime_rate'] = round((1 - (kpis['h2020_tta_delays'] / total_signed)) * 100, 1) if total_signed > 0 else 99.8
-
+        
+        
+       
         amend_heu = _parse_safe(report_vars.get('HORIZON_overview'))
+        print("\n📦 DEBUG: Final AMD H2020 Data (after tagging and mapping):")
+        pprint(amend_heu)
         kpis['heu_amendment_count'] = _safe_get_count(amend_heu, 329)
         heu_delays = _safe_get_sum(amend_heu, 'Delayed', 0)
         total_heu_signed = _safe_get_sum(amend_heu, 'Signed', 1)
