@@ -251,7 +251,7 @@ def build_commitment_summary_table(df: pd.DataFrame, current_year: int, report: 
                     style=[style.fill(color="#E6E6FA"), style.text(weight="bold")],
                     locations=loc.stub(rows=[-1])
                 )
-                .tab_options( heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
+                .tab_options(heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
                 # Source notes
                 .tab_source_note("Source: Summa DataWarehouse")
                 .tab_source_note("BO Report: C0_Budgetary_Execution_Details")

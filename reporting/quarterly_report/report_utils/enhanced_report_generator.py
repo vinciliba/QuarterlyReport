@@ -175,64 +175,49 @@ class ReportTemplateLibrary:
         # ============================================================
         # 🎯 Executive Summary -
         # ============================================================
-        'executive_summary_template': f"""
-            GRANT MANAGEMENT DEPARTMENT - EXECUTIVE ACHIEVEMENT SUMMARY
-            Period: {quarter_period} {current_year}
-            Generated: {current_date}
+         'contextual_intro_summary_template': f"""
+                **----- BUDGET AND REPORTING TEAM -----**
 
-            **----- Budget and Reporting Team -----**
+                The Grant Management Department achieved significant milestones in {quarter_period} of {current_year}, successfully meeting and exceeding several key targets.
+                Ensuring punctual execution of all payments for H2020 and Horizon Europe (HEU) projects was a priority. By the end of the quarter, the average yearly Time-to-Pay (TTP) was commendably low, with interim payments averaging **{{h2020_ttp_interim}} days** for H2020 and **{{heu_ttp_interim}} days** for HEU, and final payments averaging **{{h2020_ttp_final}} days** for H2020 and **{{heu_ttp_final}} days** for HEU.
 
-            **The Grant Management Department** achieved significant milestones in {quarter_period} {current_year}, successfully meeting and exceeding several key targets.
+                Furthermore, the Time-to-Amend (TTA) metrics showcased exceptional efficiency, averaging **{{h2020_tta_avg}} days** for H2020 and **{{heu_tta_avg}} days** for HEU, both well below the contractual limit of 45 days. This performance resulted in a **{{heu_tta_ontime_rate}}%** on-time amendment rate for HEU and **{{h2020_tta_ontime_rate}}%** for H2020, with only **{{h2020_tta_delays}}** delays recorded out of **{{h2020_amendment_count}}** signed amendments for H2020.
 
-            COMPREHENSIVE PERFORMANCE ANALYSIS:
-            {{prioritized_data_summary}}
+                ### Detailed Breakdown of Activities
 
-            DETAILED WORKFLOW BREAKDOWN AND SUPPORTING METRICS:
-            {{secondary_data_summary}}
+                **Payments:**
+                During this quarter, the department processed a substantial volume of payments: **{{heu_payment_count}}** for Horizon Europe (HEU) and **{{h2020_payment_count}}** for H2020, totaling **€{{heu_payment_total_mil}} million** and **€{{h2020_payment_total_mil}} million** respectively. This effort is on track with the final objective of fully utilizing the payment appropriations allocated to ERCEA for execution. *{{payment_consumption_context}}*
 
-            **Detailed Breakdown of Activities**
+                **Granting:**
+                The granting process for the {int(current_year) - 1} calls was successfully completed as planned, with Time-to-Grant (TTG) metrics of **{{ttg_avg}} days**, significantly below the established targets. Meanwhile, the {current_year} calls have seen a strong start, achieving impressive completion rates of **{{stg_completion_rate}}%** for STG calls and **{{poc_completion_rate}}%** for POC 1 calls.
 
-            The analysis covers:
-            • **Payments:** Volume execution, Time-to-Pay (TTP) performance, appropriation utilization
-            • **Granting:** Time-to-Grant (TTG) metrics, call completion rates, funding milestone achievements
-            • **Amendments:** Processing efficiency, Time-to-Amend (TTA) performance, amendment volume analysis
-            • **Audits:** Recovery implementation, audit completion rates, financial integrity measures
-            • **Other Activities:** Budget compliance, contractual adherence, exceptional cases
+                **Amendments:**
+                In {current_year}, a total of **{{total_amendments_signed}}** amendments were signed, including **{{h2020_amendment_count}}** for H2020 and **{{heu_amendment_count}}** for Horizon Europe. For H2020, most changes were related to reporting periods ({{h2020_amend_type_1}}), followed by changes to action duration ({{h2020_amend_type_2}}). For Horizon Europe, the majority involved changes to Annex I ({{heu_amend_type_1}}).
 
-            **Executive Focus:** Cross-workflow achievements, quantitative performance indicators, strategic accomplishments demonstrating departmental excellence in grant management operations and successful execution of contractual obligations.
+                **Audits:**
+                Audit activities remain robust, with **{{outstanding_audits}}** audits ongoing. The current detected error rate stands at **{{error_rate}}%**. Audit result processing performance (Time-to-Implement) is efficient, averaging **{{tti_avg}} days**. Financially, this quarter saw **€{{neg_adjustment_total_mil}} million** in total negative adjustments and **€{{recovery_total_mil}} million** in recovered amounts, underscoring our commitment to financial integrity.
 
-            Analysis Date: {current_date}
-        """,
+                **Other Activities:**
+                Despite the overall efficiency, there were a few instances of L2 budgetary commitments exceeding their Final Date of Implementation (FDI): **{{fdi_breaches}}** for H2020.
+
+                *Overall, the Grant Management Department's performance in {quarter_period} {current_year} was characterized by timely payments, efficient amendment processing, and proactive audit management. This exemplary performance establishes a strong precedent for the future.*
+            """,
         # ============================================================
         # 💰 BUDGET
         # ============================================================
 
         'budget_overview_template': f"""
-            BUDGET APPROPRIATIONS AND ABSORPTION ANALYSIS
-            Reporting Period: {quarter_period} {current_year}
-            Scope: H2020 and Horizon Europe commitment and payment appropriations
+            Budget Line 01.029901.01 pertains to funds
+            allocated for supporting ERCEA Grant Agreements and Scientific Council
+            activities within the Horizon 2020 programme, while budget line 01.020101
+            relates to funds allocated for Horizon Europe.
+            The tables below provide an overview of the
+            available credits for both commitments and payments, as well as the actual
+            consumption up until the end of the reporting period, in comparison to the
+            available credits.
 
-            BUDGET APPROPRIATIONS OVERVIEW:
-            {{prioritized_data_summary}}
-
-            ABSORPTION PERFORMANCE AND SUPPORTING ANALYSIS:
-            {{secondary_data_summary}}
-
-            **Analysis Framework:**
-            • **Commitment Appropriations:** Available budget, allocation patterns, absorption rates
-            • **Payment Appropriations:** H2020 and HEU payment credit consumption and efficiency
-            • **Absorption Analysis:** Utilization levels, execution rates, remaining available amounts
-            • **Cross-Program Comparison:** H2020 vs Horizon Europe performance and trends
-            • **Performance Indicators:** Budget execution efficiency, variance analysis, optimization opportunities
-
-            **Focus Areas:**
-            - Budget availability and allocation effectiveness across both programs
-            - Commitment and payment appropriation absorption levels and trends
-            - Resource utilization efficiency and performance benchmarking
-            - Strategic budget implications for program continuation and planning
-
-            Analysis Date: {current_date}
-            """,
+            {{budget_analysis_commentary}}
+        """,
 
         # ============================================================
         # 📋 Template 1: Granting Process Overview
@@ -605,43 +590,36 @@ class TemplateSectionMatrix:
                     'name': 'Introductory Summary',
                     'category': 'executive',
                     'priority': 1,
-                    'description': 'Comprehensive executive overview covering all department workflows and achievements'
+                    'description': 'Highly structured, data-driven executive overview using a fill-in-the-blanks approach.'
                 },
                 'template_mapping': {
-                    'template_name': 'executive_summary_template',
+                    'template_name': 'contextual_intro_summary_template',  # ✅ USES NEW TEMPLATE
                     'template_category': 'executive_overview',
-                    'supports_variables': ['prioritized_data_summary', 'secondary_data_summary']
+                    'supports_variables': ['all_kpis_and_context']
                 },
                 'data_configuration': {
                     'primary_data': [
-                        'TTP_Overview', 'pay_credits_H2020', 'pay_credits_HEU',
-                        'amendment_activity_H2020', 'amendment_activity_HEU',
-                        'amendment_TTA_H2020', 'amendment_TTA_HEU',
-                        'auri_overview', 'recovery_activity', 'TTG'
+                        'TTP_Overview', 'amendment_TTA_HEU', 'amendment_TTA_H2020',
+                        'amendment_activity_HEU', 'amendment_activity_H2020',
+                        'HEU_payments_all', 'H2020_payments_all', 'TTG',
+                        'completion_previous_year_calls', 'amendment_cases_HEU', 'amendment_cases_H2020',
+                        'auri_overview', 'error_rates', 'auri_time_to_implement_overview',
+                        'auri_negative_adjustments_overview', 'recovery_activity', 'grants_exceeding_fdi',
+                        'pay_credits_HEU', 'pay_credits_H2020'
                     ],
-                    'secondary_data': [
-                        'summary_budget', 'H2020_TTP_FP', 'H2020_TTP_IP',
-                        'HEU_TTP_FP', 'HEU_TTP_IP', 'grants_signature_activity',
-                        'completion_previous_year_calls', 'grants_exceeding_fdi',
-                        'amendment_cases_H2020', 'amendment_cases_HEU', 'external_audits_activity'
-                    ],
-                    'focus_metrics': [
-                        'time', 'days', 'average', 'ttp', 'tta', 'ttg',
-                        'payments', 'amendments', 'audits', 'grants', 'calls', 'total', 'count',
-                        'amount', 'million', 'eur', 'recovery', 'appropriations',
-                        'rate', 'percentage', 'completion', 'efficiency', 'targets', 'milestones'
-                    ]
+                    'secondary_data': [],
+                    'focus_metrics': []
                 },
-                'output_configuration': {
+                'output_configuration': {  # ✅ FIXED block
                     'module': 'CommentsModule',
                     'variable_name': 'intro_summary_text',
-                    'word_limit': 800,
-                    'formatting_level': 'executive'
+                    'word_limit': 1000,
+                    'formatting_level': 'contextual'
                 },
                 'instruction_mapping': {
-                    'instruction_key': 'executive_summary_instructions',
-                    'tone': 'executive',
-                    'focus': 'comprehensive_achievements'
+                    'instruction_key': 'contextual_summary_instructions',
+                    'tone': 'factual_completion',
+                    'focus': 'data_insertion_and_contextualization'
                 }
             },
 
@@ -684,7 +662,7 @@ class TemplateSectionMatrix:
                 'output_configuration': {
                     'module': 'CommentsModule',
                     'variable_name': 'budget_overview_text',
-                    'word_limit': 500,
+                    'word_limit': 200,
                     'formatting_level': 'detailed'
                 },
                 'instruction_mapping': {
@@ -1339,18 +1317,7 @@ class EnhancedReportGenerator:
         self.template_library = ReportTemplateLibrary()
         self.mapping_matrix = TemplateSectionMatrix()
 
-    def generate_section_commentary(
-        self,
-        section_key: str,
-        quarter_period: str,
-        current_year: str,
-        financial_data: Dict[str, Any],
-        model: str = "deepseek-r1:14b",
-        temperature: float = 0.3,
-        acronym_context: str = "",
-        cutoff_date: Any = None,
-        verbose: bool = True
-    ) -> Optional[str]:
+    def generate_section_commentary(self, section_key: str, quarter_period: str, current_year: str, financial_data: Dict[str, Any], model: str, temperature: float, acronym_context: str, cutoff_date: Any, verbose: bool) -> Optional[str]:
         """
         Generate commentary for a specific section using the enhanced matrix system.
         This method is the primary entry point for generating any section, handling both
@@ -1358,47 +1325,35 @@ class EnhancedReportGenerator:
         """
         # Step 1: Configuration Lookup
         mapping = self.mapping_matrix.get_complete_mapping_matrix()
-        if section_key not in mapping:
+        section_config = mapping.get(section_key)
+        if not section_config:
             if verbose:
                 print(f"❌ Section key '{section_key}' not found in mapping matrix")
             return None
-        section_config = mapping[section_key]
 
         if verbose:
-            print(f"📝 Generating: {section_config['section_info']['name']}")
-            print(f"   Template: {section_config['template_mapping']['template_name']}")
+            print(f"📝 Generating: {section_config.get('section_info', {}).get('name', section_key)}")
+            print(f"   Template: {section_config.get('template_mapping', {}).get('template_name', 'N/A')}")
 
-        # ✅ FIX: Centralized logic to handle special "looping" sections like payment overviews.
-        # This replaces the hardcoded logic that was previously in comments.py.
         if section_key in ['heu_payment_overview', 'h2020_payment_overview']:
-            # This section requires generating multiple commentaries (one for each call type).
-            # The method returns a single string summarizing the results, which the calling module can handle.
             return self._generate_payment_overview_combinations(
-                section_key=section_key,
-                quarter_period=quarter_period,
-                current_year=current_year,
-                financial_data=financial_data,
-                model=model,
-                temperature=temperature,
-                acronym_context=acronym_context,
-                cutoff_date=cutoff_date,
-                verbose=verbose
+                section_key, quarter_period, current_year, financial_data, model,
+                temperature, acronym_context, cutoff_date, verbose
             )
 
-        # For all other "normal" sections, proceed with single commentary generation.
         return self._generate_single_section_commentary(
-            section_key=section_key,
-            section_config=section_config,
-            quarter_period=quarter_period,
-            current_year=current_year,
-            financial_data=financial_data,
-            model=model,
-            temperature=temperature,
-            acronym_context=acronym_context,
-            cutoff_date=cutoff_date, # Not used here, but passed for consistency
-            verbose=verbose
+            section_key, section_config, quarter_period, current_year, financial_data, model,
+            temperature, acronym_context, cutoff_date, verbose
         )
-
+    def _generate_intro_summary(self, template: str, financial_data: Dict[str, Any], quarter_period: str) -> str:
+        """
+        Generates the intro summary by directly formatting a template with extracted KPIs.
+        """
+        kpi_and_context_dict = financial_data.get('intro_summary_kpis', {})
+        if not kpi_and_context_dict:
+             return "Error: KPI data for the introductory summary was not found in financial_data."
+        
+        return self._format_template_safely(template, kpi_and_context_dict)
 
     def _generate_single_section_commentary(
         self,
@@ -1413,91 +1368,128 @@ class EnhancedReportGenerator:
         cutoff_date: Any,
         verbose: bool
     ) -> Optional[str]:
-        """Handles the generation of a standard, single-text section."""
-        # Step 2: Template Retrieval
+        """
+        CORRECTED: Generate commentary for a single section using conditional logic
+        to handle different template structures and avoid errors.
+        """
         templates = self.template_library.get_template_definitions(quarter_period, current_year)
-        template_name = section_config['template_mapping']['template_name']
-        if template_name not in templates:
-            if verbose:
-                print(f"❌ Template '{template_name}' not found in template library")
+        template_name = section_config.get('template_mapping', {}).get('template_name')
+        template = templates.get(template_name)
+        if not template:
+            if verbose: print(f"❌ Template '{template_name}' not found for section '{section_key}'")
             return None
-        template = templates[template_name]
 
-        # Step 3: Data Preparation
+        # ✅ FIXED: Pass the required 'quarter_period' argument to the helper function.
+        if section_key == 'intro_summary':
+            if verbose: print(f"   -> Using direct formatting logic for '{section_key}'")
+            return self._generate_intro_summary(template, financial_data, quarter_period)
+
+        # ======================================================================
+        # 🎯 AI-BASED GENERATION LOGIC FOR ALL OTHER SECTIONS
+        # ======================================================================
+        
+        # Step 2: Data Preparation (for AI-based sections)
         data_config = section_config['data_configuration']
         primary_data_raw = {k: v for k, v in financial_data.items() if k in data_config['primary_data']}
         secondary_data_raw = {k: v for k, v in financial_data.items() if k in data_config['secondary_data']}
 
-        # ✅ NEW: Special pre-processing for the granting_process_overview section
-        if section_key == 'granting_process_overview':
-            if verbose: print("   🔬 Pre-processing data for granting overview to ensure conciseness...")
-            primary_data = self._preprocess_granting_data(primary_data_raw)
-            secondary_data = self._preprocess_granting_data(secondary_data_raw)
-        else:
-            primary_data = primary_data_raw
-            secondary_data = secondary_data_raw
-
-
-        # Check if essential primary data is missing
-        if not primary_data:
+        if not primary_data_raw and not secondary_data_raw:
             if verbose:
-                print(f"⚠️  No primary data found for section '{section_key}'. Required: {data_config['primary_data']}")
+                print(f"⚠️ No primary or secondary data found for section '{section_key}'. Skipping.")
             return None
+        
+        # ✅ FIXED: Replaced placeholder with full logic for AI-driven sections
+        final_output = None
 
-        # Step 4: Data Formatting
-        prioritized_data_summary = self._prepare_data_summary(
-            primary_data,
-            data_config['focus_metrics'],
-            "PRIMARY"
-        )
-        secondary_data_summary = self._prepare_data_summary(
-            secondary_data,
-            data_config['focus_metrics'],
-            "SECONDARY"
-        )
+        # Special handling for sections with a single, AI-generated commentary placeholder
+        if section_key in ['budget_overview']:
+            if verbose: print(f"   -> Using special single-placeholder logic for '{section_key}'")
 
-        # Step 5: Template Population
-        # A dictionary to hold all possible variables for the template
-        template_vars = {
-            'prioritized_data_summary': prioritized_data_summary,
-            'secondary_data_summary': secondary_data_summary,
-            'h2020_ttp_summary': '', # Default empty values
-            'heu_ttp_summary': '',
-        }
+            # A) Create a combined data context for the AI to analyze
+            ai_data_context = self._prepare_data_summary(
+                {**primary_data_raw, **secondary_data_raw},
+                data_config['focus_metrics'],
+                "FINANCIAL DATA CONTEXT"
+            )
 
-        # For the TTP performance template, we need to prepare special summaries
-        if section_key == 'ttp_performance':
-            ttp_summaries = self._prepare_ttp_data_summary(financial_data, quarter_period, current_year)
-            template_vars.update(ttp_summaries)
+            # B) Get instructions and create a prompt for the AI to generate ONLY the commentary
+            instructions = self._get_section_instructions(section_config, quarter_period, current_year)
+            prompt_for_ai = self._create_enhanced_prompt(
+                instructions=instructions,
+                template=ai_data_context, # The AI's "template" is just the raw data
+                acronym_context=acronym_context,
+                section_key=section_key,
+                current_year=current_year,
+                quarter_period=quarter_period
+            )
 
-        # Use a relaxed format method that ignores unused keys
-        formatted_template = self._format_template_safely(template, template_vars)
+            # C) Generate ONLY the analysis text from the AI
+            analysis_commentary = self._generate_with_retry(
+                prompt=prompt_for_ai, model=model, temperature=temperature,
+                max_tokens=int(section_config['output_configuration']['word_limit'] * 1.8),
+                section_key=section_key, verbose=verbose,
+                word_limit=section_config['output_configuration']['word_limit']
+            )
 
+            if not analysis_commentary:
+                return None
 
-        # Step 6: Get AI Instructions
-        instructions = self._get_section_instructions(section_config)
+            # D) Inject the AI's generated text into the final template
+            final_output = self._format_template_safely(template, {'budget_analysis_commentary': analysis_commentary})
 
-        # Step 7: Create Final Prompt
-        final_prompt = self._create_enhanced_prompt(
-            instructions=instructions,
-            template=formatted_template,
-            acronym_context=acronym_context,
-            section_key=section_key,
-            current_year=current_year,
-            quarter_period=quarter_period
-        )
+        # --- DEFAULT LOGIC for all other sections (granting_process, etc.) ---
+        else:
+            if verbose: print(f"   -> Using standard multi-placeholder logic for '{section_key}'")
 
-        # Step 8: AI Generation with Retry Logic
-        commentary = self._generate_with_retry(
-            prompt=final_prompt,
-            model=model,
-            temperature=temperature,
-            max_tokens=int(section_config['output_configuration']['word_limit'] * 1.8), # Increased multiplier
-            section_key=section_key,
-            verbose=verbose
-        )
+            # A) Pre-process data if necessary
+            if section_key == 'granting_process_overview':
+                if verbose: print("   🔬 Pre-processing data for granting overview to ensure conciseness...")
+                primary_data_summary = self._prepare_data_summary(
+                    self._preprocess_granting_data(primary_data_raw), data_config['focus_metrics'], "PRIMARY")
+                secondary_data_summary = self._prepare_data_summary(
+                    self._preprocess_granting_data(secondary_data_raw), data_config['focus_metrics'], "SECONDARY")
+            else:
+                 primary_data_summary = self._prepare_data_summary(
+                    primary_data_raw, data_config['focus_metrics'], "PRIMARY")
+                 secondary_data_summary = self._prepare_data_summary(
+                    secondary_data_raw, data_config['focus_metrics'], "SECONDARY")
 
-        return commentary
+            # B) Create the dictionary of variables to populate the template
+            template_vars = {
+                'prioritized_data_summary': primary_data_summary,
+                'secondary_data_summary': secondary_data_summary,
+                'h2020_ttp_summary': '', # Default empty values for TTP
+                'heu_ttp_summary': '',
+            }
+
+            # C) Add special TTP data if this is the ttp_performance section
+            if section_key == 'ttp_performance':
+                ttp_summaries = self._prepare_ttp_data_summary(financial_data, quarter_period, current_year)
+                template_vars.update(ttp_summaries)
+
+            # D) Populate the template with all its required data
+            populated_template = self._format_template_safely(template, template_vars)
+
+            # E) Get instructions and create the final prompt for the AI
+            instructions = self._get_section_instructions(section_config, quarter_period, current_year)
+            final_prompt = self._create_enhanced_prompt(
+                instructions=instructions,
+                template=populated_template, # The AI gets the pre-filled template
+                acronym_context=acronym_context,
+                section_key=section_key,
+                current_year=current_year,
+                quarter_period=quarter_period
+            )
+
+            # F) Generate the final output directly from the AI
+            final_output = self._generate_with_retry(
+                prompt=final_prompt, model=model, temperature=temperature,
+                max_tokens=int(section_config['output_configuration']['word_limit'] * 1.8),
+                section_key=section_key, verbose=verbose,
+                word_limit=section_config['output_configuration']['word_limit']
+            )
+
+        return final_output
 
     def _preprocess_granting_data(self, data_dict: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -2008,10 +2000,18 @@ class EnhancedReportGenerator:
             return f"{priority_level} DATA: No relevant data available for this priority level."
 
         summary_parts = [f"{priority_level} DATA ANALYSIS:"]
+        
+        # ✅ NEW: Add a character limit to prevent overwhelming the AI
+        char_limit = 2500
+        current_chars = 0
 
         for key, value in data_dict.items():
-            if value is None:
+            if value is None or current_chars > char_limit:
                 continue
+            
+            if current_chars > char_limit:
+                summary_parts.append("\n[...Data truncated for brevity...]")
+                break
 
             try:
                 # Sanitize key for display
@@ -2025,13 +2025,19 @@ class EnhancedReportGenerator:
                         value = parsed
                     except json.JSONDecodeError:
                         # It's just a regular string, display it
-                        summary_parts.append(f"\n{display_key}: {str(value)[:300]}{'...' if len(str(value)) > 300 else ''}")
+                        line = f"\n{display_key}: {str(value)[:300]}{'...' if len(str(value)) > 300 else ''}"
+                        summary_parts.append(line)
+                        current_chars += len(line)
                         continue # continue to next item in data_dict
 
                 # Handle lists (likely from JSON or already parsed)
                 if isinstance(value, list) and len(value) > 0:
-                    summary_parts.append(f"\n{display_key} ({len(value)} records):")
-                    for i, row in enumerate(value[:3], 1): # Show first 3 records
+                    line = f"\n{display_key} ({len(value)} records):"
+                    summary_parts.append(line)
+                    current_chars += len(line)
+
+                    for i, row in enumerate(value[:2], 1): # Show first 2 records to be more concise
+                        if current_chars > char_limit: break
                         if isinstance(row, dict):
                             highlighted_items = []
                             other_items = []
@@ -2043,22 +2049,32 @@ class EnhancedReportGenerator:
                                     other_items.append(item_str)
                             # Show highlighted items first
                             row_summary = ", ".join(highlighted_items + other_items)
-                            summary_parts.append(f"  Record {i}: {row_summary[:250]}{'...' if len(row_summary) > 250 else ''}")
-                    if len(value) > 3:
-                        summary_parts.append(f"  ... and {len(value) - 3} more records")
+                            row_line = f"  Record {i}: {row_summary[:200]}{'...' if len(row_summary) > 200 else ''}"
+                            summary_parts.append(row_line)
+                            current_chars += len(row_line)
+
+                    if len(value) > 2 and current_chars <= char_limit:
+                        line = f"  ... and {len(value) - 2} more records"
+                        summary_parts.append(line)
+                        current_chars += len(line)
 
                 # Handle dictionaries
                 elif isinstance(value, dict):
-                    summary_parts.append(f"\n{display_key}: {json.dumps(value, indent=2)}")
+                    line = f"\n{display_key}: {json.dumps(value, indent=2)}"
+                    summary_parts.append(line[:500]) # Truncate large dicts
+                    current_chars += len(line)
 
                 # Handle other data types
                 else:
-                    summary_parts.append(f"\n{display_key}: {value}")
+                    line = f"\n{display_key}: {value}"
+                    summary_parts.append(line)
+                    current_chars += len(line)
 
             except Exception:
                 summary_parts.append(f"\n{display_key}: [Data processing error]")
 
         return "\n".join(summary_parts)
+
 
     def _prepare_ttp_data_summary(
         self,
@@ -2116,13 +2132,14 @@ class EnhancedReportGenerator:
         summary_parts.append("\nAI should analyze this data to report on compliance rates, processing times, and any delays noted during the quarter.")
         return "\n".join(summary_parts)
 
-
-    def _get_section_instructions(self, section_config: Dict[str, Any]) -> str:
-        """✅ REWRITTEN: Generate executive-quality instructions based on section."""
-        section_info = section_config['section_info']
-        output_config = section_config['output_configuration']
-        word_limit = output_config['word_limit']
-        section_name = section_info['name']
+    
+    def _get_section_instructions(self, section_config: Dict[str, Any], quarter_period: str, current_year: str) -> str:
+        """✅ CORRECTED: Function signature now matches the call."""
+        section_info = section_config.get('section_info', {})
+        section_name = section_info.get('name', 'Unknown Section')
+        # Safely access nested configuration with default values
+        output_config = section_config.get('output_configuration', {})
+        word_limit = output_config.get('word_limit', 400)
 
         # 🎯 UNIVERSAL EXECUTIVE WRITING GUIDELINES
         executive_guidelines = f"""
@@ -2134,27 +2151,23 @@ class EnhancedReportGenerator:
         """
 
         # 🎯 SECTION-SPECIFIC EXECUTIVE INSTRUCTIONS
-        if 'intro' in section_name.lower() or 'summary' in section_name.lower():
+        # Note: 'contextual_summary_instructions' is no longer needed as intro_summary bypasses AI generation
+        if 'budget' in section_name.lower():
             return f"""
-            {executive_guidelines}
-            MISSION: Generate a powerful departmental achievement summary demonstrating exceptional performance and strategic success.
-            NARRATIVE STRUCTURE:
-            1. **Opening Achievement Statement**: Start with a strong sentence summarizing the key success of the quarter.
-            2. **Quantitative Excellence Showcase**: Detail key metrics for payments, time performance (TTP, TTG), and budget execution.
-            3. **Strategic Workflow Achievements**: Discuss successes in granting, financial stewardship, and compliance.
-            4. **Forward Excellence Outlook**: Conclude with a confident statement about future performance.
-            """
+            MISSION: Write a concise, factual analysis (2-3 paragraphs, approx. 150-200 words) of the budget execution data provided in the 'FINANCIAL DATA CONTEXT'.
 
-        elif 'budget' in section_name.lower():
-            return f"""
-            {executive_guidelines}
-            MISSION: Demonstrate strategic budget management and efficient appropriation utilization.
-            NARRATIVE STRUCTURE:
-            1. **Strategic Budget Position**: State the total budget and overall absorption rate, emphasizing financial stewardship.
-            2. **Program Performance (H2020 vs HEU)**: Compare the utilization and performance of both main programs.
-            3. **Strategic Financial Management**: Connect commitment and payment appropriations to concrete outcomes (e.g., grants signed, payments made).
-            """
+            **CONTEXT:** The text you generate will be placed immediately after an introductory paragraph.
+            - **DO NOT** repeat the introduction.
+            - **DO NOT** use executive titles or greetings.
+            - **DO NOT** invent figures. Use only the data provided.
 
+            **STRICT REQUIREMENTS:**
+            1.  **Focus:** Analyze the budget absorption and consumption for H2020 and HEU.
+            2.  **Data Usage:** Directly reference key figures from the 'summary_budget', 'pay_credits_H2020', and 'pay_credits_HEU' data, such as available vs. consumed amounts.
+            3.  **Tone:** Be neutral and analytical. Avoid exaggerated or overly optimistic language.
+            4.  **Time Period:** Your analysis must be strictly for the period **{quarter_period} {current_year}**.
+            5.  **Output:** Start your response directly with the analysis. For example: "For the Horizon Europe program, consumption of payment appropriations reached..."
+            """
         elif 'payment' in section_name.lower() and ('heu' in section_name.lower() or 'h2020' in section_name.lower()):
             program_name = "Horizon Europe (HEU)" if 'heu' in section_name.lower() else "Horizon 2020 (H2020)"
             return f"""
@@ -2207,6 +2220,7 @@ class EnhancedReportGenerator:
         max_tokens: int,
         section_key: str,
         verbose: bool,
+        word_limit: int,
         max_retries: int = 2
     ) -> Optional[str]:
         """Generate with retry logic for better quality"""
@@ -2214,7 +2228,6 @@ class EnhancedReportGenerator:
 
         retry_count = 0
         current_temperature = temperature
-        min_length = CommentsConfig.QUALITY_SETTINGS['min_response_length']
 
         while retry_count <= max_retries:
             if retry_count > 0:
@@ -2230,18 +2243,14 @@ class EnhancedReportGenerator:
                 verbose=verbose
             )
 
-            # Pass the raw response length to the validation function
-            raw_response_len = len(response) if response else 0
-            is_valid = self._validate_response_quality(response, section_key)
+            is_valid = self._validate_response_quality(response, section_key, word_limit)
 
             if is_valid:
                 if verbose:
                     print(f"   ✅ Quality check passed on attempt {retry_count + 1}.")
                 return response
             elif verbose:
-                 # The log message was confusing, let's clarify it.
-                 # The length shown was likely the prompt, not the response. Let's show the actual response length.
-                print(f"   ⚠️ Quality check failed for attempt {retry_count + 1}. Actual response length: {raw_response_len} chars.")
+                print(f"   ⚠️ Quality check failed for attempt {retry_count + 1}.")
 
 
             retry_count += 1
@@ -2251,11 +2260,26 @@ class EnhancedReportGenerator:
         return None
 
 
-    def _validate_response_quality(self, response: str, section_key: str) -> bool:
+    def _validate_response_quality(self, response: str, section_key: str, word_limit: int) -> bool:
         """Validate response quality based on section requirements"""
         # Basic quality checks
-        if not response or len(response) < 50: return False
-        if not response.strip().endswith(('.', '!', '?', '"', ')')): return False # Check for incomplete sentence
+        if not response or len(response) < 50:
+            if not response:
+                print("   ⚠️ Quality fail: Response is empty.")
+            else:
+                print(f"   ⚠️ Quality fail: Response is too short ({len(response)} chars).")
+            return False
+
+        if not response.strip().endswith(('.', '!', '?', '"', ')', '}')):
+            print("   ⚠️ Quality fail: Response appears to be an incomplete sentence.")
+            return False
+
+        # ✅ NEW: Enforce a character limit based on the word_limit to prevent overly long responses
+        # Using a generous multiplier (e.g., 8 chars per word) to account for long words and spacing.
+        char_limit = word_limit * 8
+        if len(response) > char_limit:
+            print(f"   ⚠️ Quality fail: Response length ({len(response)} chars) exceeds limit for ~{word_limit} words (~{int(char_limit)} chars).")
+            return False
 
         # Check for repetitive content
         sentences = response.split('.')
@@ -2263,14 +2287,17 @@ class EnhancedReportGenerator:
             # Normalize sentences for comparison
             unique_sentences = {s.strip().lower() for s in sentences if len(s.strip()) > 10}
             if len(unique_sentences) < len(sentences) * 0.6:  # Over 40% repetition
+                print("   ⚠️ Quality fail: Response contains repetitive sentences.")
                 return False
 
         # Section-specific keyword checks
         if 'payment' in section_key or 'ttp' in section_key:
             if not any(kw in response.lower() for kw in ['€', 'eur', 'million', 'payment', 'ttp', 'compliance']):
+                print(f"   ⚠️ Quality fail: Missing required keywords for '{section_key}' (e.g., €, payment, ttp).")
                 return False
         if 'budget' in section_key:
             if not any(kw in response.lower() for kw in ['appropriation', 'allocation', 'budget', 'consumption']):
+                print(f"   ⚠️ Quality fail: Missing required keywords for '{section_key}' (e.g., appropriation, budget).")
                 return False
 
         return True
@@ -2395,4 +2422,5 @@ class EnhancedReportGenerator:
                 for issue in diagnosis['issues']:
                     print(f"      - {issue}")
 
-        return diagnosis
+        return diagno
+

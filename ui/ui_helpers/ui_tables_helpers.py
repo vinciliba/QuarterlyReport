@@ -316,6 +316,7 @@ def apply_external_audits_styling(gt_table,  report_params):
             style=style.borders(sides="all", color="#ffffff", weight="2px"),
             locations=loc.column_labels()
         )
+        .tab_options(heading_subtitle_font_size="medium", heading_title_font_size="large", table_font_size='medium',  column_labels_font_size='medium',row_group_font_size='medium', stub_font_size='medium')
         .tab_source_note(
                 source_note=md("Source:Common Audit Service (CAS)"),
              )
