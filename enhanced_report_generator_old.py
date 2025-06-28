@@ -2137,6 +2137,7 @@ class EnhancedReportGenerator:
         quarter_period: str,
         current_year: str,
         financial_data: Dict[str, Any],
+        report_vars: Dict[str, Any],
         model: str,
         temperature: float,
         acronym_context: str,

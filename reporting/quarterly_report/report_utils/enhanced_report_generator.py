@@ -176,31 +176,35 @@ class ReportTemplateLibrary:
         # 🎯 Executive Summary -
         # ============================================================
          'contextual_intro_summary_template': f"""
-                **----- BUDGET AND REPORTING TEAM -----**
+                
 
                 The Grant Management Department achieved significant milestones in {quarter_period} of {current_year}, successfully meeting and exceeding several key targets.
-                Ensuring punctual execution of all payments for H2020 and Horizon Europe (HEU) projects was a priority. By the end of the quarter, the average yearly Time-to-Pay (TTP) was commendably low, with interim payments averaging **{{h2020_ttp_interim}} days** for H2020 and **{{heu_ttp_interim}} days** for HEU, and final payments averaging **{{h2020_ttp_final}} days** for H2020 and **{{heu_ttp_final}} days** for HEU.
 
-                Furthermore, the Time-to-Amend (TTA) metrics showcased exceptional efficiency, averaging **{{h2020_tta_avg}} days** for H2020 and **{{heu_tta_avg}} days** for HEU, both well below the contractual limit of 45 days. This performance resulted in a **{{heu_tta_ontime_rate}}%** on-time amendment rate for HEU and **{{h2020_tta_ontime_rate}}%** for H2020, with only **{{h2020_tta_delays}}** delays recorded out of **{{h2020_amendment_count}}** signed amendments for H2020.
+                {{heu_comm_credits_consumed}} of total voted Commitment Credits assigned to ERCEA have been consumed out a total of {{heu_comm_credits_total}} ({{heu_comm_credits_consum_rate}}).
+                
+                Ensuring punctual execution of all payments was a priority. Overall performance for Horizon Europe (HEU) was {{heu_payments_processed}}, with an average Time-to-Pay (TTP) of {{heu_ttp_total}} days and {{heu_ttp_total_on_time}} of payments processed on time. For H2020, performance was {{h2020_payments_processed}}, with an average TTP of {{h2020_ttp_total}} days and {{h2020_ttp_total_on_time}} processed within contractual deadlines.
+                A detailed breakdown shows interim payments for H2020 and HEU averaged {{h2020_ttp_interim}} and {{heu_ttp_interim}} days respectively, while final payments were processed in {{h2020_ttp_final}} and {{heu_ttp_final}} days.
+                
+                Furthermore, the Time-to-Amend (TTA) metrics showcased exceptional efficiency, averaging {{h2020_tta_avg}} days for H2020 and {{heu_tta_avg}} days for HEU, both well below the contractual limit of 45 days. This performance resulted in a {{heu_tta_ontime_rate}} on-time amendment rate for HEU and {{h2020_tta_ontime_rate}} for H2020.
 
                 ### Detailed Breakdown of Activities
 
-                **Payments:**
-                During this quarter, the department processed a substantial volume of payments: **{{heu_payment_count}}** for Horizon Europe (HEU) and **{{h2020_payment_count}}** for H2020, totaling **€{{heu_payment_total_mil}} million** and **€{{h2020_payment_total_mil}} million** respectively. This effort is on track with the final objective of fully utilizing the payment appropriations allocated to ERCEA for execution. *{{payment_consumption_context}}*
+                Payments:
+                During this quarter, the department processed a substantial volume of payments: {{heu_payments_processed}} for Horizon Europe (HEU) and {{h2020_payments_processed}} for H2020, totaling €{{heu_payments_total_mil}} million, out of which {{heu_payments_total_mil_voted_budg}} paid in voted budget, and €{{h2020_payments_total_mil}} million, out of which {{h2020_payments_total_mil_voted_budg}} paid in voted budget, respectively. This effort is on track with the final objective of fully utilizing the payment appropriations allocated to ERCEA for execution.  {{payment_consumption_context_HEU}}.{{payment_consumption_context_H2020}}
+                
+                Granting:
+                In the {current_year} {{heu_signed_grants}} were signed while {{heu_under_prep_grants}} are still under-preparation. The granting process for the {int(current_year) - 1} calls is implemented as planned, with an ovreall Time-to-Grant (TTG) metrics of {{ttg_avg}} days.
 
-                **Granting:**
-                The granting process for the {int(current_year) - 1} calls was successfully completed as planned, with Time-to-Grant (TTG) metrics of **{{ttg_avg}} days**, significantly below the established targets. Meanwhile, the {current_year} calls have seen a strong start, achieving impressive completion rates of **{{stg_completion_rate}}%** for STG calls and **{{poc_completion_rate}}%** for POC 1 calls.
+                Amendments:
+                In {current_year}, a total of {{amendment_signed_count}} amendments were signed, including {{h2020_amendment_signed_count}} for H2020 and {{heu_amendment_signed_count}} for Horizon Europe. For H2020, most changes were related to {{amd_top1_h2020}}, followed by {{amd_top2_h2020}}. For Horizon Europe, the majority involved {{amd_top1_heu}}, followed by {{amd_top2_heu}} .
 
-                **Amendments:**
-                In {current_year}, a total of **{{total_amendments_signed}}** amendments were signed, including **{{h2020_amendment_count}}** for H2020 and **{{heu_amendment_count}}** for Horizon Europe. For H2020, most changes were related to reporting periods ({{h2020_amend_type_1}}), followed by changes to action duration ({{h2020_amend_type_2}}). For Horizon Europe, the majority involved changes to Annex I ({{heu_amend_type_1}}).
+                Audits:
+                Audit activities remain robust, with {{outstanding_audits}} audits ongoing while {{closed_audits}} in {current_year}. The current detected error rate stands at {{error_rate}}. {{tti_avg}} of the total auris have been implemeted within 6 months. Financially, this quarter saw €{{neg_adjustment_total_mil}} million in total negative adjustments and €{{recovery_total_mil}} million in recovered amounts, underscoring our commitment to financial soundness.
 
-                **Audits:**
-                Audit activities remain robust, with **{{outstanding_audits}}** audits ongoing. The current detected error rate stands at **{{error_rate}}%**. Audit result processing performance (Time-to-Implement) is efficient, averaging **{{tti_avg}} days**. Financially, this quarter saw **€{{neg_adjustment_total_mil}} million** in total negative adjustments and **€{{recovery_total_mil}} million** in recovered amounts, underscoring our commitment to financial integrity.
+                Other Activities:
+                Despite the overall efficiency, there were a few instances of L2 budgetary commitments exceeding their Final Date of Implementation (FDI): {{fdi_breaches_h2020}} for H2020, and {{fdi_breaches_heu}} for HEU .
 
-                **Other Activities:**
-                Despite the overall efficiency, there were a few instances of L2 budgetary commitments exceeding their Final Date of Implementation (FDI): **{{fdi_breaches}}** for H2020.
-
-                *Overall, the Grant Management Department's performance in {quarter_period} {current_year} was characterized by timely payments, efficient amendment processing, and proactive audit management. This exemplary performance establishes a strong precedent for the future.*
+                *Overall, the Grant Management Department's performance in {quarter_period} {current_year} was characterized by timely payments, efficient amendment processing, and proactive audit management. This exemplary performance establishes a strong precedent for the future.
             """,
         # ============================================================
         # 💰 BUDGET
@@ -1337,8 +1341,16 @@ class EnhancedReportGenerator:
 
         if section_key in ['heu_payment_overview', 'h2020_payment_overview']:
             return self._generate_payment_overview_combinations(
-                section_key, quarter_period, current_year, financial_data, model,
-                temperature, acronym_context, cutoff_date, verbose
+                section_key=section_key,
+                quarter_period=quarter_period,
+                current_year=current_year,
+                financial_data=financial_data,
+                model=model,
+                temperature=temperature,
+                acronym_context=acronym_context,
+                cutoff_date=cutoff_date,
+                verbose=verbose,
+                report_vars=financial_data  # Now passed explicitly and unambiguously
             )
 
         return self._generate_single_section_commentary(
@@ -1658,7 +1670,7 @@ class EnhancedReportGenerator:
 
 
     def _generate_payment_overview_combinations(
-        self,
+         self,
         section_key: str,
         quarter_period: str,
         current_year: str,
@@ -1667,8 +1679,9 @@ class EnhancedReportGenerator:
         temperature: float,
         acronym_context: str,
         cutoff_date: Any,
-        verbose: bool
-    ) -> str: # ✅ FIX: This method should return a string, not a dictionary, to be compatible with the caller.
+        verbose: bool,
+        report_vars: Dict[str, Any]  # <- NEW ARG
+    ) -> str: # FIX: This method should return a string, not a dictionary, to be compatible with the caller.
         """
         Generate payment overview for each call type combination and return a summary string.
         This centralized logic is now called from generate_section_commentary.
@@ -1684,16 +1697,25 @@ class EnhancedReportGenerator:
             if verbose:
                 print(f"   📝 Generating {program}-{call_type} overview...")
             try:
-                commentary = self._generate_call_type_payment_overview(
+                # commentary = self._generate_call_type_payment_overview(
+                #     program=program,
+                #     call_type=call_type,
+                #     quarter_period=quarter_period,
+                #     current_year=current_year,
+                #     financial_data=financial_data,
+                #     model=model,
+                #     temperature=temperature,
+                #     acronym_context=acronym_context,
+                #     verbose=False
+                # )
+                commentary = self._generate_structured_payment_summary(
                     program=program,
                     call_type=call_type,
                     quarter_period=quarter_period,
                     current_year=current_year,
                     financial_data=financial_data,
-                    model=model,
-                    temperature=temperature,
-                    acronym_context=acronym_context,
-                    verbose=False
+                    report_vars=report_vars,
+                    verbose=verbose
                 )
                 if commentary:
                     var_name = f"{section_key}_{call_type.lower()}"
@@ -1730,6 +1752,104 @@ class EnhancedReportGenerator:
             'EXPERTS': 'Expert evaluation and support services'
         }
         return descriptions.get(call_type, f'{call_type} grants')
+    
+    def _generate_structured_payment_summary(
+        self,
+        program: str,
+        call_type: str,
+        quarter_period: str,
+        current_year: str,
+        financial_data: Dict[str, Any],
+        report_vars: Dict[str, Any],
+        verbose: bool = False
+    ) -> Optional[str]:
+        """
+        Generate structured, factual payment summary per program-call type.
+        """
+
+        def safe_parse_table(table_data):
+            if isinstance(table_data, str):
+                try:
+                    return json.loads(table_data)
+                except:
+                    try:
+                        return pd.read_csv(io.StringIO(table_data)).to_dict(orient='records')
+                    except:
+                        return []
+            return table_data if isinstance(table_data, list) else []
+
+        payment_types = ['Final', 'Interim', 'Pre_Financing', 'Experts']
+        all_data = {}
+        total_transactions = 0
+        total_amount = 0
+        total_vobu = 0
+
+        for payment_type in payment_types:
+            table_key = f"{program}_{payment_type}_Payments"
+            table = safe_parse_table(financial_data.get(table_key))
+            if not table:
+                continue
+
+            filtered = [r for r in table if r.get('Quarter') == f"1Q{current_year}" and r.get('Metric') in ['Total Amount', 'Out of Which VOBU/EFTA', 'No of Transactions']]
+            if not filtered:
+                continue
+
+            summary = {r['Metric']: r.get(call_type) for r in filtered if isinstance(r, dict)}
+            count = summary.get('No of Transactions') or 0
+            amount = summary.get('Total Amount') or 0
+            vobu = summary.get('Out of Which VOBU/EFTA') or 0
+
+            try:
+                count = int(float(count))
+                amount = float(amount)
+                vobu = float(vobu)
+            except:
+                count = 0
+                amount = 0
+                vobu = 0
+
+            all_data[payment_type] = {
+                'count': count,
+                'amount': amount,
+                'vobu': vobu
+            }
+
+            total_transactions += count
+            total_amount += amount
+            total_vobu += vobu
+
+        # Load deviation data
+        deviation_key = f"{program}_{call_type}_paym_analysis_table"
+        deviation_df = None
+        if deviation_key in financial_data:
+            try:
+                deviation_df = pd.read_csv(io.StringIO(financial_data[deviation_key])) if isinstance(financial_data[deviation_key], str) else financial_data[deviation_key]
+            except Exception:
+                deviation_df = None
+
+        deviation_value = None
+        if deviation_df is not None:
+            deviation_value = deviation_df.loc[0, 'Deviation_Pct'] if 'Deviation_Pct' in deviation_df.columns else None
+
+        # Format message
+        lines = [f"In {quarter_period}, {total_transactions} payments totalling €{total_amount / 1e6:.2f} million, of which €{total_vobu / 1e6:.2f} million were paid using C1/E0 credits, were executed."]
+        for ptype in payment_types:
+            entry = all_data.get(ptype)
+            if entry and entry['count']:
+                lines.append(
+                    f"Additionally, {entry['count']} {ptype.replace('_', ' ').lower()} payments amounting to €{entry['amount'] / 1e6:.2f} million were processed, of which €{entry['vobu'] / 1e6:.2f} million were paid using C1/E0 credits."
+                )
+
+        if deviation_value is not None:
+            try:
+                pct = float(deviation_value) * 100
+                lines.append(f"In comparison to the forecast, consumption was {'above' if pct > 0 else 'below'} by {abs(pct):.1f} percentage points.")
+            except:
+                pass
+
+        return "\n".join(lines) if lines else None
+
+
 
     def generate_predefined_call_type_loops(
         self,
