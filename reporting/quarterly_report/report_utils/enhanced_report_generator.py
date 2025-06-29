@@ -79,7 +79,7 @@ import datetime
 import pandas as pd
 import json
 import re
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TypedDict
 
 # Your existing imports
 from ingestion.db_utils import (
@@ -87,6 +87,17 @@ from ingestion.db_utils import (
     load_report_params
 )
 
+import io
+from langgraph.graph import StateGraph
+try:
+    from langchain.tools import tool
+except ImportError:
+    from langchain_core.tools import tool  # fallback
+
+from langchain_community.chat_models import ChatOllama
+
+
+from pprint import pprint
 
 # ================================================================
 # PREDEFINED CONSTANTS FOR LOOPS
@@ -1753,6 +1764,109 @@ class EnhancedReportGenerator:
         }
         return descriptions.get(call_type, f'{call_type} grants')
     
+    # def _generate_structured_payment_summary(
+    #     self,
+    #     program: str,
+    #     call_type: str,
+    #     quarter_period: str,
+    #     current_year: str,
+    #     financial_data: Dict[str, Any],
+    #     report_vars: Dict[str, Any],
+    #     verbose: bool = False
+    # ) -> Optional[str]:
+    #     """
+    #     Generate structured, factual payment summary per program-call type.
+    #     """
+
+    #     def safe_parse_table(table_data):
+    #         if isinstance(table_data, str):
+    #             try:
+    #                 return json.loads(table_data)
+    #             except:
+    #                 try:
+    #                     return pd.read_csv(io.StringIO(table_data)).to_dict(orient='records')
+    #                 except:
+    #                     return []
+    #         return table_data if isinstance(table_data, list) else []
+
+    #     payment_types = ['Final', 'Interim', 'Pre_Financing', 'Experts']
+    #     all_data = {}
+    #     total_transactions = 0
+    #     total_amount = 0
+    #     total_vobu = 0
+
+    #     for payment_type in payment_types:
+    #         table_key = f"{program}_{payment_type}_Payments"
+    #         table = safe_parse_table(financial_data.get(table_key))
+    #         if not table:
+    #             continue
+
+    #         filtered = [r for r in table if r.get('Quarter') == f"1Q{current_year}" and r.get('Metric') in ['Total Amount', 'Out of Which VOBU/EFTA', 'No of Transactions']]
+    #         if not filtered:
+    #             continue
+
+    #         summary = {r['Metric']: r.get(call_type) for r in filtered if isinstance(r, dict)}
+    #         count = summary.get('No of Transactions') or 0
+    #         amount = summary.get('Total Amount') or 0
+    #         vobu = summary.get('Out of Which VOBU/EFTA') or 0
+
+    #         try:
+    #             count = int(float(count))
+    #             amount = float(amount)
+    #             vobu = float(vobu)
+    #         except:
+    #             count = 0
+    #             amount = 0
+    #             vobu = 0
+
+    #         all_data[payment_type] = {
+    #             'count': count,
+    #             'amount': amount,
+    #             'vobu': vobu
+    #         }
+
+    #         total_transactions += count
+    #         total_amount += amount
+    #         total_vobu += vobu
+
+    #     # Load deviation data
+    #     deviation_key = f"{program}_{call_type}_paym_analysis_table"
+    #     deviation_df = None
+    #     if deviation_key in financial_data:
+    #         try:
+    #             deviation_df = pd.read_csv(io.StringIO(financial_data[deviation_key])) if isinstance(financial_data[deviation_key], str) else financial_data[deviation_key]
+    #         except Exception:
+    #             deviation_df = None
+
+    #     deviation_value = None
+    #     if deviation_df is not None:
+    #         deviation_value = deviation_df.loc[0, 'Deviation_Pct'] if 'Deviation_Pct' in deviation_df.columns else None
+
+    #     # Format message
+    #     lines = [f"In {quarter_period}, {total_transactions} payments totalling €{total_amount / 1e6:.2f} million, of which €{total_vobu / 1e6:.2f} million were paid using C1/E0 credits, were executed."]
+    #     for ptype in payment_types:
+    #         entry = all_data.get(ptype)
+    #         if entry and entry['count']:
+    #             lines.append(
+    #                 f"Additionally, {entry['count']} {ptype.replace('_', ' ').lower()} payments amounting to €{entry['amount'] / 1e6:.2f} million were processed, of which €{entry['vobu'] / 1e6:.2f} million were paid using C1/E0 credits."
+    #             )
+
+    #     if deviation_value is not None:
+    #         try:
+    #             pct = float(deviation_value) * 100
+    #             lines.append(f"In comparison to the forecast, consumption was {'above' if pct > 0 else 'below'} by {abs(pct):.1f} percentage points.")
+    #         except:
+    #             pass
+
+    #     return "\n".join(lines) if lines else None
+
+
+    import logging
+
+    # Add this if not already configured somewhere in your app
+    logging.basicConfig(level=logging.DEBUG)
+
+  
     def _generate_structured_payment_summary(
         self,
         program: str,
@@ -1764,92 +1878,130 @@ class EnhancedReportGenerator:
         verbose: bool = False
     ) -> Optional[str]:
         """
-        Generate structured, factual payment summary per program-call type.
+        Generate structured, factual payment summary per program-call type using a LangGraph-based architecture.
         """
 
-        def safe_parse_table(table_data):
-            if isinstance(table_data, str):
-                try:
-                    return json.loads(table_data)
-                except:
-                    try:
-                        return pd.read_csv(io.StringIO(table_data)).to_dict(orient='records')
-                    except:
-                        return []
-            return table_data if isinstance(table_data, list) else []
-
-        payment_types = ['Final', 'Interim', 'Pre_Financing', 'Experts']
-        all_data = {}
-        total_transactions = 0
-        total_amount = 0
-        total_vobu = 0
-
-        for payment_type in payment_types:
-            table_key = f"{program}_{payment_type}_Payments"
-            table = safe_parse_table(financial_data.get(table_key))
-            if not table:
-                continue
-
-            filtered = [r for r in table if r.get('Quarter') == f"1Q{current_year}" and r.get('Metric') in ['Total Amount', 'Out of Which VOBU/EFTA', 'No of Transactions']]
-            if not filtered:
-                continue
-
-            summary = {r['Metric']: r.get(call_type) for r in filtered if isinstance(r, dict)}
-            count = summary.get('No of Transactions') or 0
-            amount = summary.get('Total Amount') or 0
-            vobu = summary.get('Out of Which VOBU/EFTA') or 0
-
+        # -- Tool to get table content as string --
+        def get_payment_data(table_key: str, input: str = "") -> str:
+            raw = report_vars.get(table_key) or financial_data.get(table_key)
+            logging.debug(f"[get_payment_data] Loading {table_key} - Found: {type(raw)}")
+            if raw is None:
+                return f"No data for {table_key}"
             try:
-                count = int(float(count))
-                amount = float(amount)
-                vobu = float(vobu)
-            except:
-                count = 0
-                amount = 0
-                vobu = 0
+                if isinstance(raw, str):
+                    df = pd.read_csv(io.StringIO(raw))  # Deviation tables in CSV
+                else:
+                    df = pd.DataFrame(raw)  # Payment tables in JSON
+                logging.debug(f"[get_payment_data] Loaded data for {table_key}:{df}")
+                return df.to_string(index=False) if not df.empty else f"No data for {table_key}"
+            except Exception as e:
+                logging.exception(f"Error loading table {table_key}")
+                return f"Error reading {table_key}: {e}"
 
-            all_data[payment_type] = {
-                'count': count,
-                'amount': amount,
-                'vobu': vobu
+        @tool
+        def final_payments(input: str) -> str:
+            """Fetches final payment data table for the given programme."""
+            return get_payment_data(f"{program}_Final_Payments", input)
+
+        @tool
+        def interim_payments(input: str) -> str:
+            """Fetches interim payment data table for the given programme."""
+            return get_payment_data(f"{program}_Interim_Payments", input)
+
+        @tool
+        def pre_financing(input: str) -> str:
+            """Fetches pre-financing payment data table for the given programme."""
+            return get_payment_data(f"{program}_Pre_Financing", input)
+
+        @tool
+        def experts_support(input: str) -> str:
+            """Fetches experts and support payments data table for the given programme."""
+            return get_payment_data(f"{program}_Experts and Support", input)
+
+        @tool
+        def deviation_analysis(input: str) -> str:
+            """Fetches deviation analysis data table for the specific call."""
+            return get_payment_data(f"{program}_payments_analysis_{call_type.upper()}", input)
+
+
+        tools = {
+            "Final": final_payments,
+            "Interim": interim_payments,
+            "Pre-Financing": pre_financing,
+            "Experts": experts_support,
+            "Deviation": deviation_analysis
+        }
+
+        # -- LangGraph nodes --
+        def analyze_input(state):
+            initial = {
+                "call_type": call_type,
+                "program": program,
+                "quarter": quarter_period,
+                "year": current_year
             }
+            logging.debug(f"[analyze_input] state: {initial}")
+            return initial
 
-            total_transactions += count
-            total_amount += amount
-            total_vobu += vobu
+        def choose_sources(state):
+            sources = list(tools.keys())
+            logging.debug(f"[choose_sources] sources: {sources}")
+            return {"sources": sources}
 
-        # Load deviation data
-        deviation_key = f"{program}_{call_type}_paym_analysis_table"
-        deviation_df = None
-        if deviation_key in financial_data:
-            try:
-                deviation_df = pd.read_csv(io.StringIO(financial_data[deviation_key])) if isinstance(financial_data[deviation_key], str) else financial_data[deviation_key]
-            except Exception:
-                deviation_df = None
+        def fetch_data(state):
+            logging.debug(f"[fetch_data] state: {state}")
+            retrieved = {}
+            for key in state["sources"]:
+                try:
+                    data = tools[key]("")
+                    logging.debug(f"[fetch_data] {key} =>{data}")
+                    retrieved[key] = data
+                except Exception as e:
+                    logging.exception(f"[fetch_data] Failed to fetch {key}")
+                    retrieved[key] = f"Error: {e}"
+            return {"retrieved": retrieved}
 
-        deviation_value = None
-        if deviation_df is not None:
-            deviation_value = deviation_df.loc[0, 'Deviation_Pct'] if 'Deviation_Pct' in deviation_df.columns else None
+        def generate_summary(state):
+            logging.debug(f"[generate_summary] state: {state}")
+            context_blocks = [f"{k}:{v}" for k, v in state["retrieved"].items() if v.strip() and "No data" not in v]
+            context = "\n\n".join(context_blocks)
+            logging.debug(f"[generate_summary] context:\n{context}")
+            prompt = f"""
+            You are a financial analyst. Based on the following payment records for {program} {call_type} grants in {quarter_period} {current_year}, write a concise summary.
 
-        # Format message
-        lines = [f"In {quarter_period}, {total_transactions} payments totalling €{total_amount / 1e6:.2f} million, of which €{total_vobu / 1e6:.2f} million were paid using C1/E0 credits, were executed."]
-        for ptype in payment_types:
-            entry = all_data.get(ptype)
-            if entry and entry['count']:
-                lines.append(
-                    f"Additionally, {entry['count']} {ptype.replace('_', ' ').lower()} payments amounting to €{entry['amount'] / 1e6:.2f} million were processed, of which €{entry['vobu'] / 1e6:.2f} million were paid using C1/E0 credits."
-                )
+            Data:
+            {context}
 
-        if deviation_value is not None:
-            try:
-                pct = float(deviation_value) * 100
-                lines.append(f"In comparison to the forecast, consumption was {'above' if pct > 0 else 'below'} by {abs(pct):.1f} percentage points.")
-            except:
-                pass
+            Requirements:
+            - Report total payments, volume, and value
+            - Separate commentary per type: Final, Interim, Pre-Financing, Experts
+            - End with a sentence on deviation if available
 
-        return "\n".join(lines) if lines else None
+            Output:
+            """
+            llm = ChatOllama(model="qwen2.5:14b")
+            response = llm.invoke(prompt)
+            logging.debug(f"[generate_summary] LLM response: {response}")
+            return {"text": response.content if hasattr(response, "content") else str(response)}
 
+        # -- Assemble LangGraph --
+        g = StateGraph(dict)
+        g.add_node("analyze_input", analyze_input)
+        g.add_node("choose_sources", choose_sources)
+        g.add_node("fetch_data", fetch_data)
+        g.add_node("generate_summary", generate_summary)
+        g.set_entry_point("analyze_input")
+        g.set_finish_point("generate_summary")
 
+        g.add_edge("analyze_input", "choose_sources")
+        g.add_edge("choose_sources", "fetch_data")
+        g.add_edge("fetch_data", "generate_summary")
+
+        chain = g.compile()
+        result = chain.invoke({})
+
+        logging.debug(f"[FINAL OUTPUT] Result: {result}")
+        return result["text"] if result else None
 
     def generate_predefined_call_type_loops(
         self,
