@@ -282,6 +282,7 @@ class PaymentsModule(BaseModule):
         module_warnings = []
         
         print("🚀 Starting Payments Module...")
+        print(f'CUTOFF:{cutoff}')
 
         try:
             # ══════════════════════════════════════════════════════════════════
@@ -365,6 +366,7 @@ class PaymentsModule(BaseModule):
             # Filter by date scope
             quarter_dates = get_scope_start_end(cutoff=cutoff)
             last_valid_date = quarter_dates[1]
+            print(f'LAST VALID DATE PAYMENTS {last_valid_date}')
             df_paym = df_paym[df_paym['Pay Document Date (dd/mm/yyyy)'] <= last_valid_date].copy()
             df_paym = df_paym[df_paym['call_type'] != 'CSA']
 
