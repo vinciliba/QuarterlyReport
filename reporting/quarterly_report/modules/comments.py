@@ -25,6 +25,17 @@ from ingestion.db_utils import (
 
 from pprint import pprint
 
+import requests
+from langchain_community.chat_models import ChatOllama
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph
+from langchain_core.tools import tool
+import io
+from reporting.quarterly_report.report_utils.llm_loader import get_fallback_llm
+
+logging.basicConfig(level=logging.DEBUG)
+
+
 logger=logging.getLogger(__name__)
 
 # ================================================================
@@ -716,6 +727,196 @@ class CommentsModule(BaseModule):
         pprint('END FDI')
         return kpis
 
+    def _generate_structured_intro_summary(
+        program: str,
+        quarter_period: str,
+        current_year: str,
+        financial_data: Dict[str, Any],
+        report_vars: Dict[str, Any],
+        verbose: bool = False
+        ) -> Optional[str]:
+        """
+        Generate the introductory summary using LangGraph and fallback logic (Ollama → OpenAI).
+        """
+
+        # 🔧 Tool to retrieve and format data tables
+        def get_table_data(table_key: str, input: str = "") -> str:
+            raw = report_vars.get(table_key) or financial_data.get(table_key)
+            logging.debug(f"[get_table_data] Loading {table_key} - Found: {type(raw)}")
+            if raw is None:
+                return f"No data for {table_key}"
+            try:
+                if isinstance(raw, str):
+                    df = pd.read_csv(io.StringIO(raw))  # if CSV
+                else:
+                    df = pd.DataFrame(raw)
+                return df.to_string(index=False) if not df.empty else f"No data for {table_key}"
+            except Exception as e:
+                logging.exception(f"Error loading {table_key}")
+                return f"Error reading {table_key}: {e}"
+
+        # 🛠️ Define tools
+        @tool
+        def budget_data(input: str) -> str:
+            return get_table_data("table_1a")
+
+        @tool
+        def ttp_data(input: str) -> str:
+            return get_table_data("TTP_performance_summary_table")
+
+        @tool
+        def amendment_h2020(input: str) -> str:
+            return get_table_data("H2020_overview")
+
+        @tool
+        def amendment_heu(input: str) -> str:
+            return get_table_data("HORIZON_overview")
+
+        @tool
+        def amendment_kpis(input: str) -> str:
+            return get_table_data("overview_tta_summary")
+
+        @tool
+        def amendment_cases_h2020(input: str) -> str:
+            return get_table_data("H2020_cases")
+
+        @tool
+        def amendment_cases_heu(input: str) -> str:
+            return get_table_data("HEU_cases")
+
+        @tool
+        def pay_heu(input: str) -> str:
+            return get_table_data("HEU_All_Payments")
+
+        @tool
+        def pay_credits_heu(input: str) -> str:
+            return get_table_data("table_2a_HE_data")
+
+        @tool
+        def pay_h2020(input: str) -> str:
+            return get_table_data("H2020_All_Payments")
+
+        @tool
+        def pay_credits_h2020(input: str) -> str:
+            return get_table_data("table_2a_H2020_data")
+
+        @tool
+        def grant_signatures(input: str) -> str:
+            return get_table_data("table_3_signatures")
+
+        @tool
+        def avg_ttg(input: str) -> str:
+            return str(report_vars.get("HEU_TTG_C_Y", "n/a"))
+
+        @tool
+        def external_audits(input: str) -> str:
+            return get_table_data("external_audits")
+
+        @tool
+        def tti(input: str) -> str:
+            return get_table_data("tti_combined")
+
+        @tool
+        def negative_adj(input: str) -> str:
+            return get_table_data("negative_adjustments")
+
+        @tool
+        def recoveries(input: str) -> str:
+            return get_table_data("recovery_activity")
+
+        @tool
+        def fdi_data(input: str) -> str:
+            return get_table_data("table_3c")
+
+        tools = {
+            "Budget": budget_data,
+            "TTP": ttp_data,
+            "Amendments H2020": amendment_h2020,
+            "Amendments HEU": amendment_heu,
+            "Amendment KPIs": amendment_kpis,
+            "Amendment Cases H2020": amendment_cases_h2020,
+            "Amendment Cases HEU": amendment_cases_heu,
+            "HEU Payments": pay_heu,
+            "HEU Credits": pay_credits_heu,
+            "H2020 Payments": pay_h2020,
+            "H2020 Credits": pay_credits_h2020,
+            "Grant Signatures": grant_signatures,
+            "Avg TTG": avg_ttg,
+            "External Audits": external_audits,
+            "TTI": tti,
+            "Negative Adjustments": negative_adj,
+            "Recoveries": recoveries,
+            "FDI": fdi_data,
+        }
+
+        # 🔄 LangGraph nodes
+        def analyze_input(state):
+            return {
+                "program": program,
+                "quarter": quarter_period,
+                "year": current_year
+            }
+
+        def choose_sources(state):
+            return {"sources": list(tools.keys())}
+
+        def fetch_data(state):
+            retrieved = {}
+            for key in state["sources"]:
+                try:
+                    retrieved[key] = tools[key]("")
+                except Exception as e:
+                    retrieved[key] = f"Error retrieving {key}: {e}"
+            return {"retrieved": retrieved}
+
+        def generate_summary(state):
+            context = "\n\n".join(f"{k}:\n{v}" for k, v in state["retrieved"].items() if v and "No data" not in v)
+            prompt = f"""
+            You are an expert in EU financial reporting. Based on the following raw financial data for {program} in {quarter_period} {current_year}, draft a concise and structured introductory summary.
+
+            Data:
+            {context}
+
+            Guidelines:
+            - Mention key budget consumption, TTP, audits, grants, amendments, and payment stats.
+            - Prioritize numerical accuracy and clarity.
+            - Use bullet points or short paragraphs.
+            - Use the euro symbol (€), not dollar ($).
+
+            Output:
+            """
+
+            llm = _get_fallback_llm()
+            response = llm.invoke(prompt)
+            return {"text": response.content if hasattr(response, "content") else str(response)}
+
+        # 🧠 LLM fallback selector
+        def _get_fallback_llm():
+            try:
+                r = requests.get("http://localhost:11434", timeout=5)
+                if r.status_code == 200:
+                    logging.debug("✅ Ollama detected — using local Qwen model.")
+                    return ChatOllama(model="qwen2.5:14b")
+            except:
+                pass
+            logging.debug("⚠️ Ollama unavailable — falling back to OpenAI.")
+            return ChatOpenAI(model="gpt-4", temperature=0.4)
+
+        # 🚀 Assemble LangGraph
+        g = StateGraph(dict)
+        g.add_node("analyze_input", analyze_input)
+        g.add_node("choose_sources", choose_sources)
+        g.add_node("fetch_data", fetch_data)
+        g.add_node("generate_summary", generate_summary)
+        g.set_entry_point("analyze_input")
+        g.set_finish_point("generate_summary")
+        g.add_edge("analyze_input", "choose_sources")
+        g.add_edge("choose_sources", "fetch_data")
+        g.add_edge("fetch_data", "generate_summary")
+
+        result = g.compile().invoke({})
+        return result["text"] if result else None
+
     def run(self, ctx: RenderContext) -> RenderContext:
         log=logging.getLogger(self.name)
         conn=ctx.db.conn
@@ -756,7 +957,8 @@ class CommentsModule(BaseModule):
             
             # ✅ ARCHITECTURE FIX: Pre-process KPIs here and add them to the dictionary
             # This ensures the generator receives everything it needs.
-            intro_summary_kpis = self._extract_and_contextualize_intro_kpis(report_vars, quarter_period)
+            # intro_summary_kpis = self._generate_structured_intro_summary(report_vars=report_vars, financial_data=financial_data,quarter_period=quarter_period, current_year=current_year)
+            intro_summary_kpis = self._extract_and_contextualize_intro_kpis(report_vars=report_vars,quarter_period=quarter_period)
             financial_data['intro_summary_kpis'] = intro_summary_kpis
 
 

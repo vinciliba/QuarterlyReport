@@ -576,8 +576,11 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
     df.loc[:, 'Source_Type'] = df['FR Earmarked Document Type Desc'].apply(map_fund_type)
 
     # ---------- GLOBAL COMMITMENTS -------------------------------------
-    global_df = df[(df["Source_Type"] == "MainCalls") &
-                   (df["FR ILC Date (dd/mm/yyyy)"] == eoy_next) & (df['Fund Source'] == "VOBU/EFTA/IAR2/2")].copy()
+    global_df = df[
+        (df["Source_Type"] == "MainCalls") &
+        ((df["FR ILC Date (dd/mm/yyyy)"] == eoy_next) | (df["FR ILC Date (dd/mm/yyyy)"] == eoy_this)) &
+        (df['Fund Source'] == "VOBU/EFTA/IAR2/2")
+    ].copy()
 
     logging.debug(f"Global Commitments - Rows after filter: {len(global_df)}")
 

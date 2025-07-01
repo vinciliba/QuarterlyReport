@@ -1122,8 +1122,21 @@ elif selected_section == "single_upload":
 # ------------------------------------------------------------------
 # 4) MASS UPLOAD
 # ------------------------------------------------------------------
+
+
+
 elif selected_section == "mass_upload":
     st.subheader("📦 Mass Upload")
+
+    
+    def alias_exists(alias: str, db_path: str) -> bool:
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (alias,)
+            )
+            return cursor.fetchone() is not None
 
     # ─────────────────────────── 1. drag-and-drop ──────────────────────────
     uploads = st.file_uploader(

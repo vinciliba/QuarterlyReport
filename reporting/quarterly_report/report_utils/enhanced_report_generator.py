@@ -95,7 +95,8 @@ except ImportError:
     from langchain_core.tools import tool  # fallback
 
 from langchain_community.chat_models import ChatOllama
-
+from langchain_openai import ChatOpenAI
+from reporting.quarterly_report.report_utils.llm_loader import get_fallback_llm
 
 from pprint import pprint
 
@@ -1764,101 +1765,7 @@ class EnhancedReportGenerator:
         }
         return descriptions.get(call_type, f'{call_type} grants')
     
-    # def _generate_structured_payment_summary(
-    #     self,
-    #     program: str,
-    #     call_type: str,
-    #     quarter_period: str,
-    #     current_year: str,
-    #     financial_data: Dict[str, Any],
-    #     report_vars: Dict[str, Any],
-    #     verbose: bool = False
-    # ) -> Optional[str]:
-    #     """
-    #     Generate structured, factual payment summary per program-call type.
-    #     """
-
-    #     def safe_parse_table(table_data):
-    #         if isinstance(table_data, str):
-    #             try:
-    #                 return json.loads(table_data)
-    #             except:
-    #                 try:
-    #                     return pd.read_csv(io.StringIO(table_data)).to_dict(orient='records')
-    #                 except:
-    #                     return []
-    #         return table_data if isinstance(table_data, list) else []
-
-    #     payment_types = ['Final', 'Interim', 'Pre_Financing', 'Experts']
-    #     all_data = {}
-    #     total_transactions = 0
-    #     total_amount = 0
-    #     total_vobu = 0
-
-    #     for payment_type in payment_types:
-    #         table_key = f"{program}_{payment_type}_Payments"
-    #         table = safe_parse_table(financial_data.get(table_key))
-    #         if not table:
-    #             continue
-
-    #         filtered = [r for r in table if r.get('Quarter') == f"1Q{current_year}" and r.get('Metric') in ['Total Amount', 'Out of Which VOBU/EFTA', 'No of Transactions']]
-    #         if not filtered:
-    #             continue
-
-    #         summary = {r['Metric']: r.get(call_type) for r in filtered if isinstance(r, dict)}
-    #         count = summary.get('No of Transactions') or 0
-    #         amount = summary.get('Total Amount') or 0
-    #         vobu = summary.get('Out of Which VOBU/EFTA') or 0
-
-    #         try:
-    #             count = int(float(count))
-    #             amount = float(amount)
-    #             vobu = float(vobu)
-    #         except:
-    #             count = 0
-    #             amount = 0
-    #             vobu = 0
-
-    #         all_data[payment_type] = {
-    #             'count': count,
-    #             'amount': amount,
-    #             'vobu': vobu
-    #         }
-
-    #         total_transactions += count
-    #         total_amount += amount
-    #         total_vobu += vobu
-
-    #     # Load deviation data
-    #     deviation_key = f"{program}_{call_type}_paym_analysis_table"
-    #     deviation_df = None
-    #     if deviation_key in financial_data:
-    #         try:
-    #             deviation_df = pd.read_csv(io.StringIO(financial_data[deviation_key])) if isinstance(financial_data[deviation_key], str) else financial_data[deviation_key]
-    #         except Exception:
-    #             deviation_df = None
-
-    #     deviation_value = None
-    #     if deviation_df is not None:
-    #         deviation_value = deviation_df.loc[0, 'Deviation_Pct'] if 'Deviation_Pct' in deviation_df.columns else None
-
-    #     # Format message
-    #     lines = [f"In {quarter_period}, {total_transactions} payments totalling €{total_amount / 1e6:.2f} million, of which €{total_vobu / 1e6:.2f} million were paid using C1/E0 credits, were executed."]
-    #     for ptype in payment_types:
-    #         entry = all_data.get(ptype)
-    #         if entry and entry['count']:
-    #             lines.append(
-    #                 f"Additionally, {entry['count']} {ptype.replace('_', ' ').lower()} payments amounting to €{entry['amount'] / 1e6:.2f} million were processed, of which €{entry['vobu'] / 1e6:.2f} million were paid using C1/E0 credits."
-    #             )
-
-    #     if deviation_value is not None:
-    #         try:
-    #             pct = float(deviation_value) * 100
-    #             lines.append(f"In comparison to the forecast, consumption was {'above' if pct > 0 else 'below'} by {abs(pct):.1f} percentage points.")
-    #         except:
-    #             pass
-
-    #     return "\n".join(lines) if lines else None
+   
 
 
     import logging
@@ -1918,11 +1825,9 @@ class EnhancedReportGenerator:
             """Fetches experts and support payments data table for the given programme."""
             return get_payment_data(f"{program}_Experts and Support", input)
 
-        @tool
+        @tool(description="Returns forecast deviation analysis table for the programme and call.")
         def deviation_analysis(input: str) -> str:
-            """Fetches deviation analysis data table for the specific call."""
             return get_payment_data(f"{program}_payments_analysis_{call_type.upper()}", input)
-
 
         tools = {
             "Final": final_payments,
@@ -1979,7 +1884,8 @@ class EnhancedReportGenerator:
 
             Output:
             """
-            llm = ChatOllama(model="qwen2.5:14b")
+            # llm = ChatOllama(model="qwen2.5:14b")
+            llm = get_fallback_llm()
             response = llm.invoke(prompt)
             logging.debug(f"[generate_summary] LLM response: {response}")
             return {"text": response.content if hasattr(response, "content") else str(response)}
