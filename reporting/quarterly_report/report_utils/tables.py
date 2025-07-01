@@ -583,7 +583,7 @@ def build_commitment_detail_table_1(df: pd.DataFrame, current_year: int, report:
     ].copy()
 
     # Then filter by year in the string
-    global_df = global_df[global_df["FR Fund Reservation Desc"].str.contains(current_year, na=False)]
+    global_df = global_df[global_df["FR Fund Reservation Desc"].str.contains(str(current_year), na=False)]
 
     logging.debug(f"Global Commitments - Rows after filter: {len(global_df)}")
 
