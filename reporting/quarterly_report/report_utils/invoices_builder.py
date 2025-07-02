@@ -128,6 +128,112 @@ def map_call_type_with_experts(row, grant_map):
     return project_num
 
 
+# def create_registration_pivot_table(df, programme_name):
+#     """Create a pivot table for a specific programme (H2020 or HEU)"""
+#     prog_data = df[df['Programme'] == programme_name].copy()
+    
+#     if len(prog_data) == 0:
+#         return pd.DataFrame()
+    
+#     pivot_rows = []
+    
+#     # GRANTS section
+#     grants_data = prog_data[~prog_data['call_type'].isin(['EXPERTS', 'EXPERTS_C0'])].copy()
+    
+#     if len(grants_data) > 0:
+#         # Individual grant types
+#         for call_type in sorted(grants_data['call_type'].unique()):
+#             ct_data = grants_data[grants_data['call_type'] == call_type]
+            
+#             total_invoices = ct_data['Inv Supplier Invoice Key'].count()
+#             on_time_count = ct_data[ct_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+#             late_count = ct_data[ct_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
+            
+#             on_time_pct = (on_time_count / total_invoices * 100) if total_invoices > 0 else 0
+#             late_pct = (late_count / total_invoices * 100) if total_invoices > 0 else 0
+            
+#             pivot_rows.append({
+#                 'Category': 'GRANTS',
+#                 'Type': call_type,
+#                 'No of Invoices': total_invoices,
+#                 '% registered on time': f"{on_time_pct:.2f}%",
+#                 '% registered late': f"{late_pct:.2f}%"
+#             })
+        
+#         # GRANTS TOTAL
+#         total_grants = grants_data['Inv Supplier Invoice Key'].count()
+#         on_time_grants = grants_data[grants_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+#         late_grants = grants_data[grants_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
+        
+#         on_time_grants_pct = (on_time_grants / total_grants * 100) if total_grants > 0 else 0
+#         late_grants_pct = (late_grants / total_grants * 100) if total_grants > 0 else 0
+        
+#         pivot_rows.append({
+#             'Category': 'GRANTS',
+#             'Type': 'TOTAL:',
+#             'No of Invoices': total_grants,
+#             '% registered on time': f"{on_time_grants_pct:.2f}%",
+#             '% registered late': f"{late_grants_pct:.2f}%"
+#         })
+    
+#     # EXPERTS section
+#     experts_data = prog_data[prog_data['call_type'].isin(['EXPERTS', 'EXPERTS_C0'])].copy()
+    
+#     if len(experts_data) > 0:
+#         # Individual expert types
+#         for expert_type in ['EXPERTS', 'EXPERTS_C0']:
+#             if expert_type in experts_data['call_type'].values:
+#                 exp_data = experts_data[experts_data['call_type'] == expert_type]
+                
+#                 total_experts = exp_data['Inv Supplier Invoice Key'].count()
+#                 on_time_experts = exp_data[exp_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+#                 late_experts = exp_data[exp_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
+                
+#                 on_time_exp_pct = (on_time_experts / total_experts * 100) if total_experts > 0 else 0
+#                 late_exp_pct = (late_experts / total_experts * 100) if total_experts > 0 else 0
+                
+#                 pivot_rows.append({
+#                     'Category': 'EXPERTS',
+#                     'Type': expert_type,
+#                     'No of Invoices': total_experts,
+#                     '% registered on time': f"{on_time_exp_pct:.2f}%",
+#                     '% registered late': f"{late_exp_pct:.2f}%"
+#                 })
+        
+#         # EXPERTS TOTAL
+#         total_all_experts = experts_data['Inv Supplier Invoice Key'].count()
+#         on_time_all_experts = experts_data[experts_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+#         late_all_experts = experts_data[experts_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
+        
+#         on_time_all_exp_pct = (on_time_all_experts / total_all_experts * 100) if total_all_experts > 0 else 0
+#         late_all_exp_pct = (late_all_experts / total_all_experts * 100) if total_all_experts > 0 else 0
+        
+#         pivot_rows.append({
+#             'Category': 'EXPERTS',
+#             'Type': 'TOTAL:',
+#             'No of Invoices': total_all_experts,
+#             '% registered on time': f"{on_time_all_exp_pct:.2f}%",
+#             '% registered late': f"{late_all_exp_pct:.2f}%"
+#         })
+    
+#     # PROGRAMME TOTAL
+#     total_programme = prog_data['Inv Supplier Invoice Key'].count()
+#     on_time_programme = prog_data[prog_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+#     late_programme = prog_data[prog_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
+    
+#     on_time_prog_pct = (on_time_programme / total_programme * 100) if total_programme > 0 else 0
+#     late_prog_pct = (late_programme / total_programme * 100) if total_programme > 0 else 0
+    
+#     pivot_rows.append({
+#         'Category': programme_name,
+#         'Type': 'TOTAL:',
+#         'No of Invoices': total_programme,
+#         '% registered on time': f"{on_time_prog_pct:.2f}%",
+#         '% registered late': f"{late_prog_pct:.2f}%"
+#     })
+    
+#     return pd.DataFrame(pivot_rows)
+
 def create_registration_pivot_table(df, programme_name):
     """Create a pivot table for a specific programme (H2020 or HEU)"""
     prog_data = df[df['Programme'] == programme_name].copy()
@@ -137,102 +243,78 @@ def create_registration_pivot_table(df, programme_name):
     
     pivot_rows = []
     
-    # GRANTS section
-    grants_data = prog_data[~prog_data['call_type'].isin(['EXPERTS', 'EXPERTS_C0'])].copy()
+    # GRANTS section: anything not starting with EXPERTS
+    grants_data = prog_data[~prog_data['call_type'].astype(str).str.startswith('EXPERTS')].copy()
     
     if len(grants_data) > 0:
-        # Individual grant types
         for call_type in sorted(grants_data['call_type'].unique()):
             ct_data = grants_data[grants_data['call_type'] == call_type]
-            
-            total_invoices = ct_data['Inv Supplier Invoice Key'].count()
-            on_time_count = ct_data[ct_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
-            late_count = ct_data[ct_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
-            
-            on_time_pct = (on_time_count / total_invoices * 100) if total_invoices > 0 else 0
-            late_pct = (late_count / total_invoices * 100) if total_invoices > 0 else 0
-            
+            total = ct_data['Inv Supplier Invoice Key'].count()
+            on_time = ct_data[ct_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+            late = ct_data[ct_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
             pivot_rows.append({
                 'Category': 'GRANTS',
                 'Type': call_type,
-                'No of Invoices': total_invoices,
-                '% registered on time': f"{on_time_pct:.2f}%",
-                '% registered late': f"{late_pct:.2f}%"
+                'No of Invoices': total,
+                '% registered on time': f"{(on_time / total * 100) if total > 0 else 0:.2f}%",
+                '% registered late': f"{(late / total * 100) if total > 0 else 0:.2f}%"
             })
         
         # GRANTS TOTAL
-        total_grants = grants_data['Inv Supplier Invoice Key'].count()
-        on_time_grants = grants_data[grants_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
-        late_grants = grants_data[grants_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
-        
-        on_time_grants_pct = (on_time_grants / total_grants * 100) if total_grants > 0 else 0
-        late_grants_pct = (late_grants / total_grants * 100) if total_grants > 0 else 0
-        
+        total = grants_data['Inv Supplier Invoice Key'].count()
+        on_time = grants_data[grants_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+        late = grants_data[grants_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
         pivot_rows.append({
             'Category': 'GRANTS',
             'Type': 'TOTAL:',
-            'No of Invoices': total_grants,
-            '% registered on time': f"{on_time_grants_pct:.2f}%",
-            '% registered late': f"{late_grants_pct:.2f}%"
+            'No of Invoices': total,
+            '% registered on time': f"{(on_time / total * 100) if total > 0 else 0:.2f}%",
+            '% registered late': f"{(late / total * 100) if total > 0 else 0:.2f}%"
         })
     
-    # EXPERTS section
-    experts_data = prog_data[prog_data['call_type'].isin(['EXPERTS', 'EXPERTS_C0'])].copy()
+    # EXPERTS section: dynamically group any call_type starting with EXPERTS
+    experts_data = prog_data[prog_data['call_type'].astype(str).str.startswith('EXPERTS')].copy()
     
     if len(experts_data) > 0:
-        # Individual expert types
-        for expert_type in ['EXPERTS', 'EXPERTS_C0']:
-            if expert_type in experts_data['call_type'].values:
-                exp_data = experts_data[experts_data['call_type'] == expert_type]
-                
-                total_experts = exp_data['Inv Supplier Invoice Key'].count()
-                on_time_experts = exp_data[exp_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
-                late_experts = exp_data[exp_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
-                
-                on_time_exp_pct = (on_time_experts / total_experts * 100) if total_experts > 0 else 0
-                late_exp_pct = (late_experts / total_experts * 100) if total_experts > 0 else 0
-                
-                pivot_rows.append({
-                    'Category': 'EXPERTS',
-                    'Type': expert_type,
-                    'No of Invoices': total_experts,
-                    '% registered on time': f"{on_time_exp_pct:.2f}%",
-                    '% registered late': f"{late_exp_pct:.2f}%"
-                })
+        for expert_type in sorted(experts_data['call_type'].unique()):
+            exp_data = experts_data[experts_data['call_type'] == expert_type]
+            total = exp_data['Inv Supplier Invoice Key'].count()
+            on_time = exp_data[exp_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+            late = exp_data[exp_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
+            pivot_rows.append({
+                'Category': 'EXPERTS',
+                'Type': expert_type,
+                'No of Invoices': total,
+                '% registered on time': f"{(on_time / total * 100) if total > 0 else 0:.2f}%",
+                '% registered late': f"{(late / total * 100) if total > 0 else 0:.2f}%"
+            })
         
         # EXPERTS TOTAL
-        total_all_experts = experts_data['Inv Supplier Invoice Key'].count()
-        on_time_all_experts = experts_data[experts_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
-        late_all_experts = experts_data[experts_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
-        
-        on_time_all_exp_pct = (on_time_all_experts / total_all_experts * 100) if total_all_experts > 0 else 0
-        late_all_exp_pct = (late_all_experts / total_all_experts * 100) if total_all_experts > 0 else 0
-        
+        total = experts_data['Inv Supplier Invoice Key'].count()
+        on_time = experts_data[experts_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+        late = experts_data[experts_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
         pivot_rows.append({
             'Category': 'EXPERTS',
             'Type': 'TOTAL:',
-            'No of Invoices': total_all_experts,
-            '% registered on time': f"{on_time_all_exp_pct:.2f}%",
-            '% registered late': f"{late_all_exp_pct:.2f}%"
+            'No of Invoices': total,
+            '% registered on time': f"{(on_time / total * 100) if total > 0 else 0:.2f}%",
+            '% registered late': f"{(late / total * 100) if total > 0 else 0:.2f}%"
         })
-    
+
     # PROGRAMME TOTAL
-    total_programme = prog_data['Inv Supplier Invoice Key'].count()
-    on_time_programme = prog_data[prog_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
-    late_programme = prog_data[prog_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
-    
-    on_time_prog_pct = (on_time_programme / total_programme * 100) if total_programme > 0 else 0
-    late_prog_pct = (late_programme / total_programme * 100) if total_programme > 0 else 0
-    
+    total = prog_data['Inv Supplier Invoice Key'].count()
+    on_time = prog_data[prog_data['registered_on_time'] == 1]['Inv Supplier Invoice Key'].count()
+    late = prog_data[prog_data['registered_on_time'] == 0]['Inv Supplier Invoice Key'].count()
     pivot_rows.append({
         'Category': programme_name,
         'Type': 'TOTAL:',
-        'No of Invoices': total_programme,
-        '% registered on time': f"{on_time_prog_pct:.2f}%",
-        '% registered late': f"{late_prog_pct:.2f}%"
+        'No of Invoices': total,
+        '% registered on time': f"{(on_time / total * 100) if total > 0 else 0:.2f}%",
+        '% registered late': f"{(late / total * 100) if total > 0 else 0:.2f}%"
     })
     
     return pd.DataFrame(pivot_rows)
+
 
 
 def create_registration_great_table_grouped(df_pivot, programme_name, colors):
@@ -445,16 +527,32 @@ def generate_invoices_report(
         
         # Create binary column for on-time registration
         df_inv['registered_on_time'] = (df_inv['Time_to_Invoice'] <= 5).astype(int)
+        df_inv.to_excel('test_inv.xlsx')
         
-        # Filter valid call types
-        valid_call_types = set(grant_map.values()) | {'EXPERTS', 'EXPERTS_C0'}
-        valid_call_types.discard('CSA')
-        df_filtered = df_inv[df_inv['call_type'].isin(valid_call_types)].copy()
+        # # Filter valid call types
+        # valid_call_types = set(grant_map.values()) | {'EXPERTS', 'EXPERTS_C0'}
+        # valid_call_types.discard('CSA')
+        # df_filtered = df_inv[df_inv['call_type'].isin(valid_call_types)].copy()
         
+        # # Apply date scope filter
+        # quarter_dates = get_scope_start_end(cutoff=cutoff)
+        # last_valid_date = quarter_dates[1]
+        # df_filtered = df_filtered[df_filtered['Inv Reception Date (dd/mm/yyyy)'] <= last_valid_date].copy()
+
+        # Filter valid call types (standard + all EXPERTS variants)
+        valid_call_types = set(grant_map.values())
+        df_filtered = df_inv[
+            df_inv['call_type'].apply(
+                lambda x: x in valid_call_types or (isinstance(x, str) and x.startswith('EXPERTS'))
+            )
+        ].copy()
+
         # Apply date scope filter
         quarter_dates = get_scope_start_end(cutoff=cutoff)
         last_valid_date = quarter_dates[1]
         df_filtered = df_filtered[df_filtered['Inv Reception Date (dd/mm/yyyy)'] <= last_valid_date].copy()
+
+        logger.info(f"Filtered to {len(df_filtered)} invoices within scope")
         
         logger.info(f"Filtered to {len(df_filtered)} invoices within scope")
         

@@ -531,6 +531,7 @@ def quarterly_tables_generation_main(df_paym, cutoff, db_path, report, table_col
                 'IP': 'Interim Payments',
                 'FP': 'Final Payments', 
                 'PF': 'Pre-financing',
+                'GF': 'Pre-Financing',
                 'EXPERTS': 'Experts and Support'
             }
             
@@ -654,8 +655,6 @@ def quarterly_tables_generation_main(df_paym, cutoff, db_path, report, table_col
                 
                 for call_type in call_types:
                     df_call_type = df_q[df_q['Call_Type_Display'] == call_type]
-                    
-                    # Total amount for this call type
                     total_amount = df_call_type['v_amount_to_sum'].sum()
                     quarter_row[f'Total_Amount_{call_type}'] = total_amount
                     total_amount_all_types += total_amount

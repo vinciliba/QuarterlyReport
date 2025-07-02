@@ -196,8 +196,13 @@ def map_call_type_with_experts(row, grant_map):
     # Return original project_number if no conditions are met
     return project_num
 
+# def map_payment_type(row):
+#     if row['v_payment_type'] == 'Other' and row['Pay Workflow Last AOS Person Id'] == 'WALASOU':
+#         return 'EXPERTS'
+#     return row['v_payment_type']
+
 def map_payment_type(row):
-    if row['v_payment_type'] == 'Other' and row['Pay Workflow Last AOS Person Id'] == 'WALASOU':
+    if row['v_payment_type'] == 'Other':
         return 'EXPERTS'
     return row['v_payment_type']
 
@@ -315,18 +320,57 @@ class PaymentsModule(BaseModule):
             # ══════════════════════════════════════════════════════════════════
             # 2. DATA TRANSFORMATION
             # ══════════════════════════════════════════════════════════════════
-            
+
             print("🔄 Starting data transformation...")
 
             # Apply payment type mapping
             df_paym['v_payment_type'] = df_paym.apply(map_payment_type, axis=1)
-            
-            # Filter the dataframe
-            df_paym = df_paym[df_paym['Pay Document Type Desc'].isin(['Payment Directive', 'Exp Pre-financing'])]
+
+            # Now it's safe to drop rows still marked as 'Other' (should be 0)
             df_paym = df_paym[df_paym['v_payment_type'] != 'Other']
+
+            num_others = (df_paym['v_payment_type'] == 'Other').sum()
+            print(f"🚨 WARNING: {num_others} rows still marked as 'Other' after mapping")
+
+            # Filter the dataframe
+            df_paym = df_paym[df_paym['Pay Document Type Desc'].isin(['Payment Directive', 'Exp Pre-financing', 'Exp. Guarantee'])]
+           
             df_paym = df_paym[df_paym['Pay Payment Key'].notnull()]
 
             df_paym['project_number'] = df_paym.apply(extract_project_number, axis=1)
+
+            # ──────────────────────────────────────────────────────────────
+            # NORMALIZE GF Pay Payment Keys USING PF REFERENCE
+            # ──────────────────────────────────────────────────────────────
+            # Purpose:
+            # To prevent duplicate transaction counts in Pre-financing,
+            # we unify GF and PF payments that share the same v_payment_reference_key.
+            # If a PF payment exists for the same reference key, the GF row's
+            # Pay Payment Key is overwritten with that of the PF.
+            # This ensures both payments are treated as a single transaction.
+
+            # 1. Build a mapping from v_payment_reference_key → PF Pay Payment Key
+            pf_rows = df_paym[
+                (df_paym['v_payment_type'] == 'PF') & 
+                df_paym['v_payment_reference_key'].notna()
+            ][['v_payment_reference_key', 'Pay Payment Key']]
+
+            # Only keep the first PF per reference key (in case of multiple)
+            pf_reference_map = pf_rows.drop_duplicates(subset=['v_payment_reference_key'])
+
+            # Create dictionary for fast lookup
+            pf_key_map = pf_reference_map.set_index('v_payment_reference_key')['Pay Payment Key'].to_dict()
+
+            # 2. Replace GF Pay Payment Key if there's a matching PF
+            def replace_gf_key(row):
+                if row['v_payment_type'] == 'GF':
+                    ref_key = row['v_payment_reference_key']
+                    if pd.notna(ref_key) and ref_key in pf_key_map:
+                        return pf_key_map[ref_key]  # Replace with PF's key
+                return row['Pay Payment Key']  # Keep original
+
+            # 3. Apply the replacement
+            df_paym['Pay Payment Key'] = df_paym.apply(replace_gf_key, axis=1)
 
             # Create call type mappings
             df_calls['CALL_TYPE'] = df_calls.apply(determine_po_category, axis=1)
@@ -335,27 +379,38 @@ class PaymentsModule(BaseModule):
             # PO ORDERS MAP
             df_po['CALL_TYPE'] = df_po.apply(determine_po_category_po_list, axis=1)
             po_map = df_po[
-                df_po['CALL_TYPE'].notna() &
-                (df_po['CALL_TYPE'].str.strip() != '')
+                df_po['CALL_TYPE'].notna() & (df_po['CALL_TYPE'].str.strip() != '')
             ].set_index('PO Purchase Order Key')['CALL_TYPE'].to_dict()
 
-            # Apply the mapping
+            # Apply the mapping from grant number and project number
             df_paym['call_type'] = df_paym['project_number'].apply(
-                lambda x: map_project_to_call_type(x, grant_map))
+                lambda x: map_project_to_call_type(x, grant_map)
+            )
             df_paym['call_type'] = df_paym.apply(
-                lambda row: map_call_type_with_experts(row, grant_map), axis=1)
+                lambda row: map_call_type_with_experts(row, grant_map), axis=1
+            )
 
-            # Clean call_type column
+            # Clean and normalize call_type
             df_paym['call_type'] = df_paym['call_type'].astype(str).str.strip().replace(['nan', ''], np.nan)
-            # df_paym['call_type'] = df_paym.apply(apply_conditional_mapping, axis=1)
-             # ✅ FIXED: Pass po_map as parameter instead of relying on global
+
+            # Apply conditional PO mapping fallback
             df_paym['call_type'] = df_paym.apply(
                 lambda row: apply_conditional_mapping(row, po_map), axis=1
             )
-            
+
+            # ✅ Ensure call_type is EXPERTS where v_payment_type is EXPERTS
+            df_paym.loc[df_paym['v_payment_type'] == 'EXPERTS', 'call_type'] = 'EXPERTS'
+            print(f"✅ call_type set to 'EXPERTS' for {(df_paym['v_payment_type'] == 'EXPERTS').sum()} rows")
+
+            # ✅ Set v_amount_to_sum = v_accepted_amount for EXPERTS and Other types
+            experts_mask = df_paym['v_payment_type'].isin(['EXPERTS', 'Other'])
+            df_paym.loc[experts_mask, 'v_amount_to_sum'] = df_paym.loc[experts_mask, 'v_accepted_amount']
+            print(f"✅ Overwrote v_amount_to_sum with v_accepted_amount for {experts_mask.sum()} EXPERTS/Other rows")
+                  
             # Data type conversions
             df_paym['PO Purchase Order Key'] = pd.to_numeric(
-                df_paym['PO Purchase Order Key'], errors='coerce').astype('Int64')
+                df_paym['PO Purchase Order Key'], errors='coerce'
+            ).astype('Int64')
 
             df_paym['Pay Document Date (dd/mm/yyyy)'] = pd.to_datetime(
                 df_paym['Pay Document Date (dd/mm/yyyy)'],
@@ -371,6 +426,7 @@ class PaymentsModule(BaseModule):
             df_paym = df_paym[df_paym['call_type'] != 'CSA']
 
             print(f"✅ Data transformation completed: {len(df_paym)} records after filtering")
+            df_paym.to_excel('test_paymen.xlsx')
 
         except Exception as e:
             error_msg = f"Data transformation failed: {str(e)}"
@@ -428,7 +484,10 @@ class PaymentsModule(BaseModule):
             payment_key_to_payment_in_time = mapping_data.set_index('Pay_Payment_Key_Int')['v_payment_in_time'].to_dict()
 
             # Split dataframe and apply mappings
-            exp_prefi_mask = df_paym['Pay Document Type Desc'] == 'Exp Pre-financing'
+            exp_prefi_mask = (
+                (df_paym['Pay Document Type Desc'] == 'Exp Pre-financing') |
+                (df_paym['Pay Document Type Desc'] == 'Exp. Guarantee')
+            )
             payment_directive_mask = df_paym['Pay Document Type Desc'] == 'Payment Directive'
             other_mask = ~(exp_prefi_mask | payment_directive_mask)
 

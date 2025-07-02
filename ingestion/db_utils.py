@@ -834,39 +834,64 @@ def save_gt_table_smart(gt_table, file_path, var_name):
             logging.warning(f"Could not delete existing file {file_path}: {e}")
 
     # Get table dimensions from GT table
-    def get_table_dimensions(gt_table):
-        """Extract column and row count from GT table object"""
-        num_cols = 5  # default
-        num_rows = 10  # default
+    # def get_table_dimensions(gt_table):
+    #     """Extract column and row count from GT table object"""
+    #     num_cols = 5  # default
+    #     num_rows = 10  # default
         
-        try:
-            # Try different methods to get dimensions
-            if hasattr(gt_table, '_data'):
-                # Access underlying data
-                if hasattr(gt_table._data, 'columns'):
-                    num_cols = len(gt_table._data.columns)
-                elif hasattr(gt_table._data, 'shape'):
-                    num_cols = gt_table._data.shape[1]
-                    num_rows = gt_table._data.shape[0]
+    #     try:
+    #         # Try different methods to get dimensions
+    #         if hasattr(gt_table, '_data'):
+    #             # Access underlying data
+    #             if hasattr(gt_table._data, 'columns'):
+    #                 num_cols = len(gt_table._data.columns)
+    #             elif hasattr(gt_table._data, 'shape'):
+    #                 num_cols = gt_table._data.shape[1]
+    #                 num_rows = gt_table._data.shape[0]
                 
-                # Try to get row count
-                if hasattr(gt_table._data, 'index'):
-                    num_rows = len(gt_table._data.index)
+    #             # Try to get row count
+    #             if hasattr(gt_table._data, 'index'):
+    #                 num_rows = len(gt_table._data.index)
             
-            # Try to access through other GT table attributes
-            if hasattr(gt_table, '_boxhead'):
-                if hasattr(gt_table._boxhead, '_columns'):
-                    num_cols = len(gt_table._boxhead._columns)
+    #         # Try to access through other GT table attributes
+    #         if hasattr(gt_table, '_boxhead'):
+    #             if hasattr(gt_table._boxhead, '_columns'):
+    #                 num_cols = len(gt_table._boxhead._columns)
             
-            # Check for stub (row labels) which adds width
-            has_stub = hasattr(gt_table, '_stub') and gt_table._stub is not None
+    #         # Check for stub (row labels) which adds width
+    #         has_stub = hasattr(gt_table, '_stub') and gt_table._stub is not None
             
-            logging.debug(f"Table dimensions: {num_cols} columns x {num_rows} rows, has_stub={has_stub}")
-            return num_cols, num_rows, has_stub
+    #         logging.debug(f"Table dimensions: {num_cols} columns x {num_rows} rows, has_stub={has_stub}")
+    #         return num_cols, num_rows, has_stub
             
+    #     except Exception as e:
+    #         logging.warning(f"Error getting table dimensions: {e}, using defaults")
+    #         return num_cols, num_rows, False
+
+    def get_table_dimensions(gt_table):
+        """
+        Extract accurate column and row count from GT table object.
+        Works across different GT table types, including with or without stub.
+        """
+        try:
+            df = getattr(gt_table, "_data", None)
+            if isinstance(df, pd.DataFrame):
+                num_rows, num_cols = df.shape
+
+                has_stub = getattr(gt_table, "_stub", None) is not None
+                if has_stub:
+                    # Count index column as an extra visual column
+                    num_cols += 1
+
+                logging.debug(f"Table dimensions: {num_cols} columns x {num_rows} rows, has_stub={has_stub}")
+                return num_cols, num_rows, has_stub
+
         except Exception as e:
-            logging.warning(f"Error getting table dimensions: {e}, using defaults")
-            return num_cols, num_rows, False
+            logging.warning(f"Could not extract GT table dimensions: {e}")
+
+        # Fallback
+        logging.warning("Falling back to default GT table dimensions (9x10)")
+        return 9, 10, False
 
     # Calculate dynamic dimensions based on content
     num_columns, num_rows, has_stub = get_table_dimensions(gt_table)
