@@ -1475,29 +1475,24 @@ def build_signatures_table(
     tab3_prep['Status'] = 'Under Preparation'
 
     final_df = pd.concat([agg_with_totals, tab3_prep], ignore_index=True)
-
-    # --- FIX STARTS HERE ---
-
-    # Identify all topic columns and the TOTAL column
-    numeric_columns = [col for col in final_df.columns if col.startswith('ERC-') or col == 'TOTAL']
-
-    # Loop through the numeric columns to fill NaNs and set the correct type
-    for col in numeric_columns:
+    numeric_cols_to_clean = [col for col in final_df.columns if col.startswith('ERC-') or col == 'TOTAL']
+    for col in numeric_cols_to_clean:
         if col in final_df.columns:
-            # Fill any NaN values with 0 and convert the column to a standard integer type
             final_df[col] = final_df[col].fillna(0).astype(int)
+    #1. Get all topic columns and sort them to ensure a consistent order
+    erc_columns = sorted([col for col in final_df.columns if col.startswith('ERC-')])
 
-    # --- FIX ENDS HERE ---
-    
-    # This line, which you had for debugging, is no longer necessary but can be kept for verification
-    # final_df.to_excel('granting_final.xlsx') 
-    
-    # --- CORRECTED CODE STARTS HERE ---
-    
-    # Explicitly define which columns are numeric and should be displayed/formatted as such.
-    # This avoids accidentally selecting the non-numeric 'Status' column.
-    display_columns = [col for col in final_df.columns if col.startswith('ERC-') or col == 'TOTAL']
+    # 2. Define the complete, desired column order
+    column_order = ['Signature Month'] + erc_columns + ['TOTAL', 'Status']
 
+    # 3. Reorder the DataFrame itself.
+    # We filter the list to only include columns that actually exist in the DataFrame to prevent errors.
+    final_df = final_df[[col for col in column_order if col in final_df.columns]]
+
+    # --- FIX FOR COLUMN ORDER ENDS HERE ---
+
+    # This line correctly defines the columns for numeric formatting
+    display_columns = erc_columns + ['TOTAL']
 
     # final_df = sanitize_dataframe(final_df)
     print("Dtypes before rendering GT:")
