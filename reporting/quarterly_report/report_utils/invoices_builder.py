@@ -526,7 +526,7 @@ def generate_invoices_report(
                                     df_inv['Inv Reception Date (dd/mm/yyyy)']).dt.days
         
         # Create binary column for on-time registration
-        df_inv['registered_on_time'] = (df_inv['Time_to_Invoice'] <= 5).astype(int)
+        df_inv['registered_on_time'] = (df_inv['Time_to_Invoice'] <= 7).astype(int)
         df_inv.to_excel('test_inv.xlsx')
         
         # # Filter valid call types
