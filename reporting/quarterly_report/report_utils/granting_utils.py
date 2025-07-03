@@ -101,32 +101,43 @@ def _coerce_date_columns(df: pd.DataFrame) -> None:
         if not pd.api.types.is_datetime64_any_dtype(df[col]):
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
+# def _ensure_timedelta_cols(out: pd.DataFrame) -> None:
+#     """Create TTG/TTS/TTI columns if absent (works whatever dtypes we start with)."""
+#     if {"TTG_timedelta", "TTS_timedelta", "TTI_timedelta"}.issubset(out.columns):
+#         return                # already there
+
+#     _coerce_dates(out)        # <── NEW: make sure date parsing happened
+
+#     main = out["Ranking Status"].eq("MAIN")
+
+#     out["TTG_timedelta"] = np.where(
+#         main,
+#         out["GA Signature - Commission"] - out["Call Closing Date"],
+#         (out["GA Signature - Commission"] - out["Invitation Letter Sent"])
+#         + (out["Evaluation Result Letter Sent"] - out["Call Closing Date"]),
+#     )
+
+#     out["TTS_timedelta"] = np.where(
+#         main,
+#         out["GA Signature - Commission"] - out["Evaluation Result Letter Sent"],
+#         (out["GA Signature - Commission"] - out["Evaluation Result Letter Sent"])
+#         - (out["Invitation Letter Sent"] - out["Evaluation Result Letter Sent"]),
+#     )
+
+#     out["TTI_timedelta"] = (
+#         out["Evaluation Result Letter Sent"] - out["Call Closing Date"]
+#     )
+
 def _ensure_timedelta_cols(out: pd.DataFrame) -> None:
-    """Create TTG/TTS/TTI columns if absent (works whatever dtypes we start with)."""
+    """Ensure TTI, TTS, and TTG are computed using simplified consistent logic."""
     if {"TTG_timedelta", "TTS_timedelta", "TTI_timedelta"}.issubset(out.columns):
-        return                # already there
+        return  # already computed
 
-    _coerce_dates(out)        # <── NEW: make sure date parsing happened
+    _coerce_dates(out)  # ensure date parsing
 
-    main = out["Ranking Status"].eq("MAIN")
-
-    out["TTG_timedelta"] = np.where(
-        main,
-        out["GA Signature - Commission"] - out["Call Closing Date"],
-        (out["GA Signature - Commission"] - out["Invitation Letter Sent"])
-        + (out["Evaluation Result Letter Sent"] - out["Call Closing Date"]),
-    )
-
-    out["TTS_timedelta"] = np.where(
-        main,
-        out["GA Signature - Commission"] - out["Evaluation Result Letter Sent"],
-        (out["GA Signature - Commission"] - out["Evaluation Result Letter Sent"])
-        - (out["Invitation Letter Sent"] - out["Evaluation Result Letter Sent"]),
-    )
-
-    out["TTI_timedelta"] = (
-        out["Evaluation Result Letter Sent"] - out["Call Closing Date"]
-    )
+    out["TTI_timedelta"] = out["Evaluation Result Letter Sent"] - out["Call Closing Date"]
+    out["TTS_timedelta"] = out["GA Signature - Commission"] - out["Invitation Letter Sent"]
+    out["TTG_timedelta"] = out["TTI_timedelta"] + out["TTS_timedelta"]
     
 # 2) vectorised transform ────────────────────────────────────────────────────
 def enrich_grants(df: pd.DataFrame) -> pd.DataFrame:
