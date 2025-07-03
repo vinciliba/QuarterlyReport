@@ -1384,6 +1384,10 @@ def quarterly_tables_generation_main(df_paym, cutoff, db_path, report, table_col
                         anchor_name = f'{program}_Final_Payments'
                     elif pay_type == 'Pre-financing':
                         anchor_name = f'{program}_Pre_Financing'
+                    elif pay_type == 'Experts and Support':
+                        anchor_name = f'{program}_Experts_payments'
+                    elif pay_type == 'EXPERTS':
+                        anchor_name = f'{program}_Experts_payments'
                     else:
                         anchor_name = f'{program}_{pay_type}'            
                     
