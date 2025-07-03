@@ -368,6 +368,20 @@ class PaymentsModule(BaseModule):
                     if pd.notna(ref_key) and ref_key in pf_key_map:
                         return pf_key_map[ref_key]  # Replace with PF's key
                 return row['Pay Payment Key']  # Keep original
+            
+            # ──────────────────────────────────────────────────────────────
+            # FINAL TRANSFORMATION: Change GF to PF
+            # ──────────────────────────────────────────────────────────────
+            # Purpose: Unify all Guarantee Fund payments under the Pre-financing type
+            # as per the final requirement.
+
+            # 1. Create a new boolean column to flag rows where v_payment_type is 'GF'
+            df_paym['is_legacy_gf'] = (df_paym['v_payment_type'] == 'GF')
+            print(f"🚩 Flagged {df_paym['is_legacy_gf'].sum()} rows as legacy 'GF'.")
+
+            # 2. Now, change 'GF' to 'PF' in the original column
+            df_paym.loc[df_paym['v_payment_type'] == 'GF', 'v_payment_type'] = 'PF'
+            print("✅ Converted all 'GF' payment types to 'PF'.")
 
             # 3. Apply the replacement
             df_paym['Pay Payment Key'] = df_paym.apply(replace_gf_key, axis=1)
