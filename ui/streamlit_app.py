@@ -3027,7 +3027,7 @@ elif selected_section == "audit_data_input":
             ongoing_prev_total = st.text_input("Total", value=field_values.get('ongoing_prev_total', "73"), key="ongoing_prev_total", label_visibility="collapsed")
 
         # 6. TOTAL ON-GOING
-        st.markdown(f'<div class="section-label">TOTAL On-going as of 31 December {current_year}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="section-label">TOTAL On-going as of {last_date}</div>', unsafe_allow_html=True)
         cols6 = st.columns([3, 1, 1, 2, 1, 1])
         with cols6[0]:
             st.write("")
@@ -3165,7 +3165,7 @@ elif selected_section == "audit_data_input":
             cas_to_be_reported = st.text_input("Reporting", value=field_values.get('cas_to_be_reported', "Quarterly basis"), key="cas_to_be_reported", label_visibility="collapsed")
 
         # 2. ERCEA Residual Based on CRS 1 to 5 - Latest figures
-        st.markdown('<div class="section-label">ERCEA Residual Based on CRS 1 to 5 - Latest figures</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">ERCEA Residual Based on CRS 1 to 6 - Latest figures</div>', unsafe_allow_html=True)
         cols_error2 = st.columns([3, 1, 3, 1])
         with cols_error2[0]:
             st.write("")

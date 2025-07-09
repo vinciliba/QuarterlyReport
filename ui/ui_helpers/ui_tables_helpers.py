@@ -47,7 +47,7 @@ def create_external_audits_dataframe(current_year, last_date, form_data):
             "Total": form_data.get('ongoing_prev_total', "73")
         },
         {
-            "Status": f"TOTAL On-going as of 31 December {current_year}",
+            "Status": f"TOTAL On-going as of {last_date}",
             "CAS": form_data.get(f'total_ongoing_{current_year}_cas', "143"),
             "Joint with Court of auditors*": form_data.get(f'total_ongoing_{current_year}_joint', "0"),
             "Subtotal for error rates and coverage": form_data.get(f'total_ongoing_{current_year}_subtotal', "143"),
