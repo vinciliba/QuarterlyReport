@@ -2186,8 +2186,8 @@ def generate_ttp_summary_overview (df_paym, cutoff, db_path, report, table_color
             })
             
             # Administrative expenditure (days) - from database
-            admin_net_current = admin_ttp.get("Current", 0)
-            admin_gross_current = admin_ttp.get("Current", 0)  # Assuming same for both NET and GROSS
+            admin_net_current = admin_ttp.get("Net", 0)
+            admin_gross_current = admin_ttp.get("Gross", 0)  # Assuming same for both NET and GROSS
             
             # Format admin values
             if isinstance(admin_net_current, (int, float)):
@@ -4648,12 +4648,16 @@ def annex_tables_ttp_eff (df_paym, cutoff, db_path, report, table_colors, report
                 admin_gross_current = admin_ttp.get("Current", 0)  # Assuming same for both NET and GROSS
                 
                 # Format admin values
-                if isinstance(admin_net_current, (int, float)):
+                if isinstance(admin_net_current, (int, float)) and isinstance(admin_gross_current, (int, float)):
                     admin_net_str = str(round(admin_net_current, 1))
                     admin_gross_str = str(round(admin_gross_current, 1))
+                elif isinstance(admin_net_current, str) and isinstance(admin_gross_current, str):
+                    admin_net_str = admin_net_current
+                    admin_gross_str = admin_gross_current
                 else:
                     admin_net_str = "n/a"
                     admin_gross_str = "n/a"
+
                 
                 days_data.append({
                     'Time to Pay: Average number of days (H2020 - HEU)': 'Administrative expenditure (days)',

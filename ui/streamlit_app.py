@@ -1883,7 +1883,9 @@ elif selected_section == "report_structure":
               "Administrative_expenditure_ttp" : { 
                                  'Current': 7.8,
                                  'Old': 7.6,
-                                 'Target' :"30 days"
+                                 'Target' :"30 days",
+                                 'Net':17,
+                                 'Gross':20
                                   },
             "Expert_meetings_ttp" : { 
                                  'Current': 'na',
