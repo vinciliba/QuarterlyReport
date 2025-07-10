@@ -3718,10 +3718,11 @@ def annex_tables_ttp_eff (df_paym, cutoff, db_path, report, table_colors, report
                 # Create MultiIndex columns structure
                 columns = []
                 
+                available_directorates_h2020 = [d for d in available_directorates if d != 'EXPERTS']
                 # Add directorate columns
-                for dir_name in available_directorates:
+                for dir_name in available_directorates_h2020:
                     for pt in payment_types_h2020:
-                        columns.append((dir_name, pt))
+                            columns.append((dir_name, pt))
                 
                 # Add Experts column (single column, no sub-payment types)
                 columns.append(('Experts', 'Experts'))
@@ -3742,7 +3743,7 @@ def annex_tables_ttp_eff (df_paym, cutoff, db_path, report, table_colors, report
                     quarter_data = h2020_data[h2020_data['Quarter_Label'] == quarter]
                     
                     # Fill directorate data
-                    for dir_name in available_directorates:
+                    for dir_name in available_directorates_h2020 :
                         dir_data = quarter_data[quarter_data['call_type'] == dir_name]
                         
                         for pt in payment_types_h2020:
@@ -3760,7 +3761,7 @@ def annex_tables_ttp_eff (df_paym, cutoff, db_path, report, table_colors, report
                     quarterly_data.loc[quarter, ('Total', 'Total')] = round(total_avg, 1) if not pd.isna(total_avg) else 0.0
                 
                 # Fill Dep C. summary row
-                for dir_name in available_directorates:
+                for dir_name in available_directorates_h2020:
                     dir_data = h2020_data[h2020_data['call_type'] == dir_name]
                     
                     for pt in payment_types_h2020:
