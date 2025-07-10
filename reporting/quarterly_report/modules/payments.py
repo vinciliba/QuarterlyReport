@@ -825,7 +825,7 @@ class PaymentsModule(BaseModule):
         # ══════════════════════════════════════════════════════════════════
         try:
             success, message, results = paym_charts_summary_tables(
-                df_paym=df_paym,
+                df_paym=df_paym ,
                 cutoff=cutoff,
                 db_path=db_path,
                 report=report,

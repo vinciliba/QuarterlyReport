@@ -2189,14 +2189,17 @@ def generate_ttp_summary_overview (df_paym, cutoff, db_path, report, table_color
             admin_net_current = admin_ttp.get("Net", 0)
             admin_gross_current = admin_ttp.get("Gross", 0)  # Assuming same for both NET and GROSS
             
-            # Format admin values
-            if isinstance(admin_net_current, (int, float)):
+            #Format admin values
+            if isinstance(admin_net_current, (int, float)) and isinstance(admin_gross_current, (int, float)):
                 admin_net_str = str(round(admin_net_current, 1))
                 admin_gross_str = str(round(admin_gross_current, 1))
+            elif isinstance(admin_net_current, str) and isinstance(admin_gross_current, str):
+                admin_net_str = admin_net_current
+                admin_gross_str = admin_gross_current
             else:
                 admin_net_str = "n/a"
                 admin_gross_str = "n/a"
-            
+        
             days_data.append({
                 'Time to Pay: Average number of days (H2020 - HEU)': 'Administrative expenditure (days)',
                 'NET': admin_net_str,
@@ -3798,11 +3801,11 @@ def annex_tables_ttp_eff (df_paym, cutoff, db_path, report, table_colors, report
                 
                 # Based on image: ADG(PF,IP), COG(PF,FP), POC(PF,IP), STG(PF,IP), SYG(PF)
                 directorate_payment_mapping = {
-                    'ADG': ['PF', 'IP'],
-                    'COG': ['PF', 'FP'], 
-                    'POC': ['PF', 'IP'],
-                    'STG': ['PF', 'IP'],
-                    'SYG': ['PF']
+                    'ADG': ['PF', 'IP','FP'],
+                    'COG': ['PF', 'IP','FP'], 
+                    'POC': ['PF', 'FP'],
+                    'STG': ['PF', 'IP','FP'],
+                    'SYG': ['PF', 'IP','FP']
                 }
                 
                 # Add columns for available directorates
@@ -4644,10 +4647,10 @@ def annex_tables_ttp_eff (df_paym, cutoff, db_path, report, table_colors, report
                 })
                 
                 # Administrative expenditure (days) - from database
-                admin_net_current = admin_ttp.get("Current", 0)
-                admin_gross_current = admin_ttp.get("Current", 0)  # Assuming same for both NET and GROSS
+                admin_net_current = admin_ttp.get("Net", 0)
+                admin_gross_current = admin_ttp.get("Gross", 0)  # Assuming same for both NET and GROSS
                 
-                # Format admin values
+                #Format admin values
                 if isinstance(admin_net_current, (int, float)) and isinstance(admin_gross_current, (int, float)):
                     admin_net_str = str(round(admin_net_current, 1))
                     admin_gross_str = str(round(admin_gross_current, 1))
@@ -4658,7 +4661,7 @@ def annex_tables_ttp_eff (df_paym, cutoff, db_path, report, table_colors, report
                     admin_net_str = "n/a"
                     admin_gross_str = "n/a"
 
-                
+        
                 days_data.append({
                     'Time to Pay: Average number of days (H2020 - HEU)': 'Administrative expenditure (days)',
                     'NET': admin_net_str,
@@ -6631,9 +6634,11 @@ def paym_charts_summary_tables (df_paym, cutoff, db_path, report, table_colors, 
                                             budget = None
                                         
                                         # Generate chart and table
+
                                         try:
+                                            df_paym_voted_budget = df_paym.loc[df_paym['Fund Source'].isin(['VOBU', 'EFTA'])]
                                             result = generate_payment_chart_and_table(
-                                                df_paym, df_forecast, programme, call_type, budget, cutoff_date
+                                                df_paym_voted_budget, df_forecast, programme, call_type, budget, cutoff_date
                                             )
                                         except Exception as generation_error:
                                             print(f"      ❌ Error generating chart/table for {programme} {call_type}: {str(generation_error)}")
